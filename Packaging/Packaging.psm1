@@ -1,5 +1,5 @@
 ########################################################################
-## Copyright (c) Joel Bennett, 2013
+## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ########################################################################
 # 0.01 Initial release (works on my machine, with modules that have a FileList)

@@ -1,4 +1,9 @@
-﻿function ConvertTo-Dictionary {
+﻿########################################################################
+## Copyright (c) 2013 by Joel Bennett, all rights reserved.
+## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
+########################################################################
+
+function ConvertTo-Dictionary {
   param(
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,ParameterSetName="Hashtable")]
     [Hashtable[]]$Hashtable,

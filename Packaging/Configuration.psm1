@@ -1,3 +1,8 @@
+########################################################################
+## Copyright (c) 2013 by Joel Bennett, all rights reserved.
+## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
+########################################################################
+
 function Test-ExecutionPolicy {
   #.Synopsis
   #   Validate the ExecutionPolicy
