@@ -2,40 +2,6 @@
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ########################################################################
-# 0.01 Initial release (works on my machine, with modules that have a FileList)
-# 0.02 Added checking the Module.FileList and packing all files if it's empty
-# 0.03 Changed error handling for missing psd1 files to ThrowTerminatingError
-# 0.04 Check file difference even if the file counts are the same
-# 0.05 Set the -Id on Write-Progress
-# 0.06 Fix checking the existence of the module
-#      Fix FileList to pick only files (not directories)
-#      Fix the RootModule compatibility (trying to keep this working with PS2)
-#      Add support for a Package Thumbnail like: ModuleName.png
-#      Rename to New-ModulePackage
-# 0.07 Write out the file info at the end
-#      Improve error messages
-# 0.08 Avoid the use of [Environment]::CurrentDirectory by explicitly specifying $PWD
-# 0.09 Clean up path handling
-#      Avoid overwriting package files (use -Force)
-#      Implement ShouldProcess1
-# 0.10 Clean up Verbose/Debug/Progress messages
-# 0.11 Begin Get-ModulePackage
-# 0.12 Added boatloads of C# code to define a custom ModuleId/ModuleInfo/
-# 0.13 Working Get-ModulePackage
-# 0.14 Working Set-ModuleInfo (should be Update?)
-# 0.15 Fixes to New-ModulePackage
-# 0.16 (1.0.1) Added Install-ModulePackage
-# 0.17 Hide ConvertTo-Hashtable
-# 0.18 Improve install script
-# 0.19 Add Configuration.ps1 to contain config-related functions (Get/Set/Update)
-# 0.20 Update Install-ModulePackage with switches for the three configured install paths (default to User)
-# 0.21 (1.0.2) Update Install-ModulePackage to support http:// urls and passthru
-# 0.22 Change (default) Global install location to the Common Files Directory as recommended by microsoft
-#      http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350%28v=vs.85%29.aspx
-#      Refactor installation functions into the Install script and dot-sourcing it in the module
-
-# TODO: Package (and module) signing
-#       We need a module registry to list where they are: @{ name, version, guid, releaseUri }
 
 # We need to make up a URL for the metadata psd1 relationship type
 $ModuleMetadataType   = "http://schemas.poshcode.org/package/module-metadata"
@@ -298,7 +264,7 @@ function New-ModulePackage {
 
 function Get-ModuleInfo {
   #.Synopsis
-  #  Get Information about a module from the ModuleInfo or ModuleManifest file.
+  #  Get information about a module from the ModuleInfo manifest or the psd1 metadata file.
   [CmdletBinding()]
   param(
     # The name of the module (or path)
