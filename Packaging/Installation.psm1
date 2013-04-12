@@ -14,17 +14,13 @@
     $Url = "http://PoshCode.org/Packaging.psmx"
   )
   end {
-    # If the script isn't running from a module, then run the install
+    # If this code isn't running from a module, then run the install
     if(!$MyInvocation.MyCommand.Module) {
-      Write-Progress "Installing " -Id 0
-
+      Write-Progress "Installing Package" -Id 0
       $InstallPath = Select-ModulePath
-      Write-Verbose "Selected module install path: $InstallPath"
-
       $PackageFile = Get-ModulePackage $Url $InstallPath
-      Write-Verbose "Downloaded module package: $PackageFile"
-
       Install-ModulePackage $PackageFile $InstallPath -Import
+      Test-ExecutionPolicy
     }
   }
 
@@ -48,11 +44,6 @@
         # If set, the module is installed to the Common module path (as specified in Packaging.ini)
         [Parameter(ParameterSetName="CommonPath", Mandatory=$true)]
         [Switch]$Common,
-
-        ##### We do not support installing to the System location. #####
-        # # If set, the module is installed to the System module path (as specified in Packaging.ini)
-        # [Parameter(ParameterSetName="SystemPath", Mandatory=$true)]
-        # [Switch]$System,
 
         # If set, the module is installed to the User module path (as specified in Packaging.ini)
         [Parameter(ParameterSetName="UserPath")]
@@ -102,6 +93,8 @@
     }
 
     function Install-ModulePackage {
+      #.Synopsis
+      #   Install a module package to the module 
       [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium", DefaultParameterSetName="UserPath")]
       param(
         # The package file to be installed
@@ -117,11 +110,6 @@
         # If set, the module is installed to the Common module path (as specified in Packaging.ini)
         [Parameter(ParameterSetName="CommonPath", Mandatory=$true)]
         [Switch]$Common,
-
-        ##### We do not support installing to the System location. #####
-        # # If set, the module is installed to the System module path (as specified in Packaging.ini)
-        # [Parameter(ParameterSetName="SystemPath", Mandatory=$true)]
-        # [Switch]$System,
 
         # If set, the module is installed to the User module path (as specified in Packaging.ini)
         [Parameter(ParameterSetName="UserPath")]
@@ -364,6 +352,5 @@
             "        PS> Get-Help about_execution_policies`n")
       }
     }
-
   } 
 }

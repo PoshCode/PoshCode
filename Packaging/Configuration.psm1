@@ -3,30 +3,8 @@
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ########################################################################
 
-function Test-ExecutionPolicy {
-  #.Synopsis
-  #   Validate the ExecutionPolicy
-  param()
-
-  $Policy = Get-ExecutionPolicy
-  if(([Microsoft.PowerShell.ExecutionPolicy[]]"Restricted","Default") -contains $Policy) {
-    $Warning = "Your execution policy is $Policy, so you will not be able import script modules."
-  } elseif(([Microsoft.PowerShell.ExecutionPolicy[]]"Unrestricted","RemoteSigned") -contains $Policy) {
-    $Warning = "Your execution policy is $Policy, if modules are flagged as internet, you won't be able to import them."
-  } elseif(([Microsoft.PowerShell.ExecutionPolicy[]]"AllSigned") -eq $Policy) {
-    $Warning = "Your execution policy is $Policy, if modules are not signed, you won't be able to import them."
-  }
-  if($Warning) {
-    Write-Warning ("$Warning`n" +
-        "You may want to change your execution policy to RemoteSigned, Unrestricted or even Bypass.`n" +
-        "`n" +
-        "        PS> Set-ExecutionPolicy RemoteSigned`n" +
-        "`n" +
-        "For more information, read about execution policies by executing:`n" +
-        "        `n" +
-        "        PS> Get-Help about_execution_policies`n")
-  }
-}
+# The config file
+$ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
 
 function Get-SpecialFolder {
   #.Synopsis
@@ -153,74 +131,51 @@ function Set-ConfigData {
   Set-Content $Path $ConfigString  
 }
 
-function Update-Config {
+function Test-ConfigData {
   #.Synopsis
   #  Validate and configure the module installation paths
-  [CmdletBinding()]param()
+  [CmdletBinding()]
+  param(
+    # A Name=Path hashtable containing the paths you want to use in your configuration
+    $ConfigData = $(Get-ConfigData)
+  )
 
-  $PSModulePaths = $Env:PSModulePath -split ";" | Resolve-Path | Convert-Path
-
-  Write-Host ("The Environment Variable `"PSModulePath`" controls which folders are searched for installed modules.`n" +
-              "By default, it includes two locations: The reserved `"System`" location, and the `"User`" location.`n" +
-              "The PoshCode Packaging module adds a third `"Common`" location based on Microsoft's recommendations.`n" +
-              "Yours may be customized. Here are the folders in your current PSModulePath:")
-
-  Write-Host "`n$($PSModulePaths -Join "`n")`n" -Foreground Yellow -Background Black
-
-  Write-Host -NoNewLine "* The System Location:"
-  Write-Host -Foreground Red "$PSHome\Modules"
-  Write-Host "This location is reserved by Microsoft for the built-in modules which ship with Windows.`n`n"
-
-  Write-Host "These are the locations used by PoshCode Packaging:`n"
-
-  Write-Host -NoNewLine "* The User Location:"
-  Write-Host -Foreground Red "$([Environment]::GetFolderPath("MyDocuments"))\WindowsPowerShell\Modules"
-  Write-Host "This is the default location, all modules will be installed here unless otherwise specified.`n`n"
-
-  Write-Host -NoNewLine "* The Common Location:"
-  Write-Host -Foreground Red "$([Environment]::GetFolderPath("CommonProgramFiles"))\Modules"
-  Write-Host "This location is recommended for modules which can be shared by all users."
-  Write-Host "When installing modules with Install-ModulePackage, you can use the -Common switch to install here.`n`n"
-
-  Write-Host ("You will now be allowed to customize those locations.`n" +
-              "If you enter folders which do not exist, we will attempt to create them.`n" +
-              "If you enter folders which are not already in your PSModulePath, we will attempt to add them.`n")
-
-  $null = Read-Host "Press ENTER to continue..."
-
-  $Paths = Get-ConfigData
-
-  foreach($path in @($Paths.Keys)) {
+  foreach($path in @($ConfigData.Keys)) {
     $name = $path -replace 'Path$'
-
+    $folder = $ConfigData.$path
     do {
-      $folder = Read-Host "`nConfiguring $name module location:`nPress ENTER to accept the current value:`n`t$($Paths.$path)`nor type a new path"
-      if([string]::IsNullOrWhiteSpace($folder)) {
-        $folder = $Paths.$path
+      ## Create the folder, if necessary
+      if(!(Test-Path $folder)) {
+        Write-Warning "The $name module location does not exist. Please validate:"
+        $folder = Read-Host "Press ENTER to accept the current value:`n`t$($ConfigData.$path)`nor type a new path"
+        if([string]::IsNullOrWhiteSpace($folder)) { $folder = $ConfigData.$path }
+
+        if(!(Test-Path $folder)) {
+          $CP, $ConfirmPreference = $ConfirmPreference, 'Low'
+          if($PSCmdlet.ShouldContinue("The folder '$folder' does not exist, do you want to create it?", "Configuring <$name> module location:")) {
+            $ConfirmPreference = $CP
+            if(!(New-Item $folder -Type Directory -Force -ErrorAction SilentlyContinue -ErrorVariable fail))
+            {
+              Write-Warning ($fail.Exception.Message + "`nThe $name Location path '$folder' couldn't be created.`n`nYou may need to be elevated.`n`nPlease enter a new path, or press Ctrl+C to give up.")
+            }
+          }
+          $ConfirmPreference = $CP
+        }
       }
 
-      ## Create the folder, if necessary
-      if(!(Test-Path $folder)){
-        $CP, $ConfirmPreference = $ConfirmPreference, 'Low'
-        if($PSCmdlet.ShouldContinue("The folder '$folder' does not exist, do you want to create it?", "Configuring $name module location:")) {
-          $ConfirmPreference = $CP
-          if(!(New-Item $folder -Type Directory -Force -ErrorAction SilentlyContinue -ErrorVariable fail))
-          {
-            Write-Warning ($fail.Exception.Message + "`nThe $name Location path '$folder' couldn't be created.`n`nYou may need to be elevated.`n`nPlease enter a new path, or press Ctrl+C to give up.")
-          }
-        }
-        $ConfirmPreference = $CP
-      }
+      [string[]]$PSModulePaths = $Env:PSModulePath -split ";" | Resolve-Path | Convert-Path
 
       ## Add it to the PSModulePath, if necessary
       if((Test-Path $folder) -and ($PSModulePaths -notcontains (Convert-Path $folder))) {
+        $folder = Convert-Path $folder
         $CP, $ConfirmPreference = $ConfirmPreference, 'Low'
-        if($PSCmdlet.ShouldContinue("The folder '$folder' is not in your PSModulePath, do you want to add it?", "Configuring $name module location:")) {
+        if($PSCmdlet.ShouldContinue("The folder '$folder' is not in your PSModulePath, do you want to add it?", "Configuring <$name> module location:")) {
           $ConfirmPreference = $CP          
           # Global and System paths need to go in the Machine registry to work properly
-          if("Global","System" -contains $name) {
+          if("Global","System","Common" -contains $name) {
             try {
               $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "Machine") + ";" + $Folder
+              $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
               [System.Environment]::SetEnvironmentVariable("PSModulePath",$PsMP,"Machine")
             }
             catch [System.Security.SecurityException] 
@@ -228,8 +183,9 @@ function Update-Config {
               Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be added to your Local Machine PSModulePath.")
               try {
                 $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "User") + ";" + $Folder
+                $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
                 [System.Environment]::SetEnvironmentVariable("PSModulePath", $PsMP, "User")
-                Write-Host "Added '$folder' to your user PSModulePath instead."
+                Write-Host "Added '$folder' to your User PSModulePath instead."
               }
               catch [System.Security.SecurityException] 
               {
@@ -239,20 +195,27 @@ function Update-Config {
           } else {
             try {
               $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "User") + ";" + $Folder
+              $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
               [System.Environment]::SetEnvironmentVariable("PSModulePath", $PsMP, "User")
             }
             catch [System.Security.SecurityException] 
             {
-              Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be added to your PSModulePath.")
+              Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be permanently added to your PSModulePath.")
+              $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
             }
           }
         }
         $ConfirmPreference = $CP
       }
     } while(!(Test-Path $folder))
-    $Paths.$path = $folder
+    $ConfigData.$path = $folder
   }
-
-  Set-ConfigData -ConfigData $Paths
+  # If you pass in a Hashtable, you get a Hashtable back
+  if($PSBoundParameters.ContainsKey("ConfigData")) {
+    Write-Output $ConfigData
+    # Otherwise, we set it back where we got it from!
+  } else {
+    Set-ConfigData -ConfigData $ConfigData
+  }
 }
 

@@ -4,16 +4,22 @@
 ########################################################################
 
 function ConvertTo-Dictionary {
+  #.Synopsis
+  #   Convert a Hashtable or NameObjectCollection to a strongly typed generic dictionary
   param(
+    # The Hashtable to be converted
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,ParameterSetName="Hashtable")]
     [Hashtable[]]$Hashtable,
 
+    # The NameObjectCollection to be converted
     [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ParameterSetName="WebHeaders")]
     [System.Collections.Specialized.NameObjectCollectionBase]$Headers,
 
+    # The type for the key of the output dictionary
     [Parameter(Mandatory=$true,ParameterSetName="Hashtable")]
     [Type]$TKey,
 
+    # The type for the value of the output dictionary
     [Parameter(Mandatory=$true,ParameterSetName="Hashtable")]
     [Type]$Tvalue
   )
@@ -45,12 +51,21 @@ function ConvertTo-Dictionary {
   }
   end { return $dictionary }
 }
+
 function ConvertFrom-Dictionary {
-    [CmdletBinding()]
-    param($Dictionary, [Switch]$Encode)
-    foreach($key in $Dictionary.Keys) {
-        "{0} = {1}" -f $key, $( if($Encode) { [System.Net.WebUtility]::UrlEncode( $Dictionary.$key ) } else { $Dictionary.$key } )
-    }
+  #.Synopsis
+  #   Convert a string dictionary to a key = value strings, optionally UrlEncoding the values.
+  [CmdletBinding()]
+  param(
+    # The dictionary to convert (values should be strings or castable to strings)
+    $Dictionary, 
+    
+    # If set, UrlEncode the values    
+    [Switch]$Encode
+  )
+  foreach($key in $Dictionary.Keys) {
+    "{0} = {1}" -f $key, $( if($Encode) { [System.Net.WebUtility]::UrlEncode( $Dictionary.$key ) } else { $Dictionary.$key } )
+  }
 }
 
 ## Get-WebFile (aka wget for PowerShell)
