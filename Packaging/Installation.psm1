@@ -25,7 +25,26 @@
   }
 
   begin {
-    Add-Type -Assembly WindowsBase, PresentationFramework
+    Add-Type -Assembly WindowsBase
+
+    # NOTE: these types are needed elsewhere (Packaging Module)
+    #       the types and Get-ModulePackage aren't needed for the installer
+    #       but they are part of the "packaging light" module, so here they are.
+    # We need to make up a URL for the metadata psd1 relationship type
+    $Script:ModuleMetadataType   = "http://schemas.poshcode.org/package/module-metadata"
+    $Script:ModuleHelpInfoType   = "http://schemas.poshcode.org/package/help-info"
+    $Script:PackageThumbnailType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"
+    # This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
+    $Script:ManifestType         = "http://schemas.microsoft.com/packaging/2010/07/manifest"
+    # I'm not sure there's any benefit to extra types:
+    # CorePropertiesType is the .psmdcp
+    $Script:CorePropertiesType   = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
+    $Script:ModuleRootType       = "http://schemas.poshcode.org/package/module-root"
+    $Script:ModuleContentType    = "http://schemas.poshcode.org/package/module-file"
+    # Our Extensions
+    $Script:ModuleInfoExtension  = ".moduleinfo"
+    $Script:ModuleManifestExtension = ".psd1"
+    $Script:ModulePackageExtension = ".psmx"    
 
     function Get-ModulePackage {
       #.Synopsis
@@ -202,6 +221,143 @@
         } else {
           Get-Module $ModuleName
         }      
+      }
+    }
+
+    function Get-ModuleInfo {
+      #.Synopsis
+      #  Get information about a module from the ModuleInfo manifest or the psd1 metadata file.
+      [CmdletBinding()]
+      param(
+        # The name of the module (or path)
+        [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Mandatory=$true)]
+        [Alias("PSPath","Path","Name")]
+        $Module
+      )
+      process {
+        [string]$ModuleManifestPath = ""
+        [string]$ModuleInfoPath = ""
+
+        # If the parameter isn't already a ModuleInfo object, then let's make it so:
+        if($Module -is "string") {
+          $ModulePath = Convert-Path $Module -ErrorAction SilentlyContinue -ErrorVariable noPath
+          if($noPath) { $ModulePath = $Module }
+          $Module = $null
+          $Extension = [IO.Path]::GetExtension($ModulePath)
+          # It should be either a String or a FileInfo (if it's a string, it might begmo)
+          Write-Verbose "Switch on Extension: $Extension  ($ModulePath)"
+          switch($Extension) {
+            $ModuleInfoExtension {
+              Write-Verbose "Finding Module by ModuleInfoPath"
+              $ModuleInfoPath = $ModulePath
+              $ModuleManifestPath = [IO.Path]::ChangeExtension($ModuleInfoPath, $ModuleManifestExtension)
+            }
+            $ModuleManifestExtension {
+              Write-Verbose "Finding Module by ModuleManifestPath"
+              # We have a path to a .psd1
+              $ModuleManifestPath = $ModulePath
+              $ModuleInfoPath = [IO.Path]::ChangeExtension($ModuleManifestPath, $ModuleInfoExtension)
+            }
+            $ModulePackageExtension {
+              Write-Verbose "Finding Module by ModuleManifestPath"
+              try {
+                $ModulePath = Resolve-Path $ModulePath
+                $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
+
+                $manifest = $Package.GetRelationshipsByType( $ManifestType )
+                if(!$manifest) {
+                  Write-Warning "This Package is invalid, it has not specified the manifest"
+                  Write-Output $Package.PackageProperties
+                  return
+                }
+
+                $Part = $Package.GetPart( $manifest.TargetUri )
+                if(!$manifest) {
+                  Write-Warning "This Package is invalid, it has no manifest at $($manifest.TargetUri)"
+                  Write-Output $Package.PackageProperties
+                  return
+                }
+
+                try {
+                  $stream = $part.GetStream()
+                  $reader = New-Object System.IO.StreamReader $stream
+                  # This gets the ModuleInfo
+                  ([xml]$reader.ReadToEnd()).ModuleManifest | 
+                    Add-Member NoteProperty PackagePath $ModulePath -Passthru |
+                    Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModulePath.Provider, $ModulePath.ProviderPath) -Passthru
+                } catch [Exception]{
+                  $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+                } finally {
+                  if($reader) {
+                    $reader.Close()
+                    $reader.Dispose()
+                  }
+                  if($stream) {
+                    $stream.Close()
+                    $stream.Dispose()
+                  }
+                }
+              } catch [Exception] {
+                $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+              } finally {
+                $Package.Close()
+                $Package.Dispose()
+              }
+              return
+            }
+            default {
+              Write-Verbose "Finding Module by Module Name"
+              # Hopefully, they've just specified a module name:
+              $Module = Get-Module $ModulePath -ListAvailable | Select-Object -First 1
+              if($Module) {
+                $ModuleInfoPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleInfoExtension"
+                $ModuleManifestPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleManifestExtension"
+              }
+            }
+          }
+
+          if(!$Module -and (Test-Path $ModulePath)) {
+            Write-Verbose "Searching for Module by Path"
+            # They got crazy and passed us a path instead of a name ...
+            $ModuleBase = $ModulePath
+            if(Test-Path $ModulePath -PathType Leaf) {
+              $ModuleBase = Split-Path $ModulePath
+            }
+            # Hopefully, it's at least in the PSModulePath (or already loaded)
+            $Module = Get-Module (Split-Path $ModuleBase -Leaf) -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleBase }
+            # But otherwise, we can always try importing it:
+            if(!$Module) {
+              Write-Verbose "Finding Module by Import-Module (least optimal method)"
+              $Module = Import-Module $ModulePath -Passthru
+              if($Module) {
+                Remove-Module $Module
+              }
+            }
+          }
+        }
+        if($Module) {
+          $ModuleInfoPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleInfoExtension"
+          $ModuleManifestPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleManifestExtension"
+        }
+
+        if(Test-Path $ModuleInfoPath) {
+          Write-Verbose "Loading ModuleManifest"
+          $ModuleInfo = ([xml](gc $ModuleInfoPath)).ModuleManifest | 
+                          Add-Member NoteProperty ModuleInfoPath $ModuleInfoPath -Passthru | 
+                          Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru
+          Write-Output $ModuleInfo
+        }
+        elseif($Module) 
+        {
+          Write-Verbose "Write out PSModuleInfo"
+          Write-Output ($Module | 
+                          Add-Member NoteProperty ModuleInfoPath $ModuleInfoPath -Passthru | 
+                          Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru)
+        } 
+        else 
+        {
+          throw "Unable to get ModuleInfo"
+        }
       }
     }
 
