@@ -56,9 +56,9 @@
         [string]$Url = "http://PoshCode.org/Packaging.psmx",
 
         # The PSModulePath to install to
-        [Parameter(ParameterSetName="InstallPath", Mandatory=$true, Position=1)]
+        [Parameter(ParameterSetName="InstallPath", Mandatory=$false, Position=1)]
         [Alias("PSModulePath")]
-        $InstallPath,
+        $InstallPath = $([IO.Path]::GetTempPath()),
 
         # If set, the module is installed to the Common module path (as specified in Packaging.ini)
         [Parameter(ParameterSetName="CommonPath", Mandatory=$true)]
@@ -82,6 +82,7 @@
         }
       }
       end {
+        ## TODO: Confirm they want to overwrite the file?
         if(Get-Command Packaging\Invoke-Web -ErrorAction SilentlyContinue) {
           Write-Verbose "Using Invoke-Web"
           Packaging\Invoke-Web $Url -OutFile $InstallPath
@@ -91,7 +92,8 @@
           # Get the Packaging package from the web
 
             $Reader = [Net.WebRequest]::Create($Url).GetResponse().GetResponseStream()
-            $PackagePath = Join-Path $InstallPath (Split-Path $Url -leaf)
+            ## TODO: Find the right file name, that's what Invoke-Web would do!
+            $PackagePath = Join-Path $InstallPath (Split-Path $Url -Leaf)
             $Writer = [IO.File]::Open($PackagePath, "Create", "Write" )
 
             Copy-Stream $reader $writer -Activity "Downloading $Url"
@@ -160,8 +162,54 @@
       }
       process {
         try {
+          if("$Package" -match "^https?://" ) {
+            $PackagePath = Get-ModulePackage $Package $InstallPath
+          }
           # Open it as a package
           $PackagePath = Resolve-Path $Package -ErrorAction Stop
+
+          $Manifest = Get-ModuleManifestXml $PackagePath
+
+          # We need to verify the RequiredModules are available, or install them.
+          if($Manifest."ModuleManifest.RequiredModules") {
+            $FailedModules = @()
+            foreach($RequiredModule in $Manifest."ModuleManifest.RequiredModules".ModuleId) {
+              # If the module is available ... 
+              if($Module = Get-Module -Name $RequiredModule.ModuleName -ListAvailable }) {
+                if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.ModuleVersion }) {
+                  if($Import) {
+                    Import-Module -Name $RequiredModule.ModuleName -MinimumVersion
+                    continue
+                  }
+                } else {
+                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version). Trying upgrade:"
+                }
+              } else {
+                  Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module. Trying install:"
+              }
+              # Check for a local copy, maybe we get lucky:
+              $Folder = Split-Path $PackagePath
+              if(Test-Path (Join-Path $Folder "$($RequiredModule.ModuleName)-$($RequiredModule.ModuleVersion)$ModulePackageExtension")) {
+                Install-ModulePackage $RequiredModule.ReleaseUri $InstallPath
+                continue
+              }
+              # If they have a ReleaseUri, try that:
+              if($RequiredModule.ReleaseUri) {
+                Install-ModulePackage $RequiredModule.ReleaseUri $InstallPath
+                continue
+              } 
+
+              Write-Warning "The module package does not have a ReleaseUri for the required module $($RequiredModule.ModuleName), and there's not a local copy."
+              $FailedModules += $RequiredModule
+              continue
+            }
+            if($FailedModules) {
+              Write-Error "Unable to resolve required modules."
+              Write-Output $FailedModules
+              return # TODO: Should we install anyway? Prompt?
+            }
+          }
+
           $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
           Write-Host ($Package.PackageProperties|Select-Object Title,Version,@{n="Guid";e={$_.Identifier}},Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
 
@@ -173,7 +221,7 @@
         
           if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $($ModuleName)" )) {
             if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
-
+              $success = $false
               $null = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
               
               ## Handle the error if they asked for -Common and don't have permissions
@@ -182,6 +230,7 @@
               }
 
               foreach($part in $Package.GetParts() | where Uri -match ("^/" + $ModuleName)) {
+                $fileSuccess = $false
                 # Copy the data to the file system
                 try {
                   if(!(Test-Path ($Folder = Split-Path ($File = Join-Path $InstallPath $Part.Uri)) -EA 0) ){
@@ -192,6 +241,7 @@
                   $reader = $part.GetStream()
 
                   Copy-Stream $reader $writer -Activity "Writing $file"
+                  $fileSuccess = $true
                 } catch [Exception] {
                   $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
                 } finally {
@@ -204,11 +254,13 @@
                     $reader.Dispose()
                   }
                 }
+                if(!$fileSuccess) { throw "Couldn't unpack to $File."}
                 if($Passthru) { Get-Item $file }
               }
             } else { # !Force
               $Import = $false # Don't _EVER_ import if they refuse the install
             }
+            $success = $true
           } # ShouldProcess
         } catch [Exception] {
           $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
@@ -216,6 +268,7 @@
           $Package.Close()
           $Package.Dispose()
         }
+        if(!$success) { throw "Couldn't unpack $ModuleName."}
         if($Import) {
           Import-Module $ModuleName -Passthru:$Passthru
         } else {
@@ -260,50 +313,10 @@
             }
             $ModulePackageExtension {
               Write-Verbose "Finding Module by ModuleManifestPath"
-              try {
-                $ModulePath = Resolve-Path $ModulePath
-                $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
-
-                $manifest = $Package.GetRelationshipsByType( $ManifestType )
-                if(!$manifest) {
-                  Write-Warning "This Package is invalid, it has not specified the manifest"
-                  Write-Output $Package.PackageProperties
-                  return
-                }
-
-                $Part = $Package.GetPart( $manifest.TargetUri )
-                if(!$manifest) {
-                  Write-Warning "This Package is invalid, it has no manifest at $($manifest.TargetUri)"
-                  Write-Output $Package.PackageProperties
-                  return
-                }
-
-                try {
-                  $stream = $part.GetStream()
-                  $reader = New-Object System.IO.StreamReader $stream
-                  # This gets the ModuleInfo
-                  ([xml]$reader.ReadToEnd()).ModuleManifest | 
-                    Add-Member NoteProperty PackagePath $ModulePath -Passthru |
-                    Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModulePath.Provider, $ModulePath.ProviderPath) -Passthru
-                } catch [Exception]{
-                  $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-                } finally {
-                  if($reader) {
-                    $reader.Close()
-                    $reader.Dispose()
-                  }
-                  if($stream) {
-                    $stream.Close()
-                    $stream.Dispose()
-                  }
-                }
-              } catch [Exception] {
-                $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-              } finally {
-                $Package.Close()
-                $Package.Dispose()
-              }
-              return
+              Get-ModuleManifestXml $ModulePath |
+              Add-Member NoteProperty PackagePath $ModulePath -Passthru |
+              Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModulePath.Provider, $ModulePath.ProviderPath) -Passthru
+              return 
             }
             default {
               Write-Verbose "Finding Module by Module Name"
@@ -360,6 +373,57 @@
         }
       }
     }
+
+
+    function Get-ModuleManifestXml {
+      param( 
+        $ModulePath 
+      )
+      end {
+        try {
+          $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
+
+          $manifest = $Package.GetRelationshipsByType( $ManifestType )
+          if(!$manifest) {
+            Write-Warning "This Package is invalid, it has not specified the manifest"
+            Write-Output $Package.PackageProperties
+            return
+          }
+
+          $Part = $Package.GetPart( $manifest.TargetUri )
+          if(!$manifest) {
+            Write-Warning "This Package is invalid, it has no manifest at $($manifest.TargetUri)"
+            Write-Output $Package.PackageProperties
+            return
+          }
+
+          try {
+            $stream = $part.GetStream()
+            $reader = New-Object System.IO.StreamReader $stream
+            # This gets the ModuleInfo
+            ([xml]$reader.ReadToEnd()).ModuleManifest
+          } catch [Exception] {
+            $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+          } finally {
+            if($reader) {
+              $reader.Close()
+              $reader.Dispose()
+            }
+            if($stream) {
+              $stream.Close()
+              $stream.Dispose()
+            }
+          }
+
+        } catch [Exception] {
+          $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+        } finally {
+          $Package.Close()
+          $Package.Dispose()
+        }
+      }
+    }
+
 
     ##### Private functions ######
     function Copy-Stream {
