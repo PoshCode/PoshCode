@@ -132,6 +132,7 @@ function Invoke-Web {
 
       #  Sends the results to the specified output file. Enter a path and file name. If you omit the path, the default is the current location.
       #  By default, Invoke-WebRequest returns the results to the pipeline. To send the results to a file and to the pipeline, use the Passthru parameter.
+      [Parameter(Position=1)]
       [Alias("OutFile")]
       [string]$OutPath,
 
@@ -200,7 +201,6 @@ function Invoke-Web {
   )
 
   process {
-    Write-Verbose "Downloading '$Uri'"
     $EAP,$ErrorActionPreference = $ErrorActionPreference, "Stop"
     $request = [System.Net.HttpWebRequest]::Create($Uri)
     if($DebugPreference -ne "SilentlyContinue") {
@@ -304,34 +304,38 @@ function Invoke-Web {
  
     Write-Verbose "Retrieved $($Response.ResponseUri): $($Response.StatusCode)"
     if((Test-Path variable:response) -and $response.StatusCode -eq 200) {
+      Write-Verbose "OutPath: $OutPath"
       # Magics to figure out a file location based on the response
       if($OutPath -and !(Split-Path $OutPath)) {
         $OutPath = Join-Path ([IO.Path]::GetTempPath()) $OutPath
       }
       elseif((!$Passthru -and !$OutPath) -or ($OutPath -and (Test-Path -PathType "Container" $OutPath)))
       {
-        [string]$OutPath = ([regex]'(?i)filename=(.*)$').Match( $response.Headers["Content-Disposition"] ).Groups[1].Value
-        $OutPath = $OutPath.trim("\/""'")
+        [string]$OutFile = ([regex]'(?i)filename=(.*)$').Match( $response.Headers["Content-Disposition"] ).Groups[1].Value
+        $OutFile = $OutFile.trim("\/""'")
          
         $ofs = ""
-        $OutPath = [Regex]::Replace($OutPath, "[$([Regex]::Escape(""$([System.IO.Path]::GetInvalidPathChars())$([IO.Path]::AltDirectorySeparatorChar)$([IO.Path]::DirectorySeparatorChar)""))]", "_")
+        $OutFile = [Regex]::Replace($OutFile, "[$([Regex]::Escape(""$([System.IO.Path]::GetInvalidPathChars())$([IO.Path]::AltDirectorySeparatorChar)$([IO.Path]::DirectorySeparatorChar)""))]", "_")
         $ofs = " "
         
-        Write-Verbose "Guessed an OutPath: $OutPath"
-
-        if(!$OutPath) {
-          $OutPath = $response.ResponseUri.Segments[-1]
-          $OutPath = $OutPath.trim("\/")
-          if(!$OutPath) { 
-            $OutPath = Read-Host "Please provide a file name"
+        if(!$OutFile) {
+          $OutFile = $response.ResponseUri.Segments[-1]
+          $OutFile = $OutFile.trim("\/")
+          if(!$OutFile) { 
+            $OutFile = Read-Host "Please provide a file name"
           }
-          $OutPath = $OutPath.trim("\/")
-          if(!([IO.FileInfo]$OutPath).Extension) {
-            $OutPath = $OutPath + "." + $response.ContentType.Split(";")[0].Split("/")[1]
+          $OutFile = $OutFile.trim("\/")
+          if(!([IO.FileInfo]$OutFile).Extension) {
+            $OutFile = $OutFile + "." + $response.ContentType.Split(";")[0].Split("/")[1]
           }
         }
-        $OutPath = Join-Path (Convert-Path (Get-Location -PSProvider "FileSystem")) $OutPath
-        Write-Verbose "Calculated the full path to save to: $OutPath"
+        Write-Verbose "Determined a filename: $OutFile"
+        if($OutPath) {
+          $OutPath = Join-Path $OutPath $OutFile
+        } else {
+          $OutPath = Join-Path (Convert-Path (Get-Location -PSProvider "FileSystem")) $OutFile
+        }
+        Write-Verbose "Calculated the full path: $OutPath"
       }
 
       if($Passthru) {
@@ -339,50 +343,63 @@ function Invoke-Web {
         [string]$output = ""
       }
  
-      [int]$goal = $response.ContentLength
-      $reader = $response.GetResponseStream()
-      if($OutPath) {
-        Write-Verbose "Opening output file $OutPath"
-        try {
-          $writer = new-object System.IO.FileStream $OutPath, "Create"
-        } catch { # Catch just in case, lots of things could go wrong ...
-          Write-Error $_.Exception -Category WriteError
-          return
+      try {
+        [int]$goal = $response.ContentLength
+        $reader = $response.GetResponseStream()
+        if($OutPath) {
+          try {
+            $writer = new-object System.IO.FileStream $OutPath, "Create"
+          } catch { # Catch just in case, lots of things could go wrong ...
+            Write-Error $_.Exception -Category WriteError
+            return
+          }
+        }        
+        [byte[]]$buffer = new-object byte[] 4096
+        [int]$total = [int]$count = 0
+        do
+        {
+          $count = $reader.Read($buffer, 0, $buffer.Length);
+          if($OutPath) {
+            $writer.Write($buffer, 0, $count);
+          } 
+          if($Passthru){
+            $output += $encoding.GetString($buffer,0,$count)
+          } elseif(!$quiet) {
+            $total += $count
+            if($goal -gt 0) {
+              Write-Progress "Downloading $Uri" "Saving $total of $goal" -id 0 -percentComplete (($total/$goal)*100)
+            } else {
+              Write-Progress "Downloading $Uri" "Saving $total bytes..." -id 0
+            }
+          }
+        } while ($count -gt 0)
+      } catch [Exception] {
+        $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+        Write-Error "Could not download package from $Url"
+      } finally {
+        if(Test-Path variable:Reader) {
+          $Reader.Close()
+          $Reader.Dispose()
+        }
+        if(Test-Path variable:Writer) {
+          $writer.Flush()
+          $Writer.Close()
+          $Writer.Dispose()
         }
       }
-
-      [byte[]]$buffer = new-object byte[] 4096
-      [int]$total = [int]$count = 0
-      do
-      {
-        $count = $reader.Read($buffer, 0, $buffer.Length);
-        Write-Verbose "Read $count"
-        if($OutPath) {
-          $writer.Write($buffer, 0, $count);
-        } 
-        if($Passthru){
-          $output += $encoding.GetString($buffer,0,$count)
-        } elseif(!$quiet) {
-          $total += $count
-          if($goal -gt 0) {
-            Write-Progress "Downloading $Uri" "Saving $total of $goal" -id 0 -percentComplete (($total/$goal)*100)
-          } else {
-            Write-Progress "Downloading $Uri" "Saving $total bytes..." -id 0
-          }
-        }
-      } while ($count -gt 0)
       
-      $reader.Close()
+      Write-Progress "Finished Downloading $Uri" "Saved $total bytes..." -id 0 -Completed
 
       if($OutPath) {
-        $writer.Flush()
-        $writer.Close()
         Get-Item $OutPath
       } elseif($Passthru) {
         $output
       }
     }
-    if(Test-Path variable:response) { $response.Close(); }
+    if(Test-Path variable:response) {
+      $response.Close(); 
+      $response.Dispose(); 
+    }
 
     if($SessionVariable) {
       Set-Variable $SessionVariable -Scope 1 -Value ([PSCustomObject]@{
