@@ -44,7 +44,7 @@
     # Our Extensions
     $Script:ModuleInfoExtension  = ".moduleinfo"
     $Script:ModuleManifestExtension = ".psd1"
-    $Script:ModulePackageExtension = ".psmx"    
+    $Script:ModulePackageExtension = ".psmx"
 
     function Get-ModulePackage {
       #.Synopsis
@@ -80,6 +80,7 @@
           $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path")) | Out-Null
           $PsBoundParameters.Add("InstallPath", $InstallPath) | Out-Null
         }
+        Write-Host "ParameterSetName: $($PSCmdlet.ParameterSetName)`nInstallPath: ${InstallPath}`n$($PsBoundParameters|Format-Table -Auto|Out-String)"        
       }
       end {
         ## TODO: Confirm they want to overwrite the file?
@@ -156,71 +157,89 @@
           $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path"))
           $PsBoundParameters.Add("InstallPath", $InstallPath)
         }
-
-        $RejectAllOverwrite = $false;
-        $ConfirmAllOverwrite = $false;
+        if(!(Test-Path variable:RejectAllOverwriteOnInstall)){
+          $RejectAllOverwriteOnInstall = $false;
+          $ConfirmAllOverwriteOnInstall = $false;
+        }
       }
       process {
-        try {
-          if("$Package" -match "^https?://" ) {
-            $Package = Get-ModulePackage $Package $InstallPath
+        if("$Package" -match "^https?://" ) {
+          $Package = Get-ModulePackage $Package $InstallPath
+        }
+        # Open it as a package
+        $PackagePath = Resolve-Path $Package -ErrorAction Stop
+        $InstallPath = "$InstallPath".TrimEnd("\")
+
+        # Warn them if they're installing in an irregular location
+        if(!(@($Env:PSModulePath -split ";" | Resolve-Path | Convert-Path) -match ([Regex]::Escape((Convert-Path $InstallPath)) + ".*"))) {
+          if((Get-PSCallStack | Where-Object{ $_.Command -eq "Install-ModulePackage" }).Count -le 1) {
+            Write-Warning "Install path '$InstallPath' is not in yout PSModulePath!"
           }
-          # Open it as a package
-          $PackagePath = Resolve-Path $Package -ErrorAction Stop
+        }
 
-          $Manifest = Get-ModuleManifestXml $PackagePath
-
-          # We need to verify the RequiredModules are available, or install them.
-          if($Manifest."ModuleManifest.RequiredModules") {
-            $FailedModules = @()
-            foreach($RequiredModule in $Manifest."ModuleManifest.RequiredModules".ModuleId) {
-              # If the module is available ... 
-              if($Module = Get-Module -Name $RequiredModule.ModuleName -ListAvailable) {
-                if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.ModuleVersion }) {
-                  if($Import) {
-                    Import-Module -Name $RequiredModule.ModuleName -MinimumVersion
-                    continue
-                  }
-                } else {
-                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version). Trying upgrade:"
+        # We need to verify the RequiredModules are available, or install them.
+        $Manifest = Get-ModuleManifestXml $PackagePath
+        if($Manifest."ModuleManifest.RequiredModules") {
+          $FailedModules = @()
+          foreach($RequiredModule in $Manifest."ModuleManifest.RequiredModules".ModuleId) {
+            # If the module is available ... 
+            $VPR = "SilentlyContinue"
+            $VPR, $VerbosePreference = $VerbosePreference, $VPR
+            if($Module = Get-Module -Name $RequiredModule.Name -ListAvailable) {
+              $VPR, $VerbosePreference = $VerbosePreference, $VPR
+              if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.Version }) {
+                if($Import) {
+                  Import-Module -Name $RequiredModule.Name -MinimumVersion
+                  continue
                 }
               } else {
-                  Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module. Trying install:"
+                Write-Warning "The package $PackagePath requires $($RequiredModule.Version) of the $($RequiredModule.Name) module. Yours is version $($Module.Version). Trying upgrade:"
               }
-              # Check for a local copy, maybe we get lucky:
-              $Folder = Split-Path $PackagePath
-              if(Test-Path (Join-Path $Folder "$($RequiredModule.ModuleName)-$($RequiredModule.ModuleVersion)$ModulePackageExtension")) {
-                Install-ModulePackage $RequiredModule.ReleaseUri $InstallPath
-                continue
-              }
-              # If they have a ReleaseUri, try that:
-              if($RequiredModule.ReleaseUri) {
-                Install-ModulePackage $RequiredModule.ReleaseUri $InstallPath
-                continue
-              } 
-
-              Write-Warning "The module package does not have a ReleaseUri for the required module $($RequiredModule.ModuleName), and there's not a local copy."
-              $FailedModules += $RequiredModule
+            } else {
+                Write-Warning "The package $PackagePath requires the $($RequiredModule.Name) module. Trying install:"
+            }
+            # Check for a local copy, maybe we get lucky:
+            $Folder = Split-Path $PackagePath
+            # Check with and without the version number in the file name:
+            
+            if(($RequiredFile = Get-Item (Join-Path $Folder "$($RequiredModule.Name)*$ModulePackageExtension") | 
+                                  Sort-Object { [IO.Path]::GetFileNameWithoutExtension($_) } | 
+                                  Select-Object -First 1) -and
+               (Get-ModuleManifestXml $RequiredFile).Version -ge $RequiredModule.Version)
+            {
+              Write-Warning "Installing required module $($RequiredModule.Name) from $RequiredFile"
+              Install-ModulePackage $RequiredFile $InstallPath
               continue
-            }
-            if($FailedModules) {
-              Write-Error "Unable to resolve required modules."
-              Write-Output $FailedModules
-              return # TODO: Should we install anyway? Prompt?
-            }
-          }
+            } 
+            # If they have a ReleaseUri, try that:
+            if($RequiredModule.ReleaseUri) {
+              Write-Warning "Installing required module $($RequiredModule.Name) from $($RequiredModule.ReleaseUri)"
+              Install-ModulePackage $RequiredModule.ReleaseUri $InstallPath
+              continue
+            } 
 
+            Write-Warning "The module package does not have a ReleaseUri for the required module $($RequiredModule.Name), and there's not a local copy."
+            $FailedModules += $RequiredModule
+            continue
+          }
+          if($FailedModules) {
+            Write-Error "Unable to resolve required modules."
+            Write-Output $FailedModules
+            return # TODO: Should we install anyway? Prompt?
+          }
+        }
+
+        try {
           $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
           Write-Host ($Package.PackageProperties|Select-Object Title,Version,@{n="Guid";e={$_.Identifier}},Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
 
           $ModuleName = $Package.PackageProperties.Title
-          $InstallPath = "$InstallPath".TrimEnd("\")
           if($InstallPath -match ([Regex]::Escape($ModuleName)+'$')) {
             $InstallPath = Split-Path $InstallPath
           }
-        
+
           if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $($ModuleName)" )) {
-            if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
+            if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
               $success = $false
               $null = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
               
@@ -321,7 +340,11 @@
             default {
               Write-Verbose "Finding Module by Module Name"
               # Hopefully, they've just specified a module name:
+
+              $VPR = "SilentlyContinue"
+              $VPR, $VerbosePreference = $VerbosePreference, $VPR
               $Module = Get-Module $ModulePath -ListAvailable | Select-Object -First 1
+              $VPR, $VerbosePreference = $VerbosePreference, $VPR
               if($Module) {
                 $ModuleInfoPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleInfoExtension"
                 $ModuleManifestPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleManifestExtension"
@@ -337,7 +360,10 @@
               $ModuleBase = Split-Path $ModulePath
             }
             # Hopefully, it's at least in the PSModulePath (or already loaded)
+            $VPR = "SilentlyContinue"
+            $VPR, $VerbosePreference = $VerbosePreference, $VPR
             $Module = Get-Module (Split-Path $ModuleBase -Leaf) -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleBase }
+            $VPR, $VerbosePreference = $VerbosePreference, $VPR
             # But otherwise, we can always try importing it:
             if(!$Module) {
               Write-Verbose "Finding Module by Import-Module (least optimal method)"
