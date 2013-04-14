@@ -163,7 +163,7 @@
       process {
         try {
           if("$Package" -match "^https?://" ) {
-            $PackagePath = Get-ModulePackage $Package $InstallPath
+            $Package = Get-ModulePackage $Package $InstallPath
           }
           # Open it as a package
           $PackagePath = Resolve-Path $Package -ErrorAction Stop
@@ -175,7 +175,7 @@
             $FailedModules = @()
             foreach($RequiredModule in $Manifest."ModuleManifest.RequiredModules".ModuleId) {
               # If the module is available ... 
-              if($Module = Get-Module -Name $RequiredModule.ModuleName -ListAvailable }) {
+              if($Module = Get-Module -Name $RequiredModule.ModuleName -ListAvailable) {
                 if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.ModuleVersion }) {
                   if($Import) {
                     Import-Module -Name $RequiredModule.ModuleName -MinimumVersion
