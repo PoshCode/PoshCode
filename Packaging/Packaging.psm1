@@ -6,6 +6,8 @@
 # We need to make up a URL for the metadata psd1 relationship type
 $ModuleMetadataType   = "http://schemas.poshcode.org/package/module-metadata"
 $ModuleHelpInfoType   = "http://schemas.poshcode.org/package/help-info"
+$ModuleReleaseType    = "http://schemas.poshcode.org/package/release-info"
+$ModuleLicenseType    = "http://schemas.poshcode.org/package/license"
 $PackageThumbnailType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"
 # This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
 $ManifestType         = "http://schemas.microsoft.com/packaging/2010/07/manifest"
@@ -55,7 +57,6 @@ function New-ModulePackage {
 
     # The folder where packages should be placed (defaults to the current FileSystem working directory)
     [Parameter()]
-    [ValidateScript({if(!(Test-Path $_ -Type Leaf)){ throw "The OutputPath must be an existing FOLDER path." }})]
     [string]$OutputPath = $(Get-Location -PSProvider FileSystem),
 
     # If set, overwrite existing packages without prompting
@@ -88,9 +89,16 @@ function New-ModulePackage {
     {
       Write-Warning "ModuleInfo file not found, generating from module manifest: $($Module.Path)"
       Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Creating ModuleInfo Metatada File" -Id 0
-      # Note: this will prompt for mandatory parameters if they're not provided to New-ModulePackage
-      Set-ModuleInfo $Module
-      $null = Test-Path $ModuleInfoPath -ErrorAction Stop
+      # TODO: this should prompt for mandatory parameters if they're not provided to New-ModulePackage
+      Remove-Variable Xaml -Scope Script -ErrorAction SilentlyContinue
+      Update-ModuleInfo $Module
+      if(!(Test-Path $ModuleInfoPath)) {
+        if(Test-Path Variable:Xaml) {
+          $ManifestContent = $Script:Xaml
+        } else {
+          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.UnauthorizedAccessException "Couldn't access Module Manifest file: $ModuleInfoPath"), "Access Denied", "InvalidResult", $_) )
+        }
+      }
     }
 
     # Our packages are ModuleName.psmx (for now, $ModulePackageExtension = .psmx)
@@ -138,7 +146,7 @@ function New-ModulePackage {
           $FileList = Get-ChildItem $Module.FileList | 
                         Where-Object {-not $_.PSIsContainer} | 
                         Select-Object -Expand FullName
-          if($FileList -notcontains $ModuleInfoPath) {
+          if(($FileList -notcontains $ModuleInfoPath) -and (Test-Path $ModuleInfoPath)) {
             $FileList += $ModuleInfoPath
           }
 
@@ -239,8 +247,39 @@ function New-ModulePackage {
             }
           }
 
+          # When the manifest can't be written out (and doesn't exist on disk), as a last-ditch effort
+          # We have this way around it by generating a manifest in memory (Of course, it won't have URLS)
+          if((Test-Path variable:ManifestContent) -and !(Test-Path $ModuleInfoPath)){
+            $FileUri = [System.IO.Packaging.PackUriHelper]::CreatePartUri( ($ModuleInfoPath -replace $ModuleRootRex, "") )
+            $part = $Package.CreatePart( $FileUri, "text/xaml", "Maximum" ); 
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ManifestType)
+            Write-Verbose "    Added Relationship: $ManifestType"
+
+            # Copy the data to the Document Part 
+            try {
+              $writer = $part.GetStream()
+              $bytes = [System.Text.Encoding]::UTF8.GetBytes($ManifestContent)
+              $writer.Write($bytes, 0, $bytes.Count)
+            } catch [Exception]{
+              $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+            } finally {
+              if($writer) {
+                $writer.Close()
+                $writer.Dispose()
+              }
+            }
+            # TODO: Make mandatory parts of the Module Manifest mandatory, and change this warning.
+            Write-Warning "The module package manifest was NOT found (it should be created with Update-ModuleInfo at '$ModuleInfoPath'). Without it, the module is not fully valid."
+          }
+
           if($Module.HelpInfoUri) {
-            $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType)
+            $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
+          }
+          if($Module.ReleaseUri) {
+            $Package.CreateRelationship( $Module.ReleaseUri, "External", $ModuleReleaseType )
+          }
+          if($Module.LicenseUri) {
+            $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
           }
 
         } catch [Exception] {
@@ -301,17 +340,23 @@ function Get-ModuleInfo {
           try {
             $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
 
-            $manifest = $Package.GetRelationshipsByType( $ManifestType )
-            if(!$manifest) {
+            $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
+            if(!$Manifest -or !$Manifest.TargetUri ){
               Write-Warning "This Package is invalid, it has not specified the manifest"
-              Write-Output $Package.PackageProperties
+              Write-Output $Package.PackageProperties | 
+                Add-Member NoteProperty HelpInfoUri ($Package.GetRelationshipsByType($ModuleHelpInfoType))[0].TargetUri -Passthru | 
+                Add-Member NoteProperty ReleaseUri ($Package.GetRelationshipsByType($ModuleReleaseType))[0].TargetUri -Passthru | 
+                Add-Member NoteProperty LicenseUri ($Package.GetRelationshipsByType($ModuleLicenseType))[0].TargetUri -Passthru
               return
             }
 
             $Part = $Package.GetPart( $manifest.TargetUri )
-            if(!$manifest) {
+            if(!$Part) {
               Write-Warning "This Package is invalid, it has no manifest at $($manifest.TargetUri)"
-              Write-Output $Package.PackageProperties
+              Write-Output $Package.PackageProperties | 
+                Add-Member NoteProperty HelpInfoUri ($Package.GetRelationshipsByType($ModuleHelpInfoType))[0].TargetUri -Passthru | 
+                Add-Member NoteProperty ReleaseUri ($Package.GetRelationshipsByType($ModuleReleaseType))[0].TargetUri -Passthru | 
+                Add-Member NoteProperty LicenseUri ($Package.GetRelationshipsByType($ModuleLicenseType))[0].TargetUri -Passthru
               return
             }
 
@@ -320,7 +365,7 @@ function Get-ModuleInfo {
               # This gets the ModuleInfo
               [Xaml.XamlServices]::Load($reader) | 
                 Add-Member NoteProperty PackagePath $PackagePath -Passthru |
-                Add-Member NoteProperty PSPath ("{0}::{1}" -f $PackagePath.Provider, $PackagePath.ProviderPath) -Passthru
+                Add-Member NoteProperty PSPath ("{0}::{1}" -f $PackagePath.Provider, $PackagePath.ProviderPath) -Passthru                
             } catch [Exception]{
               $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
             } finally {
@@ -372,6 +417,8 @@ function Get-ModuleInfo {
       $ModuleManifestPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleManifestExtension"
     }
 
+    Write-Verbose "ModuleManifest Path: $ModuleManifestPath"
+
     if(Test-Path $ModuleInfoPath) {
       Write-Verbose "Loading ModuleManifest"
       $ModuleInfo = [system.xaml.xamlservices]::Load( $ModuleInfoPath ) | 
@@ -399,7 +446,6 @@ function Update-ModuleInfo {
   [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='Medium', HelpUri='http://go.microsoft.com/fwlink/?LinkID=141555')]
   param(
     [Parameter(Mandatory=$true, Position=0)]
-    [string]
     ${Module},
 
     [AllowEmptyCollection()]
@@ -535,14 +581,13 @@ function Update-ModuleInfo {
   end
   {
     $ModuleInfo = Get-ModuleInfo $Module
-    $ErrorAction = "Stop"
+    $ErrorActionPreference = "Stop"
 
     if($ModuleInfo.FileList) {
       [string[]]$Files = $ModuleInfo.FileList -replace ("(?i:" + [regex]::Escape((Split-Path $ModuleInfo.ModuleInfoPath)) + "\\?)"), ".\"
       $ModuleInfo.FileList.Clear()
       $ModuleInfo.FileList.AddRange($Files)
     }
-
 
     if($PSModuleInfo = Get-Module $Module -ErrorAction SilentlyContinue) {
       if($PSModuleInfo.FileList) {
@@ -587,28 +632,35 @@ function Update-ModuleInfo {
     }
 
     ## TODO: Prompt for empty required properties and update ModuleInfo
+    $Script:Xaml = $null
+    try {
+      $Script:Xaml = [Xaml.XamlServices]::Save( $ModuleInfo )
+      $NoPermission = $false
+      Set-Content $ModuleInfo.ModuleInfoPath $Script:Xaml -Encoding UTF8 -ErrorAction Continue
 
-    [Xaml.XamlServices]::Save( $ModuleInfo ) > $ModuleInfo.ModuleInfoPath
+      # Generate a hashtable from ModuleInfo for splatting to New-ModuleManifest
+      $HashTable = $ModuleInfo | Select-Object AliasesToExport, Author, ClrVersion, CmdletsToExport, CompanyName, Copyright,
+                                 DefaultCommandPrefix, Description, DotNetFrameworkVersion, FileList, FormatsToProcess,
+                                 FunctionsToExport, Guid, HelpInfoUri, PassThru, Path, PowerShellHostName,
+                                 PowerShellHostVersion, PowerShellVersion, PrivateData, ProcessorArchitecture,
+                                 RequiredAssemblies, RootModule, ScriptsToProcess, TypesToProcess, VariablesToExport,
+                                 @{n="ModuleVersion"; e={$_.Version}},
+                                 @{n="NestedModules"; e={ $_.NestedModules | % { if($_.Version -gt 0.0) { [HashTable]$_ } else { $_.Name } } }},
+                                 @{n="RequiredModules"; e={ $_.RequiredModules | % { if($_.Version -gt 0.0) { [HashTable]$_ } else { $_.Name } } }},
+                                 @{n="ModuleList"; e={ $_.ModuleList | % { if($_.Version -gt 0.0) { [HashTable]$_ } else { $_.Name } } }} | ConvertTo-Hashtable -NoNulls
 
-    # Generate a hashtable from ModuleInfo for splatting to New-ModuleManifest
-    $HashTable = $ModuleInfo | Select-Object AliasesToExport, Author, ClrVersion, CmdletsToExport, CompanyName, Copyright,
-                               DefaultCommandPrefix, Description, DotNetFrameworkVersion, FileList, FormatsToProcess,
-                               FunctionsToExport, Guid, HelpInfoUri, PassThru, Path, PowerShellHostName,
-                               PowerShellHostVersion, PowerShellVersion, PrivateData, ProcessorArchitecture,
-                               RequiredAssemblies, RootModule, ScriptsToProcess, TypesToProcess, VariablesToExport,
-                               @{n="ModuleVersion"; e={$_.Version}},
-                               @{n="NestedModules"; e={ $_.NestedModules | % { if($_.Version -gt 0.0) { [HashTable]$_ } else { $_.Name } } }},
-                               @{n="RequiredModules"; e={ $_.RequiredModules | % { if($_.Version -gt 0.0) { [HashTable]$_ } else { $_.Name } } }},
-                               @{n="ModuleList"; e={ $_.ModuleList | % { if($_.Version -gt 0.0) { [HashTable]$_ } else { $_.Name } } }} | ConvertTo-Hashtable -NoNulls
+      Write-Verbose "ModuleManifest Values:`n$( $HashTable | Out-String )"
 
-    Write-Verbose "ModuleManifest Values:`n$( $HashTable | Out-String )"
-
-    # If they updated anything, then we should rewrite the ModuleManifest
-    if(($PsBoundParameters.Keys.Count -gt 0) -and $PSCmdlet.ShouldContinue("We need to update the module manifest, is that ok?", "Updating $($ModuleInfo.Name)")) {    
-      Write-Warning "Generating ModuleInfo file: '$($ModuleInfo.ModuleInfoPath)' with new values. Please verify the manifest matches."
-      # Call New-ModuleManifest with the ModuleInfo hashtable
-      New-ModuleManifest @HashTable -Path $ModuleInfo.ModuleManifestPath
-      Write-Host "Updated values:`n$($PsBoundParameters | Out-String)"
+      # If they updated anything, then we should rewrite the ModuleManifest
+      if(($PsBoundParameters.Keys.Count -gt 0) -and $PSCmdlet.ShouldContinue("We need to update the module manifest, is that ok?", "Updating $($ModuleInfo.Name)")) {    
+        Write-Warning "Generating ModuleInfo file: '$($ModuleInfo.ModuleInfoPath)' with new values. Please verify the manifest matches."
+        # Call New-ModuleManifest with the ModuleInfo hashtable
+        New-ModuleManifest @HashTable -Path $ModuleInfo.ModuleManifestPath
+        Write-Host "Updated values:`n$($PsBoundParameters | Out-String)"
+      }
+    } catch [Exception] {
+      $NoPermission = $true
+      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
     }
 
   }

@@ -201,7 +201,6 @@
             # Check for a local copy, maybe we get lucky:
             $Folder = Split-Path $PackagePath
             # Check with and without the version number in the file name:
-            
             if(($RequiredFile = Get-Item (Join-Path $Folder "$($RequiredModule.Name)*$ModulePackageExtension") | 
                                   Sort-Object { [IO.Path]::GetFileNameWithoutExtension($_) } | 
                                   Select-Object -First 1) -and
@@ -409,16 +408,16 @@
         try {
           $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
 
-          $manifest = $Package.GetRelationshipsByType( $ManifestType )
-          if(!$manifest) {
+          $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
+          if(!$Manifest -or !$Manifest.TargetUri) {
             Write-Warning "This Package is invalid, it has not specified the manifest"
             Write-Output $Package.PackageProperties
             return
           }
 
-          $Part = $Package.GetPart( $manifest.TargetUri )
-          if(!$manifest) {
-            Write-Warning "This Package is invalid, it has no manifest at $($manifest.TargetUri)"
+          $Part = $Package.GetPart( $Manifest.TargetUri )
+          if(!$Part) {
+            Write-Warning "This Package is invalid, it has no manifest at $($Manifest.TargetUri)"
             Write-Output $Package.PackageProperties
             return
           }
