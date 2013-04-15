@@ -118,9 +118,10 @@ function Set-ConfigData {
     }
   }
 
-  $ConfigString = "# You can edit this file using the Packaging commands:`n" +
-                  "# Get-ConfigData and Set-ConfigData or using Update-Config`n" +
-                  "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n"
+  $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
+                  "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n" +
+                  "# Note that the defaults here are the ones recommended by Microsoft:`n" +
+                  "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350%28v=vs.85%29.aspx`n"
 
   $ConfigString += $(
     foreach($k in $ConfigData.Keys) {
