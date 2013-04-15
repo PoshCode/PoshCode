@@ -1,4 +1,4 @@
-PoshCode Packging Module (BETA)
+PoshCode Packaging Module (BETA)
 ===============================
 
 PoshCode Modules for Packaging, Searching, Fetching
@@ -65,20 +65,22 @@ Major TODO Items:
 
 If you want to help, I could use help in verious areas, please contact me to let me know that you'll work on one so we don't double up :)
 
-- Test the module and file issues here on GitHub
-- [ ] A format for update feeds
-  - [ ] Determine the feed format, considering nuget atom and helpInfoUri
-  - [ ] Write Update-Module(Package?) to check for updates
-  - [ ] Generate the feed during New-ModulePackage
-- [ ] Support for downgrading (I need thoughts on how this should behave)
-- [ ] Support for SxS versions (I need thoughts on how this could work)
-- [ ] Write .Example sections for the major external functions from the modules. Please be sure they are also added (with verification) as test cases in Tests.ps1
-- [ ] Profide testing & feedback & code-review for Update-ModuleInfo (I think it's still missing some parameters for updates, and is missing support for removing items from psd1)
-- [ ] Write Test Case Scripts. There are some examples in the Tests.ps1 file, but we need a lot more (I would use PSAINT, but don't care much).
-  - [ ] Write test cases involving weird paths: UNC folders, PSDrives, self-signed https servers (probably not supported yet)
-  - [ ] Write test cases for the ModulePackage cmdlets
-  - [ ] Write test cases for the ModuleInfo cmdlets
-  - [ ] Write test cases for the Invoke-Web cmdlet
+The simplest (but most important) thing that you can do is to just test the module, and file issues here on GitHub.  
 
+The biggest thing you can do is to write Test Case scripts for me. There are some examples in the Tests.ps1 file, but we need a lot more (I would use PSAINT, but don't care much).
 
+- Write test cases involving weird paths: UNC folders, PSDrives, self-signed https servers (probably not supported yet)
+- Write test cases for the ModulePackage cmdlets
+- Write test cases for the ModuleInfo cmdlets
+- Write test cases for the Invoke-Web cmdlet
 
+Additionally, I've got a fairly long task list that starts with these items:
+
+- A format for update feeds
+  - Determine the feed format, considering NuGet atom and HelpInfoUri
+  - Write Update-Module(Package?) to check for updates
+  - Generate the feed during New-ModulePackage
+- Support for downgrading (I need thoughts on how this should behave)
+- Support for SxS versions (I need thoughts on how this could work)
+- Write .Example sections for the major external functions from the modules. Please be sure they are also added (with verification) as test cases in Tests.ps1
+- Code Review Update-ModuleInfo (I think it's still missing some parameters for updates, and it's definitely missing support for removing items from psd1)
