@@ -61,17 +61,17 @@ Major TODO Items:
 If you want to help, I could use help in verious areas, please contact me to let me know that you'll work on one so we don't double up :)
 
 * NEXT: A format for update feeds (based on atom from nuget?)
-* * A feed that we can Update-Module with
-* * Generate the feed during New-ModulePackage
+  * A feed that we can Update-Module with
+  * Generate the feed during New-ModulePackage
 * Support for downgrading (I need thoughts on how this should behave)
 * Support for SxS versions (I need thoughts on how this could work)
 * Need .Examples added to the major external functions from the modules.
 * Need feedback and eyes on the Update-ModuleInfo (I think it's still missing some parameters for updates, and is missing support for removing items from psd1)
 * Need Tests Written. I've been very bad about test-first when writing PowerShell, but I've reached the point where I need test cases just to avoid regressions.
-* * There are some examples in the Tests.ps1 file, but we need a lot more (I would use PSAINT, but don't care much).
-* * I need test cases for the ModulePackage cmdlets
-* * I need test cases for the ModuleInfo cmdlets
-* * I need test cases (and scripts) for the Invoke-Web cmdlet, there are a lot of ways to use it that I still haven't tested at all
+  * There are some examples in the Tests.ps1 file, but we need a lot more (I would use PSAINT, but don't care much).
+  * I need test cases for the ModulePackage cmdlets
+  * I need test cases for the ModuleInfo cmdlets
+  * I need test cases (and scripts) for the Invoke-Web cmdlet, there are a lot of ways to use it that I still haven't tested at all
 
 
 
