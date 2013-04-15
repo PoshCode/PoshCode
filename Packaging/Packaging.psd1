@@ -15,7 +15,7 @@ RootModule = 'Packaging.psm1'
 NestedModules = @('.\Configuration.psm1','.\Installation.psm1','.\InvokeWeb.psm1')
 
 # Version number of this module.
-ModuleVersion = '1.0.5'
+ModuleVersion = '1.0.6'
 
 # ID used to uniquely identify this module
 GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'
@@ -86,7 +86,7 @@ AliasesToExport = '*'
 # List of all files packaged with this module
 FileList = '.\Packaging.moduleinfo', '.\Packaging.psd1', '.\Packaging.ini', 
            '.\InvokeWeb.psm1', '.\Packaging.psm1',
-           '.\Configuration.ps1', 'Install.ps1',
+           '.\Configuration.psm1', 'Installation.psm1',
            '.\Source\AssemblyInfo.cs', '.\Source\ModuleId.cs',
            '.\Source\StringList.cs', '.\Source\ModuleInfo.cs', 
            '.\Source\ModuleManifest.cs', '.\Source\UnitTests.cs', 

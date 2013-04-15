@@ -1,10 +1,10 @@
-<ModuleManifest Author="Joel 'Jaykul' Bennett &lt;Jaykul@HuddledMasses.org&gt;" ClrVersion="4.0" CompanyName="http://HuddledMasses.org" Copyright="Copyright (c) 2013 by Joel Bennett, all rights reserved." Description="Packaging Module for PowerShell Modules" DotNetFrameworkVersion="4.5" FunctionsToExport="New-ModulePackage,Get-ModulePackage,Install-ModulePackage,Get-ModuleInfo,Update-ModuleInfo,Test-ConfigData,Get-ConfigData,Set-ConfigData,Get-SpecialFolder,Invoke-Web" Guid="88c6579a-27b2-41c8-86c6-cd23acb791e9" HelpInfoUri="" LicenseUri="http://opensource.org/licenses/ms-pl" Name="Packaging" PowerShellVersion="3.0" ProjectUri="http://PoshCode.org" ReleaseUri="http://PoshCode.org/Modules/Packaging.psmx" RootModule="Packaging.psm1" Version="1.0.5" xmlns="http://schemas.poshcode.org/packaging" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ModuleManifest Author="Joel 'Jaykul' Bennett &lt;Jaykul@HuddledMasses.org&gt;" ClrVersion="4.0" CompanyName="http://HuddledMasses.org" Copyright="Copyright (c) 2013 by Joel Bennett, all rights reserved." Description="Packaging Module for PowerShell Modules" DotNetFrameworkVersion="4.5" FunctionsToExport="New-ModulePackage,Get-ModulePackage,Install-ModulePackage,Get-ModuleInfo,Update-ModuleInfo,Test-ConfigData,Get-ConfigData,Set-ConfigData,Get-SpecialFolder,Invoke-Web" Guid="88c6579a-27b2-41c8-86c6-cd23acb791e9" HelpInfoUri="" LicenseUri="http://opensource.org/licenses/ms-pl" Name="Packaging" PowerShellVersion="3.0" ProjectUri="http://PoshCode.org" ReleaseUri="http://PoshCode.org/Modules/Packaging.psmx" RootModule="Packaging.psm1" Version="1.0.6" xmlns="http://schemas.poshcode.org/packaging" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ModuleManifest.FileList>
     <x:String>.\Packaging.moduleinfo</x:String>
     <x:String>.\Packaging.psd1</x:String>
     <x:String>.\Packaging.psm1</x:String>
     <x:String>.\Packaging.ini</x:String>
-    <x:String>.\Configuration.ps1</x:String>
+    <x:String>.\Configuration.psm1</x:String>
     <x:String>.\InvokeWeb.psm1</x:String>
     <x:String>.\Source\AssemblyInfo.cs</x:String>
     <x:String>.\Source\ModuleId.cs</x:String>
@@ -14,7 +14,7 @@
     <x:String>.\Source\UnitTests.cs</x:String>
     <x:String>.\Source\Version.cs</x:String>
     <x:String>.\Source\VersionTypeConverter.cs</x:String>
-    <x:String>.\Install.ps1</x:String>
+    <x:String>.\Installation.psm1</x:String>
   </ModuleManifest.FileList>
   <ModuleManifest.NestedModules>
     <ModuleId Name=".\Configuration.psm1" ReleaseUri="" />
