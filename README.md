@@ -47,8 +47,8 @@ Configuration
 
 These commands could be useful for any module which needs to store key=value pairs on disk. The Get-ConfigData and Set-ConfigData commands allow you to read a simple key=value file just the way that ConvertFrom-StringData does, except they have a couple of very useful features: 
 
-# There is no need to double-up on backslashes (\\)
-# Windows Special Folders can be used by name in the values, like {MyDocuments}
+* There is no need to double-up on backslashes (\\)
+* Windows Special Folders can be used by name in the values, like {MyDocuments}
 
 The Get-SpecialFolder command allows you to get a hashtable of all the special folder names and values (so you can see what {tokens} are available), or to look up a specific special folder name to get the path.
 
