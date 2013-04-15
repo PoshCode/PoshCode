@@ -1,5 +1,5 @@
-PoshCode BETA
-=============
+PoshCode Packging Module (BETA)
+===============================
 
 PoshCode Modules for Packaging, Searching, Fetching
 
@@ -12,7 +12,11 @@ The current build supports:
 * Reading .moduleinfo manifests directly from a package (without extracting)
 * Downloading packages 
 * Installing (extracting) packages to your local system
-* Configuration of the paths used for installing 
+* Installing packages from urls (download to modules folder and install from there)
+* Checking dependencies (and downloading them if they have URLs)
+* Skipping downloads of dependencies if they are installed already or the package is available
+* Configuration of the paths used for installing
+* Validation (warns if not) that install paths are in PSModulePath
 
 Note: this module is still in **beta** and may cause loss of data (from your .psd1 files, or modules which you choose to *overwrite* on install) when used -- please make copies before testing!
 
@@ -65,14 +69,14 @@ If you want to help, I could use help in verious areas, please contact me to let
   * Generate the feed during New-ModulePackage
 * Support for downgrading (I need thoughts on how this should behave)
 * Support for SxS versions (I need thoughts on how this could work)
-* Need .Examples added to the major external functions from the modules.
+* Need .Example sections added to the major external functions from the modules. If you add any, please be sure they are also added (with verification) as test cases in Tests.ps1
 * Need feedback and eyes on the Update-ModuleInfo (I think it's still missing some parameters for updates, and is missing support for removing items from psd1)
 * Need Tests Written. I've been very bad about test-first when writing PowerShell, but I've reached the point where I need test cases just to avoid regressions.
   * There are some examples in the Tests.ps1 file, but we need a lot more (I would use PSAINT, but don't care much).
-  * I need test cases for the ModulePackage cmdlets
-  * I need test cases for the ModuleInfo cmdlets
-  * I need test cases (and scripts) for the Invoke-Web cmdlet, there are a lot of ways to use it that I still haven't tested at all
-
+  * Need test cases for all cmdlets involving weird paths: UNC folders, PSDrives, self-signed https servers (probably not supported yet)
+  * Need test cases for the ModulePackage cmdlets
+  * Need test cases for the ModuleInfo cmdlets
+  * Need test cases (and scripts) for the Invoke-Web cmdlet, there are a lot of ways to use it that I still haven't tested at all
 
 
 
