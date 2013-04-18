@@ -1,28 +1,28 @@
 <?php
-	use Sabre\DAV;
-	use Sabre\DAV\Auth;
+  use Sabre\DAV;
+  use Sabre\DAV\Auth;
 
-	// Files we need
-	require_once '../SabreDAV/vendor/autoload.php';
+  // Files we need
+  require_once '../SabreDAV/vendor/autoload.php';
 
-	class ReadOnlyDirectory extends DAV\Collection {
-	  private $myPath;
-		function __construct($myPath) {
-	    $this->myPath = $myPath;
-	  }
+  class ReadOnlyDirectory extends DAV\Collection {
+    private $myPath;
+    function __construct($myPath) {
+      $this->myPath = $myPath;
+    }
 
-  	function getChildren() {
-	    $children = array();
-	    // Loop through the directory, and create objects for each node
-	    foreach(scandir($this->myPath) as $node) {
-	      // Ignoring files staring with .
-	      if ($node[0]==='.') continue;
-	      $children[] = $this->getChild($node);
-	    }
-	    return $children;
-	  }
+    function getChildren() {
+      $children = array();
+      // Loop through the directory, and create objects for each node
+      foreach(scandir($this->myPath) as $node) {
+        // Ignoring files staring with .
+        if ($node[0]==='.') continue;
+        $children[] = $this->getChild($node);
+      }
+      return $children;
+    }
 
-  	function getChild($name) {
+    function getChild($name) {
       $path = $this->myPath . '/' . $name;
 
       // We have to throw a NotFound exception if the file didn't exist
@@ -37,68 +37,92 @@
       } else {
           return new ReadOnlyFile($path);
       }
-	  }
+    }
 
-  	function childExists($name) {
+    function childExists($name) {
       return file_exists($this->myPath . '/' . $name);
-	  }
+    }
 
-  	function getName() {
+    function getName() {
       return basename($this->myPath);
-	  }
-	}
+    }
+  }
 
-	class ReadOnlyFile extends DAV\File {
-	  private $myPath;
-	  function __construct($myPath) {
-	    $this->myPath = $myPath;
-	  }
+  class ReadOnlyFile extends DAV\File {
+    private $myPath;
+    function __construct($myPath) {
+      $this->myPath = $myPath;
+    }
 
-	  function getName() {
+    function getName() {
       return basename($this->myPath);
-	  }
+    }
 
-	  function get() {
-	    return fopen($this->myPath,'r');
-	  }
+    function get() {
+      return fopen($this->myPath,'r');
+    }
 
-	  function getSize() {
+    function getSize() {
       return filesize($this->myPath);
-	  }
+    }
 
-	  function getETag() {
+    function getETag() {
       return '"' . md5_file($this->myPath) . '"';
-	  }
-	}
+    }
+
+    function getContentType() {
+      // The FileInfo extension is not available on DreamHost?
+      //$const = defined('FILEINFO_MIME_TYPE') ? FILEINFO_MIME_TYPE : FILEINFO_MIME;
+      //$handle = finfo_open($const, '/usr/share/file/magic.mime');
+      //$result = finfo_file($handle, $this->myPath);
+      //echo $result;
+
+      $fileext = substr(strrchr($this->myPath, '.'), 1);
+      if (empty($fileext)) return null;
 
 
-	// Change public to something else, if you are using a different directory for your files
-	// $rootDirectory = new DAV\FS\Directory('public');
-	$rootDirectory = new ReadOnlyDirectory('public');
+      // We only know these file types .psmx and .ps1
+      switch($fileext) {
+        case "ps1":
+      	  return "text/powershell";
+      	case "psmx":
+      	  return "application/vnd.poshcode.package+zip";
+      	case "psdxml":
+      	  return "application/vnd.poshcode.package-info+xml";
+      }
 
-	// The server object is responsible for making sense out of the WebDAV protocol
-	$server = new DAV\Server($rootDirectory);
+      return null; // no match at all
+    }
+  }
 
-	// SabreDAV lives in a subdirectory with mod_rewrite sending every request to server.php
-	$server->setBaseUri('/Modules');
 
-	// // Authentication backend
-	// $authBackend = new \Sabre\DAV\Auth\Backend\File('.htdigest');
-	// $auth = new \Sabre\DAV\Auth\Plugin($authBackend,'poshcode');
-	// $server->addPlugin($auth);
+  // Change public to something else, if you are using a different directory for your files
+  // $rootDirectory = new DAV\FS\Directory('public');
+  $rootDirectory = new ReadOnlyDirectory('public');
 
-	// Support for html frontend
-	$browser = new \Sabre\DAV\Browser\Plugin();
-	$server->addPlugin($browser);
+  // The server object is responsible for making sense out of the WebDAV protocol
+  $server = new DAV\Server($rootDirectory);
 
-	// The lock manager is reponsible for making sure users don't overwrite each others changes. Change 'data' to a different 
-	// directory, if you're storing your data somewhere else.
-	$lockBackend = new DAV\Locks\Backend\File('data/locks');
-	$lockPlugin = new DAV\Locks\Plugin($lockBackend);
+  // SabreDAV lives in a subdirectory with mod_rewrite sending every request to server.php
+  $server->setBaseUri('/Modules');
 
-	$server->addPlugin($lockPlugin);
+  // // Authentication backend
+  // $authBackend = new \Sabre\DAV\Auth\Backend\File('.htdigest');
+  // $auth = new \Sabre\DAV\Auth\Plugin($authBackend,'poshcode');
+  // $server->addPlugin($auth);
 
-	// All we need to do now, is to fire up the server
-	$server->exec();
+  // Support for html frontend
+  $browser = new \Sabre\DAV\Browser\Plugin(false);
+  $server->addPlugin($browser);
+
+  // The lock manager is reponsible for making sure users don't overwrite each others changes. Change 'data' to a different 
+  // directory, if you're storing your data somewhere else.
+  $lockBackend = new DAV\Locks\Backend\File('data/locks');
+  $lockPlugin = new DAV\Locks\Plugin($lockBackend);
+
+  $server->addPlugin($lockPlugin);
+
+  // All we need to do now, is to fire up the server
+  $server->exec();
 
 ?>

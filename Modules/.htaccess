@@ -4,6 +4,11 @@ RewriteBase /Modules
 RewriteRule (.*) server.php [E=HTTP_AUTHORIZATION:%{HTTP:Authorization},L]
 </IfModule>
 
+<IfModule mod_mime>
+AddType text/powershell .ps1
+AddType application/zip .psmx
+
+</IfModule>
 
 # Output buffering needs to be off, to prevent high memory usage
 php_flag output_buffering off
