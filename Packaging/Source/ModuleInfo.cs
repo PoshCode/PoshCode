@@ -37,8 +37,9 @@ namespace PoshCode.Packaging
          this.Keywords = new StringList();
 
          // Initializing these to empty strings (while the DefaultValue is null) causes them to always show up in serialized objects, even if they're blank
-         this.LicenseUri = string.Empty;
-         this.ProjectUri = string.Empty;
+         this.LicenseUri  = string.Empty;
+         this.HomePageUri = string.Empty;
+         this.PackageUri  = string.Empty;
          this.HelpInfoUri = string.Empty;
       }
 
@@ -86,10 +87,16 @@ namespace PoshCode.Packaging
       public string HelpInfoUri { get; set; }
 
       /// <summary>
-      /// Gets or sets the information URI for this module project.  This should be the homepage for the module project.
+      /// Gets or sets the information URI for this module project. This should be the homepage for the module project.
       /// </summary>
-      /// <value>The module project URI.</value>
-      public string ProjectUri { get; set; }
+      /// <value>The module home page URI.</value>
+      public string HomePageUri { get; set; }
+
+      /// <summary>
+      /// Gets or sets the package download URI. This should be the location where the version-specific .psmx package can be downloaded
+      /// </summary>
+      /// <value>The module package download URI.</value>
+      public string PackageUri { get; set; }
 
       /// <summary>
       /// Gets the keyword tags for this module.

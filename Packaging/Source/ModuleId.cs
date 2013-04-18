@@ -12,7 +12,7 @@
 // <summary>
 //    The minimal set of information to identify a module on PoshCode.
 //    Note that we don't need author, copyright, license, or requirements etc., 
-//    But we do need a ReleaseUri Uri, so we can find the ACTUAL module, and get that information
+//    But we do need a ModuleInfoUri Uri, so we can find the ACTUAL module, and get that information
 // </summary>
 // ***********************************************************************
 namespace PoshCode.Packaging
@@ -34,7 +34,7 @@ namespace PoshCode.Packaging
       /// </summary>
       public ModuleId()
       {
-         this.ReleaseUri = string.Empty;
+         this.ModuleInfoUri = string.Empty;
       }
 
       /// <summary>
@@ -61,7 +61,7 @@ namespace PoshCode.Packaging
       /// Gets or sets the module release URI.
       /// </summary>
       /// <value>The module release URI.</value>
-      public string ReleaseUri { get; set; }
+      public string ModuleInfoUri { get; set; }
 
       /// <summary>
       /// Performs an implicit conversion from <see cref="System.Management.Automation.PSModuleInfo" /> to <see cref="ModuleId" />.

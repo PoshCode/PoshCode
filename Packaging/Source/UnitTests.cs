@@ -129,14 +129,14 @@ namespace PoshCode.Packaging
          y = System.Windows.Markup.XamlWriter.Save(m);
 
          ok = x.Contains(@"<ModuleManifest.RequiredModules>
-    <ModuleId Name=""One"" ReleaseUri="""" />
-    <ModuleId Name=""Two"" ReleaseUri="""" />
+    <ModuleId Name=""One"" ModuleInfoUri="""" />
+    <ModuleId Name=""Two"" ModuleInfoUri="""" />
   </ModuleManifest.RequiredModules>");
 
          // TODO: Figure out XamlWriter
          ok = ok || y.Contains(@"<ModuleManifest.RequiredModules>
-    <ModuleId Name=""One"" ReleaseUri="""" />
-    <ModuleId Name=""Two"" ReleaseUri="""" />
+    <ModuleId Name=""One"" ModuleInfoUri="""" />
+    <ModuleId Name=""Two"" ModuleInfoUri="""" />
   </ModuleManifest.RequiredModules>");
 
          Assert.IsTrue(ok);
@@ -170,7 +170,7 @@ namespace PoshCode.Packaging
                       {
                          Name = "Module",
                          Guid = new Guid("CA2EB1D9-C16C-4E59-8E3B-7370A1494670"),
-                         ReleaseUri = "http://PoshCode.org",
+                         ModuleInfoUri = "http://PoshCode.org",
                          Version = "2.1"
                       };
 
@@ -179,7 +179,7 @@ namespace PoshCode.Packaging
          Assert.AreEqual(mid.Name, psm["ModuleName"]);
          Assert.AreEqual(mid.Version, psm["ModuleVersion"]);
          Assert.AreEqual(mid.Guid, psm["Guid"]);
-         Assert.IsFalse(psm.ContainsKey("ReleaseUri"));
+         Assert.IsFalse(psm.ContainsKey("ModuleInfoUri"));
 
          mid = new ModuleId()
          {
@@ -191,7 +191,7 @@ namespace PoshCode.Packaging
          Assert.AreEqual(mid.Name, psm["ModuleName"]);
          Assert.AreEqual(new Version("0.0"), psm["ModuleVersion"]);
          Assert.IsFalse(psm.ContainsKey("Guid"));
-         Assert.IsFalse(psm.ContainsKey("ReleaseUri"));
+         Assert.IsFalse(psm.ContainsKey("ModuleInfoUri"));
       }
 
 

@@ -3,23 +3,6 @@
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ########################################################################
 
-# We need to make up a URL for the metadata psd1 relationship type
-$ModuleMetadataType   = "http://schemas.poshcode.org/package/module-metadata"
-$ModuleHelpInfoType   = "http://schemas.poshcode.org/package/help-info"
-$ModuleReleaseType    = "http://schemas.poshcode.org/package/release-info"
-$ModuleLicenseType    = "http://schemas.poshcode.org/package/license"
-$PackageThumbnailType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"
-# This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
-$ManifestType         = "http://schemas.microsoft.com/packaging/2010/07/manifest"
-# I'm not sure there's any benefit to extra types:
-# CorePropertiesType is the .psmdcp
-$CorePropertiesType   = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
-$ModuleRootType       = "http://schemas.poshcode.org/package/module-root"
-$ModuleContentType    = "http://schemas.poshcode.org/package/module-file"
-# Our Extensions
-$ModuleInfoExtension  = ".moduleinfo"
-$ModuleManifestExtension = ".psd1"
-$ModulePackageExtension = ".psmx"
 # The config file
 $ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
 
@@ -83,24 +66,6 @@ function New-ModulePackage {
       $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (.psd1) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
     }
 
-    # If there's no ModuleInfo file, then we need to *create* one so that we can package this module
-    $ModuleInfoPath = [IO.Path]::ChangeExtension($Module.Path, $ModuleInfoExtension)
-    if(!(Test-Path $ModuleInfoPath))
-    {
-      Write-Warning "ModuleInfo file not found, generating from module manifest: $($Module.Path)"
-      Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Creating ModuleInfo Metatada File" -Id 0
-      # TODO: this should prompt for mandatory parameters if they're not provided to New-ModulePackage
-      Remove-Variable Xaml -Scope Script -ErrorAction SilentlyContinue
-      Update-ModuleInfo $Module
-      if(!(Test-Path $ModuleInfoPath)) {
-        if(Test-Path Variable:Xaml) {
-          $ManifestContent = $Script:Xaml
-        } else {
-          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.UnauthorizedAccessException "Couldn't access Module Manifest file: $ModuleInfoPath"), "Access Denied", "InvalidResult", $_) )
-        }
-      }
-    }
-
     # Our packages are ModuleName.psmx (for now, $ModulePackageExtension = .psmx)
     $PackageName = $Module.Name
     $PackageVersion = $Module.Version
@@ -117,6 +82,35 @@ function New-ModulePackage {
 
     if($PSCmdlet.ShouldProcess("Package the module '$($Module.ModuleBase)' to '$PackagePath'", "Package '$($Module.ModuleBase)' to '$PackagePath'?", "Packaging $($Module.Name)" )) {
       if($Force -Or !(Test-Path $PackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$PackagePath' already exists, do you want to replace it?", "Packaging $($Module.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
+
+        # If there's no ModuleInfo file, then we need to *create* one so that we can package this module
+        $ModuleInfoPath = [IO.Path]::ChangeExtension( $Module.Path, $Script:ModuleInfoExtension )
+        $PackageInfoPath = [IO.Path]::ChangeExtension( $PackagePath, $Script:ModuleInfoExtension )
+        
+        if(!(Test-Path $ModuleInfoPath))
+        {
+          Write-Warning "ModuleInfo file '$ModuleInfoPath' not found, generating from module manifest: $($Module.Path)"
+          Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Creating ModuleInfo Metatada File" -Id 0
+          # TODO: this should prompt for mandatory parameters if they're not provided to New-ModulePackage
+          Remove-Variable Xaml -Scope Script -ErrorAction SilentlyContinue
+          Update-ModuleInfo $Module
+          if(!(Test-Path $ModuleInfoPath)) {
+            if(Test-Path Variable:Xaml) {
+              Set-Content $PackageInfoPath $Script:Xaml -ErrorVariable CantWrite
+              if($CantWrite) {
+                $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.UnauthorizedAccessException "Couldn't output Package Info file: $PackageInfoPath"), "Access Denied", "InvalidResult", $CantWrite) )
+              }
+            } else {
+              $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.UnauthorizedAccessException "Couldn't access Module Manifest file: $ModuleInfoPath"), "Access Denied", "InvalidResult", $_) )
+            }
+          }
+        } else {
+          Copy-Item $ModuleInfoPath $PackageInfoPath -ErrorVariable CantWrite
+          if($CantWrite) {
+            $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
+          }
+        }
+        Write-Output (Get-Item $PackageInfoPath)
 
         Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Preparing File List" -Id 0    
 
@@ -275,11 +269,14 @@ function New-ModulePackage {
           if($Module.HelpInfoUri) {
             $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
           }
-          if($Module.ReleaseUri) {
-            $Package.CreateRelationship( $Module.ReleaseUri, "External", $ModuleReleaseType )
+          if($Module.ModuleInfoUri) {
+            $Package.CreateRelationship( $Module.ModuleInfoUri, "External", $ModuleReleaseType )
           }
           if($Module.LicenseUri) {
             $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
+          }
+          if($Module.PackageUri) {
+            $Package.CreateRelationship( $Module.PackageUri, "External", $ModuleReleaseType )
           }
 
         } catch [Exception] {
@@ -295,7 +292,10 @@ function New-ModulePackage {
         Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Complete" -Id 0 -Complete
 
         # Write out the FileInfo for the package
-        Get-Item $PackagePath    
+        Get-Item $PackagePath
+
+        # TODO: once the URLs are mandatory, print the full URL here
+        Write-Host "You should now copy the $ModuleInfoExtension and $ModuleManifestExtension files to the locations specified by the ModuleInfoUri and PackageUri"  
       }
     }
   }
@@ -345,7 +345,7 @@ function Get-ModuleInfo {
               Write-Warning "This Package is invalid, it has not specified the manifest"
               Write-Output $Package.PackageProperties | 
                 Add-Member NoteProperty HelpInfoUri ($Package.GetRelationshipsByType($ModuleHelpInfoType))[0].TargetUri -Passthru | 
-                Add-Member NoteProperty ReleaseUri ($Package.GetRelationshipsByType($ModuleReleaseType))[0].TargetUri -Passthru | 
+                Add-Member NoteProperty ModuleInfoUri ($Package.GetRelationshipsByType($ModuleReleaseType))[0].TargetUri -Passthru | 
                 Add-Member NoteProperty LicenseUri ($Package.GetRelationshipsByType($ModuleLicenseType))[0].TargetUri -Passthru
               return
             }
@@ -355,7 +355,7 @@ function Get-ModuleInfo {
               Write-Warning "This Package is invalid, it has no manifest at $($manifest.TargetUri)"
               Write-Output $Package.PackageProperties | 
                 Add-Member NoteProperty HelpInfoUri ($Package.GetRelationshipsByType($ModuleHelpInfoType))[0].TargetUri -Passthru | 
-                Add-Member NoteProperty ReleaseUri ($Package.GetRelationshipsByType($ModuleReleaseType))[0].TargetUri -Passthru | 
+                Add-Member NoteProperty ModuleInfoUri ($Package.GetRelationshipsByType($ModuleReleaseType))[0].TargetUri -Passthru | 
                 Add-Member NoteProperty LicenseUri ($Package.GetRelationshipsByType($ModuleLicenseType))[0].TargetUri -Passthru
               return
             }
@@ -556,11 +556,15 @@ function Update-ModuleInfo {
 
     [AllowNull()]
     [string]
-    ${ReleaseUri},
+    ${HomePageUri},
 
     [AllowNull()]
     [string]
-    ${ProjectUri},
+    ${ModuleInfoUri},
+
+    [AllowNull()]
+    [string]
+    ${PackageUri},
 
     [switch]
     ${PassThru},
