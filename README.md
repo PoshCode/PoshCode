@@ -1,6 +1,12 @@
 PoshCode Packaging Module (BETA)
 ===============================
 
+##### *tl;dr:* Execute the following command to install the module:
+
+```posh
+\\PoshCode.org\Modules\Install.ps1
+```
+
 #### PoshCode Modules for Packaging, Searching, Fetching
 
 PoshCode's purpose is (and has always been) to make it easier to distribute modules (and scripts) over the internet or within local networks.  **With this new module we are focusing on making it easy to distribute modules without explaining module installation to your users.**  Additionally, we're supporting the automatic installation of dependencies, so that you can distribute  modules which have a dependency on other modules without worrying about how your users will find those modules.
@@ -17,18 +23,6 @@ The main Packaging module contains the New-ModulePackage and the Get-ModuleInfo 
 ### Installation
 
 The Installation submodule is the most important *part of the Packaging Module*, in a sense, it's the "*Packaging Lite*" module. It contains the commands for fetching modules from the internet and extracting them locally, as well as a light version of the Get-ModuleInfo command. This ***(will soon)*** includes the ability to fetch dependencies and check for updates.
-
-You can bootstrap install the current release of the Packaging module in PowerShell 3 by using Invoke-Expression and Invoke-WebRequest like this:
-
-```posh
-IEX (IWR http://PoshCode.org/Install).Content
-```
-
-PowerShell 2 requires a little more code to download the install script:
-
-```posh
-IEX (New-Object Net.WebClient).DownloadString("http://PoshCode.org/Install")
-```
 
 The key feature of the Installation submodule is that it can be invoked as a script (using iex on it's contents) to install the main module, but can also serve itself as a light version of the Packaging module, suitable for end users that don't ever need to create packages, or that need to avoid creating the binary assemblies used by the main Packaging module.
 

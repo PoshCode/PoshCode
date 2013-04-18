@@ -1,4 +1,11 @@
 # File System Install
+Test "When the Packaging module is your first module" {
+  ## You'll have a PSModulePath with just two folders, and the default one won't exist (choose the default)
+
+  assert { throw "Test not Written"}
+} -Category "Clean","CreateDirectory"
+
+
 Test "Install a new module with no dependencies from a file (clean install)" { assert { throw "Test Not Written" }} -Category "FileSystem"
 Test "Install an upgrade module from a file (should overwrite module files but not delete ini files)" { assert { throw "Test Not Written" }} -Category "FileSystem"
 Test "Install an downgrade module from a file (should delete all files first)" { assert { throw "Test Not Written" }} -Category "FileSystem"
