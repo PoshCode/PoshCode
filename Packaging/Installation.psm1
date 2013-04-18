@@ -48,7 +48,7 @@
 
     function Get-ModulePackage {
       #.Synopsis
-      #   Download the module package to a local path
+      #   Downloads a file to the local module path
       [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
       param(
         # The path to a package to download
@@ -80,7 +80,7 @@
           $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path")) | Out-Null
           $PsBoundParameters.Add("InstallPath", $InstallPath) | Out-Null
         }
-        Write-Host "ParameterSetName: $($PSCmdlet.ParameterSetName)`nInstallPath: ${InstallPath}`n$($PsBoundParameters|Format-Table -Auto|Out-String)"        
+        # Write-Host "ParameterSetName: $($PSCmdlet.ParameterSetName)`nInstallPath: ${InstallPath}`n$($PsBoundParameters|Format-Table -Auto|Out-String)"        
       }
       end {
         ## TODO: Confirm they want to overwrite the file?
@@ -168,6 +168,20 @@
         }
         # Open it as a package
         $PackagePath = Resolve-Path $Package -ErrorAction Stop
+
+        # TODO: Make this more bullet-proof (it's just testing extensions right now)
+        # Verify it's a package (it would start with PK♥♦)
+        # if("504b0304" -cne @(Get-FileMarker $PackagePath -Count 4)) {
+        if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
+          $Mi = Get-ModuleInfo $PackagePath
+          if($Mi.PackageUri) {
+            Write-Verbose "Found PackageUri '$($Mi.PackageUri)' in Module Info file '$PackagePath' -- Installing by Uri"
+            $PsBoundParameters["Package"] = $Mi.PackageUri
+            Install-ModulePackage @PsBoundParameters
+            return
+          }
+        }
+
         $InstallPath = "$InstallPath".TrimEnd("\")
 
         # Warn them if they're installing in an irregular location
@@ -311,7 +325,7 @@
         [string]$ModuleInfoPath = ""
 
         # If the parameter isn't already a ModuleInfo object, then let's make it so:
-        if($Module -is "string") {
+        if($Module -is "string" -or $Module -is [System.IO.FileInfo] -or $Module -is [System.Management.Automation.PathInfo]) {
           $ModulePath = Convert-Path $Module -ErrorAction SilentlyContinue -ErrorVariable noPath
           if($noPath) { $ModulePath = $Module }
           $Module = $null
@@ -367,7 +381,7 @@
             # But otherwise, we can always try importing it:
             if(!$Module) {
               Write-Verbose "Finding Module by Import-Module (least optimal method)"
-              $Module = Import-Module $ModulePath -Passthru
+              $Module = Import-Module $ModulePath -Passthru -ErrorAction SilentlyContinue
               if($Module) {
                 Remove-Module $Module
               }
@@ -451,6 +465,35 @@
 
 
     ##### Private functions ######
+    function Get-FileMarker {
+      [CmdletBinding()]
+      param(
+        # The path to the file to read from
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Alias("PSPath")]
+        $FilePath,
+        
+        # How many bytes to read
+        $Count = 4
+      )
+      process {
+        $FilePath = Convert-Path $FilePath
+        try {
+          $stream = [IO.File]::Open( $FilePath, "Open", "Read" )
+          [byte[]]$buffer = new-object byte[] $Count
+          $count = $stream.Read($buffer, 0, $Count)
+          @( $buffer | ForEach-Object { $_.ToString("x2") } ) -join ""
+        } catch [Exception] {
+          $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+        } finally {
+          if($stream){
+            $stream.Close()
+            $stream.Dispose()
+          }
+        }
+      }
+    }
+
     function Copy-Stream {
       #.Synopsis
       #   Copies data from one stream to another
