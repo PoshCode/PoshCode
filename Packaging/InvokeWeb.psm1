@@ -184,6 +184,11 @@ function Invoke-Web {
       [ValidateSet("Default", "Delete", "Get", "Head", "Options", "Post", "Put", "Trace")]
       [String]$Method = "Get",
 
+      # Specifies a ScriptBlock which will be passed the response when requests are successful.
+      #
+      # This ScriptBlock can, among other things, redefine the $OutFile and $Passthru parameters, and prepend to the $output stream.
+      [ScriptBlock]$ResponseHandler,
+
       # Uses a proxy server for the request, rather than connecting directly to the Internet resource. Enter the URI of a network proxy server.
       # Note: if you have a default proxy configured in your internet settings, there is no need to set it here.
       [Uri]$Proxy,
@@ -305,6 +310,7 @@ function Invoke-Web {
     Write-Verbose "Retrieved $($Response.ResponseUri): $($Response.StatusCode)"
     if((Test-Path variable:response) -and $response.StatusCode -eq 200) {
       Write-Verbose "OutPath: $OutPath"
+
       # Magics to figure out a file location based on the response
       if($OutPath -and !(Split-Path $OutPath)) {
         $OutPath = Join-Path ([IO.Path]::GetTempPath()) $OutPath
@@ -326,7 +332,7 @@ function Invoke-Web {
           }
           $OutFile = $OutFile.trim("\/")
           if(!([IO.FileInfo]$OutFile).Extension) {
-            $OutFile = $OutFile + "." + $response.ContentType.Split(";")[0].Split("/")[1]
+            $OutFile = $OutFile + "." + $response.ContentType.Split(";")[0].Split("/")[-1].Split("+")[-1]
           }
         }
         Write-Verbose "Determined a filename: $OutFile"
@@ -343,6 +349,14 @@ function Invoke-Web {
         [string]$output = ""
       }
  
+      try {
+        if($ResponseHandler) {
+          . $ResponseHandler $response
+        }
+      } catch {
+        $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+      }
+
       try {
         [int]$goal = $response.ContentLength
         $reader = $response.GetResponseStream()
@@ -392,7 +406,7 @@ function Invoke-Web {
 
       if($OutPath) {
         Get-Item $OutPath
-      } elseif($Passthru) {
+      } elseif(Get-Variable output -Scope Local) {
         $output
       }
     }
