@@ -72,11 +72,13 @@ function New-ModulePackage {
     if(!$OutputPath.EndsWith($ModulePackageExtension)) {
       if(Test-Path $OutputPath -ErrorAction Stop) {
         $PackagePath = Join-Path $OutputPath "${PackageName}-${PackageVersion}${ModulePackageExtension}"
+        $PackageInfoPath = Join-Path $OutputPath "${PackageName}${ModuleInfoExtension}"
       }
     } elseif($Piped) {
       $OutputPath = Split-Path $OutputPath
       if(Test-Path $OutputPath -ErrorAction Stop) {
         $PackagePath = Join-Path $OutputPath "${PackageName}-${PackageVersion}${ModulePackageExtension}"
+        $PackageInfoPath = Join-Path $OutputPath "${PackageName}${ModuleInfoExtension}"
       }
     }
 
@@ -85,7 +87,6 @@ function New-ModulePackage {
 
         # If there's no ModuleInfo file, then we need to *create* one so that we can package this module
         $ModuleInfoPath = [IO.Path]::ChangeExtension( $Module.Path, $Script:ModuleInfoExtension )
-        $PackageInfoPath = [IO.Path]::ChangeExtension( $PackagePath, $Script:ModuleInfoExtension )
         
         if(!(Test-Path $ModuleInfoPath))
         {
@@ -103,9 +104,14 @@ function New-ModulePackage {
             } else {
               $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.UnauthorizedAccessException "Couldn't access Module Manifest file: $ModuleInfoPath"), "Access Denied", "InvalidResult", $_) )
             }
+          } else {
+            Copy-Item $ModuleInfoPath $OutputPath -ErrorVariable CantWrite
+            if($CantWrite) {
+              $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
+            }
           }
         } else {
-          Copy-Item $ModuleInfoPath $PackageInfoPath -ErrorVariable CantWrite
+          Copy-Item $ModuleInfoPath $OutputPath -ErrorVariable CantWrite
           if($CantWrite) {
             $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
           }
@@ -317,8 +323,12 @@ function Get-ModuleInfo {
 
     # If the parameter isn't already a ModuleInfo object, then let's make it so:
     if($Module -isnot [System.Management.Automation.PSModuleInfo] -and $Module -isnot [PoshCode.Packaging.ModuleInfo]) {
-      $ModulePath = Convert-Path $Module -ErrorAction SilentlyContinue -ErrorVariable noPath
-      if($noPath) { $ModulePath = $Module }
+      if("$Module".Contains([IO.Path]::DirectorySeparatorChar)) {
+        $ModulePath = Convert-Path $Module -ErrorAction SilentlyContinue -ErrorVariable noPath
+        if($noPath) { $ModulePath = $Module }
+      } else {
+        $ModulePath = $Module
+      }
       $Module = $null
       $Extension = [IO.Path]::GetExtension($ModulePath)
       # It should be either a String or a FileInfo (if it's a string, it might begmo)
@@ -619,6 +629,26 @@ function Update-ModuleInfo {
       }
     }
 
+    # TODO: make the rest of the mandatory things mandatory (version, guid, etc)
+    foreach($Uri in @{
+      ModuleInfoUri = "The module info URI is a static address where the $ModuleInfoExtension file for the current version can always be found (regardless of version number)."
+      LicenseUri  = "The license URI for the module should point to a license file which describes the license for this module (CAN be relative)."
+      PackageUri  = "The package download URI is where the version-specific .psmx package can be downloaded"
+      HomePageUri = "The hompage URI for this module project."
+      HelpInfoUri = "The download URI for the PowerShell Help for this module (CAN be blank)."
+    }.GetEnumerator()) {
+
+      if($ModuleInfo.($Uri.key) -le "") {
+        Write-Host ("{0} - {1}" -f $Uri.key, $ModuleInfo.($Uri.key))
+        Write-Host $Uri.value
+        if($value = Read-Host) {
+          $ModuleInfo.($Uri.key) = $value
+          $null = $PsBoundParameters.Add($Uri.key, $value)
+        }
+      }
+    }
+
+
     # Update ModuleInfo from the PSBoundParameters
     # $HashTable = Join-Hashtable $HashTable $PsBoundParameters
     foreach($key in $PsBoundParameters.Keys) {
@@ -788,8 +818,8 @@ function Join-HashTable {
 # SIG # Begin signature block
 # MIIarwYJKoZIhvcNAQcCoIIaoDCCGpwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUfRFMiev33IsPM87n/p1tzC+b
-# uRagghXlMIID7jCCA1egAwIBAgIQfpPr+3zGTlnqS5p31Ab8OzANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQULU0YS3VrsLubYFeOiCvZsJxI
+# 9figghXlMIID7jCCA1egAwIBAgIQfpPr+3zGTlnqS5p31Ab8OzANBgkqhkiG9w0B
 # AQUFADCBizELMAkGA1UEBhMCWkExFTATBgNVBAgTDFdlc3Rlcm4gQ2FwZTEUMBIG
 # A1UEBxMLRHVyYmFudmlsbGUxDzANBgNVBAoTBlRoYXd0ZTEdMBsGA1UECxMUVGhh
 # d3RlIENlcnRpZmljYXRpb24xHzAdBgNVBAMTFlRoYXd0ZSBUaW1lc3RhbXBpbmcg
@@ -911,22 +941,22 @@ function Join-HashTable {
 # c3VyZWQgSUQgQ29kZSBTaWduaW5nIENBLTECEANLUPI8pQAAS91jSo3Y0QUwCQYF
 # Kw4DAhoFAKB4MBgGCisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkD
 # MQwGCisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJ
-# KoZIhvcNAQkEMRYEFEHZ7Rp5x9umPoMNgoTJh3IJiWjqMA0GCSqGSIb3DQEBAQUA
-# BIIBADb0ZCkE1nIeBe3PFVgwr4xdyNfQwhbEE4fM8I6Fx6kazznB4r0ZfvXasIgh
-# nuE9mGmZBpyyMt+uDsoXX5NZYdsukJNpNbNrK0fEjEXzNB16sFrZy546ribq2BAJ
-# b9ZStcBkd3qoJ1YIt4Qb8uiTzAR162rKcAqs8k1i7iKCDm1SyuahAiWewpA0X2BJ
-# KnBzY2nmFYijm6inmekyXJVvhWaUM8tQSL7BzaVrMaJXjCP0u4bUQfM42aexSnJ/
-# u84P9c7XzpgNTg1zKZSA+IZqOh31T4E9KhaKwF+ThUv3zLnpCgqTEEvKLp8dPs+l
-# LSpjladtM3BB35sHmcZ5K6VxPuihggILMIICBwYJKoZIhvcNAQkGMYIB+DCCAfQC
+# KoZIhvcNAQkEMRYEFOjEgQ5v4t0psDWtLYc0TRzbtwoOMA0GCSqGSIb3DQEBAQUA
+# BIIBAF5rcV7EKc9Qr7V0IdujlKGG+GRvb27Z5qAl03XNN/IxwbusiPDcmDDbYams
+# EE2yZHzybKfHA/sEpngNLPEG68i2fFAU2wPM1CF5EQM2RIg5Lwu0Tv/iDYa8Lagh
+# tLuLAEBvrIPRB3fo0dnIRlaqoJIzPyp01/pXXJwiGvWjGXtnxbM/ZhjbQndW+GYk
+# hwYjlm3w9GhtQKio3rs6vZPK8LHJw817llX1ZPJn/AeyEkbWrvcZB9QgYbH8UbKM
+# YP0lgWQylP/c5ZF9tVJ4CTLlsgloC+W5fLH9b/7BEoY5eMCFiXT0im2hzArBYlRU
+# qWzHXELvQSdy0JeRtfarKPeK5eChggILMIICBwYJKoZIhvcNAQkGMYIB+DCCAfQC
 # AQEwcjBeMQswCQYDVQQGEwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRp
 # b24xMDAuBgNVBAMTJ1N5bWFudGVjIFRpbWUgU3RhbXBpbmcgU2VydmljZXMgQ0Eg
 # LSBHMgIQDs/0OMj+vzVuBNhqmBsaUDAJBgUrDgMCGgUAoF0wGAYJKoZIhvcNAQkD
-# MQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMTMwNDE4MTkwMDQ1WjAjBgkq
-# hkiG9w0BCQQxFgQUpILkfw8DN9vdonZ59vns5vccm1IwDQYJKoZIhvcNAQEBBQAE
-# ggEAQWtviq3BMIaw4urtVDA1fBE/qJTnjhEFzdZtAG0xDziMlwvYMs2LW5aHqNw5
-# dcBHPE+FR2uUkn9SGddPru/XTskvdpHlOj5WjXEaJdVW5sQGlLFEcRdhUVVz8Yso
-# 1MwUlxH5yP/dzGWtvRvLI+Q6REMwNNNoeZ3y5dg9Y2lD7NwhK0XODJcyo5sMOoMq
-# YxpcaH1TEIvkaeE6j7HhtpfdUuHFfwTM31mNtlhp2oaOoS6uFXRg5OzgQQGV1DSq
-# YCPayX+v5D3BqxaDHbk6J+6zn5BLzG3SVAF/Cbows9B87UoixF5rT7JtL/oJyLRX
-# FucgnIbtCCgJS04JVRpeIsJZNw==
+# MQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMTMwNDE5MDYyNTU4WjAjBgkq
+# hkiG9w0BCQQxFgQUboDgP2EQvU9XG5bHA95uGeCwFfswDQYJKoZIhvcNAQEBBQAE
+# ggEAbzb4sJBmQaiGgsle1eAIarPZWSDbsMziEZHmCeIUA6cDjlnpO4Pwo2+ZWrUR
+# KoVqo+zjixNTt8O3OaSuq3K0E42Ta79uCNLxKSjcvBeGSTQWzm3aJrNtiK3aURH2
+# 9DYabxXT4Q8AWXVogxLGKqCKrIRT1mF5bX8+mPzcKeurmhIFGeqCl1ZmAaUOtNQn
+# qBUMcuxflCHYFFvuzWFvdxs8wWxFKV4eFZcT5q5314+Fb+Lwdwgz1pUB36l4Lkkr
+# XsErZDcSejK0k25bCr31HvKaXqPyHOEAjpbSNofj2EDmZ1r5ZcRosumaloE2N+B4
+# e3nJcf3b5yf1SMHK2yQEtsW+UA==
 # SIG # End signature block
