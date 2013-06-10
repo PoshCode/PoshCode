@@ -748,7 +748,7 @@ function Select-ModulePath {
     $default = -1
     $index = -1
     $common = -1
-    switch -Wildcard ($Env:PSModulePath -split ";") {
+    switch -Wildcard ($Env:PSModulePath -split ";" | ? {$_}) {
       "${PSHome}*" {
         ##### We do not support installing to the System location. #####
         #$index++
