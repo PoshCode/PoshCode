@@ -7,9 +7,15 @@ PoshCode Packaging Module (BETA)
 \\PoshCode.org\Modules\Install.ps1
 ```
 
+Note: that sometimes fails because Windows' WebDAV is a bit slow making initial connections. Usually running it again will work, but you can always run this instead, it's just that this way digital signatures are bypassed:
+
+```posh
+iex (iwr http://PoshCode.org/Modules/Install.ps1)
+```
+
 #### PoshCode Modules for Packaging, Searching, Fetching
 
-PoshCode's purpose is (and has always been) to make it easier to distribute modules (and scripts) over the internet or within local networks.  **With this new module we are focusing on making it easy to distribute modules without explaining module installation to your users.**  Additionally, we're supporting the automatic installation of dependencies, so that you can distribute  modules which have a dependency on other modules without worrying about how your users will find those modules.
+PoshCode's purpose is (and has always been) to make it easier to distribute modules (and scripts) over the internet or within local networks.  **With this new module we are focusing on making it easy to distribute modules without explaining module installation to your users.**  Additionally, we're supporting the automatic installation of dependencies, so that you can distribute modules which have a dependency on other modules without worrying about how your users will find those modules.
 
 The PoshCode Module Package format (.psmx) provides URIs as part of the package manifest: a _ReleaseUri_ to check for updates, a _LicenseUri_ to view the software license/eula, and _ProjectUri_ for the module's homepage. However, it also provides the _ReleaseURI_s for any dependencies. This allows tools (like our module) to not only check for updates, but also download dependencies automatically.
 
