@@ -22,6 +22,64 @@ if(!(Test-Path "$PSScriptRoot\Packaging.dll") -or $LastDate -gt (Get-Item "$PSSc
   Add-Type -Path "$PSScriptRoot\Packaging.dll" -Passthru
 }
 
+function Update-ModulePackage {
+  #.Synopsis
+  #   Check for updates for modules
+  #.Description
+  #   Test the ModuleInfoUri and upgrade if there's a newer version
+  [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
+  param(
+    # The name of the module to package
+    [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+    [ValidateNotNullOrEmpty()] 
+    $Module = "*",
+
+    # If set, overwrite existing packages without prompting
+    [switch]$Force
+  )
+  begin {
+    Write-Error "Update-ModulePackage Has Not Been Written Yet. Just run Install-ModulePackage again."
+  }
+}
+
+function Test-ModulePackage {
+  #.Synopsis
+  #   Checks if you have the latest version of each module
+  #.Description
+  #   Test the ModuleInfoUri and offer to upgrade if there's a newer version
+  [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
+  param(
+    # The name of the module to package
+    [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+    [ValidateNotNullOrEmpty()] 
+    $Module = "*",
+
+    # If set, overwrite existing packages without prompting
+    [switch]$Force
+  )
+  begin {
+    Write-Error "Test-ModulePackage Has Not Been Written Yet. Just run Install-ModulePackage again."
+    return
+
+    if("$Package" -match "^https?://" ) {
+      $Package = Get-ModulePackage $Package $InstallPath -ErrorVariable FourOhFour
+      if($FourOhFour){
+        $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
+      }
+    }
+    # Open it as a package
+    $PackagePath = Resolve-Path $Package -ErrorAction Stop
+
+
+    $ModuleInfo = Get-ModuleInfo $Module
+    if($ModuleInfo.ModuleInfoUri) {
+
+    } else {
+
+    }
+  }
+}
+
 function New-ModulePackage {
   #.Synopsis
   #   Create a new psmx package for a module
@@ -55,8 +113,13 @@ function New-ModulePackage {
   process {
     if($Module -isnot [System.Management.Automation.PSModuleInfo]) {
       # Hypothetically, could it be faster to select -first, now that pipelines are interruptable?
-      $Module = Get-Module $Module -ListAvailable | Select-Object -First 1
+      $ModuleName = $Module
+      $Module = Get-Module $ModuleName | Select-Object -First 1
+      if(!$Module) {
+        $Module = Get-Module $ModuleName -ListAvailable | Select-Object -First 1
+      }
     }
+    $ModuleInfo = Get-ModuleInfo $Module.Name | Select-Object -First 1
 
     Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    
 
@@ -66,9 +129,15 @@ function New-ModulePackage {
       $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (.psd1) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
     }
 
+
     # Our packages are ModuleName.psmx (for now, $ModulePackageExtension = .psmx)
     $PackageName = $Module.Name
-    $PackageVersion = $Module.Version
+    if($Module.Version -gt "0.0") {
+      $PackageVersion = $Module.Version
+    } else {
+      $ModuleInfo = Get-ModuleInfo $Module.Name | Select-Object -First 1
+      $PackageVersion = $ModuleInfo.Version
+    }
     if(!$OutputPath.EndsWith($ModulePackageExtension)) {
       if(Test-Path $OutputPath -ErrorAction Stop) {
         $PackagePath = Join-Path $OutputPath "${PackageName}-${PackageVersion}${ModulePackageExtension}"
@@ -116,7 +185,7 @@ function New-ModulePackage {
             $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
           }
         }
-        Write-Output (Get-Item $PackageInfoPath)
+        Get-Item $PackageInfoPath
 
         Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Preparing File List" -Id 0    
 
@@ -197,7 +266,7 @@ function New-ModulePackage {
 
             # Copy the data to the Document Part 
             try {
-              $reader = [IO.File]::Open( $File, "Open", "Read" )
+              $reader = [IO.File]::Open($File, "Open", "Read", "Read")
               $writer = $part.GetStream()
               Copy-Stream $reader $writer -Length (Get-Item $File).Length -Activity "Packing $file"
             } catch [Exception]{
@@ -584,10 +653,10 @@ function Update-ModuleInfo {
     ${DefaultCommandPrefix}
   )
   begin {
-    $null = $PsBoundParameters.Remove("Module")
+    $PsBoundParameters.Remove("Module") | Out-Null
     ## And the stupid common parameters:
     if($PsBoundParameters.ContainsKey("Verbose")) {
-      $null = $PsBoundParameters.Remove("Verbose")
+      $PsBoundParameters.Remove("Verbose") | Out-Null
     }
     $RejectAllOverwrite = $false;
     $ConfirmAllOverwrite = $false;
@@ -603,26 +672,32 @@ function Update-ModuleInfo {
       $ModuleInfo.FileList.AddRange($Files)
     }
 
+    # We need to copy the ModuleMetadata, not modify it 
     if($PSModuleInfo = Get-Module $Module -ErrorAction SilentlyContinue) {
-      if($PSModuleInfo.FileList) {
-        [string[]]$Files = $PSModuleInfo.FileList -replace ("(?i:" + [regex]::Escape($PSModuleInfo.ModuleBase) + "\\?)"), ".\"
+      $ModuleBase = $PSModuleInfo.ModuleBase
+      $PSModuleInfo = [PoshCode.Packaging.ModuleManifest]$PSModuleInfo
+      if($PSModuleInfo.FileList -and $ModuleBase) {
+        [string[]]$Files = $PSModuleInfo.FileList -replace ("(?i:" + [regex]::Escape($ModuleBase) + "\\?)"), ".\"
         $PSModuleInfo.FileList.Clear()
         $PSModuleInfo.FileList.AddRange($Files)
       }
-      $PSModuleInfo = [PoshCode.Packaging.ModuleManifest]$PSModuleInfo
 
       $Properties = $PSModuleInfo.GetType().GetProperties() | 
                       Select-Object -Expand Name | 
-                      Where-Object { ($PsBoundParameters.Keys -notcontains $_) -and $PSModuleInfo.$_ }
+                      Where-Object { 
+                        ($PsBoundParameters.Keys -notcontains $_) -and 
+                        $PSModuleInfo.$_ -and 
+                        $PSModuleInfo.$_.GetType().GetInterface("System.Collections.Generic.IList``1") -and
+                        $PSModuleInfo.$_.GetType().GetInterface("System.Collections.Generic.IList``1").GenericTypeArguments[0] -eq [string]
+                      }
       foreach($prop in $Properties) {
-        if($Interface = $PSModuleInfo.$prop.GetType().GetInterface("System.Collections.Generic.IList``1")) {
-          foreach($item in $PSModuleInfo.$prop) {
-            if($ModuleInfo.$prop -notcontains $item) {
-              if($PSCmdlet.ShouldContinue(
-                  "The value '$item' is in the .psd1 manifest. Do you want to add it to the ModuleInfo?",
-                  "Updating ModuleInfo '$prop' for $($ModuleInfo.Name)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
-                $ModuleInfo.$prop.Add( ($item -as ($Interface.GenericTypeArguments[0])) )
-              }
+        foreach($item in $PSModuleInfo.$prop) {
+          if($ModuleInfo.$prop -NotContains $item) {
+            if($PSCmdlet.ShouldContinue(
+                "The following item is in the .psd1 manifest. Do you want to add it to the ModuleInfo?`n$($item|out-string)",
+                "Updating ModuleInfo '$prop' for $($ModuleInfo.Name)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) 
+            {
+              $ModuleInfo.$prop.Add( $item )
             }
           }
         }
@@ -631,19 +706,18 @@ function Update-ModuleInfo {
 
     # TODO: make the rest of the mandatory things mandatory (version, guid, etc)
     foreach($Uri in @{
-      ModuleInfoUri = "The module info URI is a static address where the $ModuleInfoExtension file for the current version can always be found (regardless of version number)."
-      LicenseUri  = "The license URI for the module should point to a license file which describes the license for this module (CAN be relative)."
-      PackageUri  = "The package download URI is where the version-specific .psmx package can be downloaded"
-      HomePageUri = "The hompage URI for this module project."
-      HelpInfoUri = "The download URI for the PowerShell Help for this module (CAN be blank)."
+      ModuleInfoUri = "the web address where the $ModuleInfoExtension file for the current version can always be found (regardless of version number)."
+      LicenseUri    = "the path to a license file which describes the license for this module (CAN be relative)."
+      PackageUri    = "the path where this specific .psmx package will be available for download"
+      HomePageUri   = "the hompage URI for this module project."
+      HelpInfoUri   = "the download URI for the PowerShell Help for this module (press ENTER to leave it blank)."
     }.GetEnumerator()) {
 
       if($ModuleInfo.($Uri.key) -le "") {
-        Write-Host ("{0} - {1}" -f $Uri.key, $ModuleInfo.($Uri.key))
-        Write-Host $Uri.value
+        Write-Host ("{0} is blank. Please enter {1}" -f $Uri.key, $Uri.value)
         if($value = Read-Host) {
           $ModuleInfo.($Uri.key) = $value
-          $null = $PsBoundParameters.Add($Uri.key, $value)
+          $PsBoundParameters.Add($Uri.key, $value) | Out-Null
         }
       }
     }
@@ -687,10 +761,9 @@ function Update-ModuleInfo {
 
       # If they updated anything, then we should rewrite the ModuleManifest
       if(($PsBoundParameters.Keys.Count -gt 0) -and $PSCmdlet.ShouldContinue("We need to update the module manifest, is that ok?", "Updating $($ModuleInfo.Name)")) {    
-        Write-Warning "Generating ModuleInfo file: '$($ModuleInfo.ModuleInfoPath)' with new values. Please verify the manifest matches."
+        Write-Warning "Generating ModuleInfo file: '$($ModuleInfo.ModuleInfoPath)' with new values. Please verify the manifest matches.`nUpdated values:`n$($PsBoundParameters | Out-String -stream)"
         # Call New-ModuleManifest with the ModuleInfo hashtable
         New-ModuleManifest @HashTable -Path $ModuleInfo.ModuleManifestPath
-        Write-Host "Updated values:`n$($PsBoundParameters | Out-String)"
       }
     } catch [Exception] {
       $NoPermission = $true
@@ -818,8 +891,8 @@ function Join-HashTable {
 # SIG # Begin signature block
 # MIIarwYJKoZIhvcNAQcCoIIaoDCCGpwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQULU0YS3VrsLubYFeOiCvZsJxI
-# 9figghXlMIID7jCCA1egAwIBAgIQfpPr+3zGTlnqS5p31Ab8OzANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUD1h2TRnYcv73bs+0lZ1G4OMf
+# 36egghXlMIID7jCCA1egAwIBAgIQfpPr+3zGTlnqS5p31Ab8OzANBgkqhkiG9w0B
 # AQUFADCBizELMAkGA1UEBhMCWkExFTATBgNVBAgTDFdlc3Rlcm4gQ2FwZTEUMBIG
 # A1UEBxMLRHVyYmFudmlsbGUxDzANBgNVBAoTBlRoYXd0ZTEdMBsGA1UECxMUVGhh
 # d3RlIENlcnRpZmljYXRpb24xHzAdBgNVBAMTFlRoYXd0ZSBUaW1lc3RhbXBpbmcg
@@ -941,22 +1014,22 @@ function Join-HashTable {
 # c3VyZWQgSUQgQ29kZSBTaWduaW5nIENBLTECEANLUPI8pQAAS91jSo3Y0QUwCQYF
 # Kw4DAhoFAKB4MBgGCisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkD
 # MQwGCisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJ
-# KoZIhvcNAQkEMRYEFOjEgQ5v4t0psDWtLYc0TRzbtwoOMA0GCSqGSIb3DQEBAQUA
-# BIIBAF5rcV7EKc9Qr7V0IdujlKGG+GRvb27Z5qAl03XNN/IxwbusiPDcmDDbYams
-# EE2yZHzybKfHA/sEpngNLPEG68i2fFAU2wPM1CF5EQM2RIg5Lwu0Tv/iDYa8Lagh
-# tLuLAEBvrIPRB3fo0dnIRlaqoJIzPyp01/pXXJwiGvWjGXtnxbM/ZhjbQndW+GYk
-# hwYjlm3w9GhtQKio3rs6vZPK8LHJw817llX1ZPJn/AeyEkbWrvcZB9QgYbH8UbKM
-# YP0lgWQylP/c5ZF9tVJ4CTLlsgloC+W5fLH9b/7BEoY5eMCFiXT0im2hzArBYlRU
-# qWzHXELvQSdy0JeRtfarKPeK5eChggILMIICBwYJKoZIhvcNAQkGMYIB+DCCAfQC
+# KoZIhvcNAQkEMRYEFGmv9p2tthJrQD4SGjJGk4c7OIlQMA0GCSqGSIb3DQEBAQUA
+# BIIBAG59kLMmlU44ImDvlOWqqq5R+ieWUEi+OnY2Lfl2WWHhZt/xu5oZpdC8MJR0
+# 1iaZHvZ8eifq9TdZOQIOsKKp32CZsZJzSiq0W7s7H00/lw/aiZAPkozKF3JvWuoa
+# 8y7N8rns6ZvYvph0T9fhh83orfP6oEemehyABgr2rT7zLjr5ofOICcj5/ppYm6RW
+# H0J0GUg+BOn3k5YxVmLSNqT/orgs5JrUrgzEBEsom4YtWrO3IoIspjpeVB8yWd4M
+# C3bWIkYBuwD0/SKDogiWBn0HhKtOHKACatLyfUmgYBPEBaZndCQLMnfdx/f2zFhm
+# MR+zFuZQS0tFBqgpQLnH9SRiYWqhggILMIICBwYJKoZIhvcNAQkGMYIB+DCCAfQC
 # AQEwcjBeMQswCQYDVQQGEwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRp
 # b24xMDAuBgNVBAMTJ1N5bWFudGVjIFRpbWUgU3RhbXBpbmcgU2VydmljZXMgQ0Eg
 # LSBHMgIQDs/0OMj+vzVuBNhqmBsaUDAJBgUrDgMCGgUAoF0wGAYJKoZIhvcNAQkD
-# MQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMTMwNDE5MDYyNTU4WjAjBgkq
-# hkiG9w0BCQQxFgQUboDgP2EQvU9XG5bHA95uGeCwFfswDQYJKoZIhvcNAQEBBQAE
-# ggEAbzb4sJBmQaiGgsle1eAIarPZWSDbsMziEZHmCeIUA6cDjlnpO4Pwo2+ZWrUR
-# KoVqo+zjixNTt8O3OaSuq3K0E42Ta79uCNLxKSjcvBeGSTQWzm3aJrNtiK3aURH2
-# 9DYabxXT4Q8AWXVogxLGKqCKrIRT1mF5bX8+mPzcKeurmhIFGeqCl1ZmAaUOtNQn
-# qBUMcuxflCHYFFvuzWFvdxs8wWxFKV4eFZcT5q5314+Fb+Lwdwgz1pUB36l4Lkkr
-# XsErZDcSejK0k25bCr31HvKaXqPyHOEAjpbSNofj2EDmZ1r5ZcRosumaloE2N+B4
-# e3nJcf3b5yf1SMHK2yQEtsW+UA==
+# MQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMTMwNjEwMDQzMjU3WjAjBgkq
+# hkiG9w0BCQQxFgQUPvuvMcWvf2OAAxDe7BRf+Z81nYMwDQYJKoZIhvcNAQEBBQAE
+# ggEAWCwtujTvDtzPxACeljyn8Q3pA5UWWhYDsqDQAJQts2XYEWEiSrNuDngyg2Zc
+# xhK6qi2lRhe60gPrOXRtNMVHnye1FJza8+ny0uLikMEO8ZgtdydjGg5ezGfzm2g+
+# AIqfpHlPD+/7nN2qpcb4pxAX7MCcdrRgPpm99se10ymDaNwNssPv0+5RidRgvfiM
+# MDBcY9pNrKq2VBn7cFfauHduuTeHd5kmE/o/DehnJ2LcJ5mpGJ2FSGUU2ZK6nppR
+# DIcEz2vvJEgRfOdUp+/pfMh48P6A+naUQduO1t9kRTEI7RVbZNpYDwY+wAREBw1O
+# ijZnRTcdx4TH3r7mhbpuNTUtoA==
 # SIG # End signature block
