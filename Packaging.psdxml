@@ -1,0 +1,27 @@
+﻿<ModuleManifest Author="Joel 'Jaykul' Bennett &lt;Jaykul@HuddledMasses.org&gt;" ClrVersion="4.0" CompanyName="http://HuddledMasses.org" Copyright="Copyright (c) 2013 by Joel Bennett, all rights reserved." Description="Packaging Module for PowerShell Modules" DotNetFrameworkVersion="4.0" FunctionsToExport="New-ModulePackage,Install-ModulePackage,Get-ModuleInfo,Update-ModuleInfo,Test-ConfigData,Get-ConfigData,Set-ConfigData,Get-SpecialFolder,Invoke-Web,Get-ConfigData,Get-ModuleInfo,Get-SpecialFolder,Install-ModulePackage,Set-ConfigData,Test-ConfigData,Update-ModuleInfo" Guid="88c6579a-27b2-41c8-86c6-cd23acb791e9" HelpInfoUri="" HomePageUri="https://github.com/Jaykul/poshcode" LicenseUri="http://opensource.org/licenses/ms-pl" ModuleInfoUri="http://poshcode.org/Modules/Packaging.psdx" Name="Packaging" PackageUri="http://poshcode.org/Modules/Packaging-1.0.9.psmx" PowerShellVersion="3.0" RootModule="Packaging.psm1" Version="1.0.9" xmlns="http://schemas.poshcode.org/packaging" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ModuleManifest.FileList>
+    <x:String>.\Packaging.psdxml</x:String>
+    <x:String>.\Packaging.psd1</x:String>
+    <x:String>.\Packaging.psm1</x:String>
+    <x:String>.\Packaging.ini</x:String>
+    <x:String>.\Configuration.psm1</x:String>
+    <x:String>.\InvokeWeb.psm1</x:String>
+    <x:String>.\Source\AssemblyInfo.cs</x:String>
+    <x:String>.\Source\ModuleId.cs</x:String>
+    <x:String>.\Source\StringList.cs</x:String>
+    <x:String>.\Source\ModuleInfo.cs</x:String>
+    <x:String>.\Source\ModuleManifest.cs</x:String>
+    <x:String>.\Source\UnitTests.cs</x:String>
+    <x:String>.\Source\Version.cs</x:String>
+    <x:String>.\Source\VersionTypeConverter.cs</x:String>
+    <x:String>.\Installation.psm1</x:String>
+  </ModuleManifest.FileList>
+  <ModuleManifest.NestedModules>
+    <ModuleId ModuleInfoUri="" Name=".\Configuration.psm1" />
+    <ModuleId ModuleInfoUri="" Name=".\Installation.psm1" />
+  </ModuleManifest.NestedModules>
+  <ModuleManifest.RequiredAssemblies>
+    <x:String>WindowsBase</x:String>
+    <x:String>PresentationFramework</x:String>
+  </ModuleManifest.RequiredAssemblies>
+</ModuleManifest>

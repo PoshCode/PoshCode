@@ -254,14 +254,152 @@ if(!(Get-Command Invoke-WebRequest)) {
   }
 }
 
+function Install-ModuleArchive {
+  #.Synopsis
+  #   Install a module package to the module 
+  [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High", DefaultParameterSetName="UserPath")]
+  param(
+    # The package file to be installed
+    [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
+    [Alias("PSPath","PackagePath")]
+    $ZipFile,
+
+    # The PSModulePath to install to
+    [Parameter(ParameterSetName="InstallPath", Mandatory=$true, Position=1)]
+    [Alias("PSModulePath")]
+    $InstallPath,
+
+    [Switch]$Force
+  )
+
+  $ZipFile = (Resolve-Path $ZipFile -ErrorAction Stop).Path
+
+  $ModuleName = [IO.Path]::GetFileNameWithoutExtension($ZipFile)
+  if($InstallPath -notmatch ([Regex]::Escape($ModuleName)+'$')) {
+    $InstallPath = Join-Path $InstallPath $ModuleName
+  }
+
+  Write-Verbose "Expand ZipFile '$ZipFile' to '$InstallPath'"
+
+  if(Get-Command Expand-ZipFile) {
+    $InstallPath = Expand-ZipFile $ZipFile $InstallPath
+  } else {
+    # This is the backup plan for the backup plan, lets just please ... unzip the thing!
+    $shellApplication = new-object -com shell.application
+    $zipPackage = $shellApplication.NameSpace($ZipFile)
+    if($zipPackage.Items().Count  -eq 1) {
+      $InstallPathParent = Split-Path $InstallPath
+      $InstallPath = Join-Path $InstallPathParent (@($zipPackage.Items())[0].Path -replace ([Regex]::Escape($ZipFile)))
+    }
+
+    if(Test-Path $InstallPath) {
+      if($Force -or $PSCmdlet.ShouldContinue("The InstallPath exists and is not empty. Are you sure you want to overwrite '$InstallPath'?", "Deleting contents of '$InstallPath'")) {
+        Remove-Item $InstallPath -Recurse -ErrorAction Stop
+      } else {
+        throw "InstallPath '$InstallPath' Exists."
+      }
+    }
+    [string]$InstallPathParent = New-Item $InstallPath -Type Directory -Force
+    $shellApplication.NameSpace($InstallPathParent).CopyHere($zipPackage.Items())
+  }
+
+  Write-Verbose "Extracted '$ZipFile' to '$InstallPath'"
+
+  # If there's only one child, that's probably a module folder:
+  $Children = Get-ChildItem $InstallPath
+  if(@($Children).Count -eq 1 -and $Children.PSIsContainer) {
+    $ChildName = $Children.Name
+    if($Children.Name -eq (Split-Path $InstallPath -Leaf)) {
+      Write-Verbose "Moving items in '$($Children.FullName)' up a level to '$(Join-Path (Split-Path $InstallPath) $ChildName)'"
+      Move-Item "$($Children.FullName)\*" $InstallPath
+      Remove-Item $Children.FullName
+    } else {
+      $InstallPath = Join-Path (Split-Path $InstallPath) $ChildName
+      if(Test-Path $InstallPath) {
+        if($Force -or $PSCmdlet.ShouldContinue("The InstallPath exists and is not empty. Are you sure you want to overwrite '$InstallPath'?", "Deleting contents of '$InstallPath'")) {
+          Remove-Item $InstallPath -Recurse -ErrorAction Stop
+        } else {
+          throw "InstallPath '$InstallPath' Exists."
+        }
+      }
+    }
+  }
+
+  $ModulePath = $InstallPath
+  $Children = Get-ChildItem $InstallPath
+  # if there were .psd1 files in the root, one of them should be the module name!
+  if($metadata = ($Children | Select-Object -Expand FullName) -like "*.psd1") {
+    # if one of them matches the module name, everything is ok, and we're done!
+    if($metadata | Where-Object { $_.BaseName -eq $ModuleName }) {
+      Get-Item $ModulePath
+    } else {
+      # if none of them match, we probably just need to rename the folder:
+      if(@($metadata).Count -eq 1) {
+        $ModulePath = Join-Path (Split-Path $InstallPath) ([IO.Path]::GetFileNameWithoutExtension($metadata))
+      } else {
+        # TODO: otherwise, pick one somehow...
+        $FileString = $(foreach($BaseName in $InstallPath | % { $_.BaseName }) {
+          Get-ChildItem (Join-Path $InstallPath "${BaseName}.*")
+        }) | Format-Table | Out-String -Stream
+
+        Write-Host $FileString
+        $Name = Read-Host "Please enter the real name of this module:"
+        $Module = Get-ChildItem (Join-Path $InstallPath "${Name}.*") -Filter "*.psd1"
+        if(!$Module) {
+          $Module = Get-ChildItem (Join-Path $InstallPath "${Name}.*") -Filter "*.psm1"
+        }
+        if($Module) {
+          $Name = $Module.BaseName
+        }
+        $ModulePath = Join-Path (Split-Path $InstallPath) ([IO.Path]::GetFileNameWithoutExtension($Name))
+      }
+      Write-Verbose "Desired Module Path: $ModulePath"
+      if("$InstallPath" -ne "$ModulePath") {
+        if(Test-Path $ModulePath) {
+          if($Force -or $PSCmdlet.ShouldContinue("The InstallPath exists, are you sure you want to overwrite '$ModulePath'?", "Deleting contents of '$ModulePath'")) {
+            Remove-Item $ModulePath -Recurse -ErrorAction Stop
+          } else {
+            throw "InstallPath '$InstallPath' Exists."
+          }
+        }
+        Rename-Item $InstallPath $ModulePath
+      }
+      Get-Item $ModulePath
+    }
+  # Otherwise, if there are no files, the folder(s) must be modules, let's move them and give up.
+  } elseif(!($Children | Where-Object { !$_.PSIsContainer })) {
+    Write-Verbose "Module $InstallPath contains multiple modules:"
+    $TemporaryFolder = $InstallPath
+    $InstallPath = Split-Path $InstallPath
+    foreach($child in $Children) {
+      $ChildModulePath = Join-Path $InstallPath $child.Name
+      Write-Verbose "Extracting $ChildModulePath"
+      if(Test-Path $ChildModulePath) {
+        if($Force -or $PSCmdlet.ShouldContinue("The Module $($Child.Name) exists, are you sure you want to overwrite '$ChildModulePath'?", "Deleting contents of '$ChildModulePath'")) {
+          Remove-Item $ChildModulePath -Recurse -ErrorAction Stop
+          Move-Item $Child.FullName -Destination $ChildModulePath -Passthru
+        } else {
+          Write-Warning "Leaving $($Child.Name) in '$($Child.PSParentPath)'"
+        }
+      } else {
+        Move-Item $Child.FullName -Destination $ChildModulePath -Passthru
+      }
+    }
+    # If we moved everything out, then clean up after ourselves.
+    if(!(Get-ChildItem $TemporaryFolder)) {
+      Remove-Item $TemporaryFolder
+    }
+  }
+}
+
 function Install-ModulePackage {
   #.Synopsis
   #   Install a module package to the module 
   [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium", DefaultParameterSetName="UserPath")]
   param(
     # The package file to be installed
-    [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
-    [Alias("PSPath","PackagePath")]
+    [Parameter(ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
+    [Alias("PSPath","PackagePath","ModuleInfoUri")]
     $Package,
 
     # The PSModulePath to install to
@@ -347,6 +485,9 @@ function Install-ModulePackage {
   process {
     if("$Package" -match "^https?://" ) {
       # Make sure the InstallPath has a file name:
+      # TODO: This is currently very simplistic, based on the URL alone which
+      #       requires the URL to have NO query string, and end in a file name
+      #       it would be better to have Invoke-Web figure out the file name...
       if(Test-Path $InstallPath -PathType Container) {
         $OutFile = Join-Path $InstallPath (Split-Path $Package -Leaf)
       } else {
@@ -358,17 +499,16 @@ function Install-ModulePackage {
       $WebParam = @{} + $PsBoundParameters
       $WebParam.Add("Uri",$Package)
       $WebParam.Add("OutFile",$OutFile)
-      $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru"  | % { $WebParam.Remove($_) }
+      $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru" | % { $WebParam.Remove($_) }
 
       $Package = Invoke-WebRequest @WebParam -ErrorVariable FourOhFour
-      # If we used the built-in Invoke-WebRequest, we don't have the file yet...
-      if($Package -isnot [System.IO.FileInfo]) { $Package = Get-ChildItem $OutFile }
-
       if($FourOhFour){
         $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
       }
+      # If we used the built-in Invoke-WebRequest, we don't have the file yet...
+      if($Package -isnot [System.IO.FileInfo]) { $Package = Get-ChildItem $OutFile }
     }
-    # Open it as a package
+    # Now lets open it as a package
     $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
     # TODO: Make this more bullet-proof (it's just testing extensions right now)
@@ -391,14 +531,21 @@ function Install-ModulePackage {
 
     # Warn them if they're installing in an irregular location
     [string[]]$ModulePaths = $Env:PSModulePath -split ";" | Resolve-Path -ErrorAction SilentlyContinue | Convert-Path -ErrorAction SilentlyContinue
-    if(!($ModulePaths -match ([Regex]::Escape((Convert-Path $InstallPath)) + ".*"))) {
+    if(!($ModulePaths -match ([Regex]::Escape($InstallPath) + ".*"))) {
       if((Get-PSCallStack | Where-Object{ $_.Command -eq "Install-ModulePackage" }).Count -le 1) {
         Write-Warning "Install path '$InstallPath' is not in yout PSModulePath!"
       }
     }
 
-    # We need to verify the RequiredModules are available, or install them.
+    # At this point $PackagePath is a local file, but it might be a .zip or .nupkg:
     $Manifest = Get-ModuleManifestXml $PackagePath
+    if(!$Manifest) {
+      Write-Warning "'$Package' is not a valid PoshCode Package, using Install-ModuleArchive"
+      Install-ModuleArchive $PackagePath $InstallPath
+      return
+    }
+
+    # We need to verify the RequiredModules are available, or install them.
     if($Manifest."ModuleManifest.RequiredModules") {
       $FailedModules = @()
       foreach($RequiredModule in $Manifest."ModuleManifest.RequiredModules".ModuleId) {
@@ -460,6 +607,9 @@ function Install-ModulePackage {
       if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $($ModuleName)" )) {
         if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
           $success = $false
+          if(Test-Path "$InstallPath\$ModuleName") {
+            Remove-Item "$InstallPath\$ModuleName" -Recurse -Force -ErrorAction Stop
+          }
           $null = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
           
           ## Handle the error if they asked for -Common and don't have permissions
@@ -522,7 +672,7 @@ function Get-ModuleInfo {
   param(
     # The name of the module (or path)
     [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Mandatory=$true)]
-    [Alias("PSPath","Path","Name")]
+    [Alias("ModuleInfoPath","ModuleManifestPath","PSPath","Path","Name")]
     $Module
   )
   process {
@@ -531,8 +681,12 @@ function Get-ModuleInfo {
 
     # If the parameter isn't already a ModuleInfo object, then let's make it so:
     if($Module -is "string" -or $Module -is [System.IO.FileInfo] -or $Module -is [System.Management.Automation.PathInfo]) {
-      $ModulePath = Convert-Path $Module -ErrorAction SilentlyContinue -ErrorVariable noPath
-      if($noPath) { $ModulePath = $Module }
+      if(Split-Path $Module) {
+        $ModulePath = Convert-Path $Module -ErrorAction SilentlyContinue -ErrorVariable noPath
+        if($noPath) { $ModulePath = $Module }
+      } else {
+        $ModulePath = $Module
+      }
       $Module = $null
       $Extension = [IO.Path]::GetExtension($ModulePath)
       # It should be either a String or a FileInfo (if it's a string, it might begmo)
@@ -557,17 +711,16 @@ function Get-ModuleInfo {
           return 
         }
         default {
-          Write-Verbose "Finding Module by Module Name"
+          Write-Verbose "Finding Module by Module Name: $ModulePath"
           # Hopefully, they've just specified a module name:
 
           $VPR = "SilentlyContinue"
           $VPR, $VerbosePreference = $VerbosePreference, $VPR
-          $Module = Get-Module $ModulePath -ListAvailable | Select-Object -First 1
+          $Module = Get-Module $ModulePath -ListAvailable
           $VPR, $VerbosePreference = $VerbosePreference, $VPR
-          if($Module) {
-            $ModuleInfoPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleInfoExtension"
-            $ModuleManifestPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleManifestExtension"
-          }
+          # In this case, there's probably lots of them, so we need to recurse:
+          $Module | Get-ModuleInfo
+          return
         }
       }
 
@@ -602,7 +755,8 @@ function Get-ModuleInfo {
       Write-Verbose "Loading ModuleManifest"
       $ModuleInfo = ([xml](gc $ModuleInfoPath)).ModuleManifest | 
                       Add-Member NoteProperty ModuleInfoPath $ModuleInfoPath -Passthru | 
-                      Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru
+                      Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru | 
+                      Add-Member NoteProperty Path $ModuleManifestPath -Passthru
       Write-Output $ModuleInfo
     }
     elseif($Module) 
@@ -629,15 +783,13 @@ function Get-ModuleManifestXml {
 
       $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
       if(!$Manifest -or !$Manifest.TargetUri) {
-        Write-Warning "This Package is invalid, it has not specified the manifest"
-        Write-Output $Package.PackageProperties
+        Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
         return
       }
 
       $Part = $Package.GetPart( $Manifest.TargetUri )
       if(!$Part) {
-        Write-Warning "This Package is invalid, it has no manifest at $($Manifest.TargetUri)"
-        Write-Output $Package.PackageProperties
+        Write-Warning "This file is not a valid PoshCode Package, it has no manifest at $($Manifest.TargetUri)"
         return
       }
 
@@ -761,21 +913,28 @@ function Select-ModulePath {
         $default = $index
         continue
       }
-      "$([Environment]::GetFolderPath("CommonProgramFiles"))\Modules*" {
+      "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) Microsoft)\Windows\PowerShell\Modules*" {
         $index++
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}else{"C&ommon"}), $_
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
         $common++
         if($Default -lt 0){$Default = $index}
         continue
       }
-      "$([Environment]::GetFolderPath("CommonDocuments"))\Modules*" {
+      "$(Join-Path ([Environment]::GetFolderPath("CommonProgramFiles")) Modules)*" {
         $index++
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}else{"C&ommon"}), $_
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
         $common++
         if($Default -lt 0){$Default = $index}
         continue
       }
-      "$([Environment]::GetFolderPath("MyDocuments"))\*" { 
+      "$(Join-Path ([Environment]::GetFolderPath("CommonDocuments")) Modules)*" {
+        $index++
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+        $common++
+        if($Default -lt 0){$Default = $index}
+        continue
+      }
+      "$([Environment]::GetFolderPath("MyDocuments"))*" { 
         $index++
         $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&MyDocuments", $_
         if($Default -lt 0){$Default = $index}
@@ -817,7 +976,7 @@ function Select-ModulePath {
       if(!$InstallPath -or !(Test-Path $InstallPath)){
         $Answer = $Host.UI.PromptForChoice(
           "Please choose an install path.",
-          "Choose a Module Folder (use ? to see full paths)",
+          "Choose a Module Folder (use ? to see the full paths)",
           ([System.Management.Automation.Host.ChoiceDescription[]]$ChoicesWithHelp),
           $Default)
 
@@ -862,149 +1021,102 @@ function Test-ExecutionPolicy {
   } 
 }
 
+try {
+  Add-Type -As System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+  function Expand-ZipFile {
+    #.Synopsis
+    #  Expand a zip file, ensuring it's contents go to a single folder ...
+    [CmdletBinding()]
+    param(
+      # The path of the zip file that needs to be extracted
+      [Parameter(ValueFromPipelineByPropertyName=$true, Position=0, Mandatory=$true)]
+      [Alias("PSPath")]
+      $FilePath,
+
+      # The path where we want the output folder to end up
+      [Parameter(Position=1)]
+      $OutputPath = $Pwd,
+
+      # Make sure the resulting folder is always named the same as the archive
+      [Switch]$Force
+    )
+    process {
+      $ZipFile = Get-Item $FilePath
+      $Archive = [System.IO.Compression.ZipFile]::Open( $ZipFile, "Read" )
+
+      # Figure out where we'd prefer to end up
+      if(Test-Path $OutputPath) {
+        if($Force -or $PSCmdlet.ShouldContinue("The OutputPath exists and is not empty. Are you sure you want to overwrite '$OutputPath'?", "Deleting contents of '$OutputPath'")) {
+          Remove-Item $OutputPath -Recurse -Force -ErrorAction Stop
+        } else {
+          throw "OutputPath '$OutputPath' Exists."
+        }
+        $Destination = $OutputPath
+      } else {
+        # Otherwise, since they passed a folder, they must want us to use it
+        $Destination = $OutputPath
+      }
+
+      # The root folder of the first entry ...
+      $ArchiveRoot = ($Archive.Entries[0].FullName -Split "/|\\")[0]
+
+      Write-Verbose "Desired Destination: $Destination"
+      Write-Verbose "Archive Root: $ArchiveRoot"
+
+      # If any of the files are not in the same root folder ...
+      if($Archive.Entries.FullName | Where-Object { @($_ -Split "/|\\")[0] -ne $ArchiveRoot }) {
+        if(Test-Path $Destination) {
+          if($Force -or $PSCmdlet.ShouldContinue("The Destination exists and is not empty. Are you sure you want to overwrite '$Destination'?", "Deleting contents of '$Destination'")) {
+            Remove-Item $Destination -Recurse -Force -ErrorAction Stop
+          } else {
+            throw "Destination '$Destination' Exists."
+          }
+        }
+
+        # extract it into a new folder:
+        New-Item $Destination -Type Directory -Force
+        [System.IO.Compression.ZipFileExtensions]::ExtractToDirectory( $Archive, $Destination )
+      } else {
+        $OutputPath = (Split-Path $Destination)
+        Write-Verbose "Output Path: $OutputPath (+ $ArchiveRoot)"
+
+        $ArchivePath = Join-Path $OutputPath $ArchiveRoot
+
+        if(Test-Path $ArchivePath) {
+          if($Force -or $PSCmdlet.ShouldContinue("The Destination exists and is not empty. Are you sure you want to overwrite '$ArchivePath'?", "Deleting contents of '$ArchivePath'")) {
+            Remove-Item $ArchivePath -Recurse -Force -ErrorAction Stop
+          } else {
+            throw "ArchivePath '$ArchivePath' Exists."
+          }
+        }
+
+        # otherwise, extract it up a level and lets see what we get
+        [System.IO.Compression.ZipFileExtensions]::ExtractToDirectory( $Archive, $OutputPath )
+
+        # If there was only a single file in the archive, then we'll just output that file...
+        if($Archive.Entries.Count -eq 1) {
+          # Except, if they asked for an OutputPath with an extension on it, we'll rename the file to that ... 
+          if([System.IO.Path]::GetExtension($Destination)) {
+            Move-Item (Join-Path $OutputPath $Archive.Entries[0].FullName) $Destination -Passthru
+          } else {
+            Get-Item (Join-Path $OutputPath $Archive.Entries[0].FullName)
+          }
+        } elseif($Force) {
+          # Otherwise let's make sure that we move it to where we expect it to go, in case the zip's been renamed
+          if((Join-Path $OutputPath $ArchiveRoot) -ne $Destination) {
+            Move-Item $ArchivePath $Destination -Passthru
+          } else {
+            Get-Item $ArchivePath
+          }
+        } else {
+          Get-Item $ArchivePath
+        }
+      }
+
+      $Archive.Dispose()
+    }
+  }
+} catch { }
+
 Export-ModuleMember -Function * -Alias * -Variable *
-# SIG # Begin signature block
-# MIIarwYJKoZIhvcNAQcCoIIaoDCCGpwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
-# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU+iWbFEyGYSk8ydkweDlfhYMc
-# G7egghXlMIID7jCCA1egAwIBAgIQfpPr+3zGTlnqS5p31Ab8OzANBgkqhkiG9w0B
-# AQUFADCBizELMAkGA1UEBhMCWkExFTATBgNVBAgTDFdlc3Rlcm4gQ2FwZTEUMBIG
-# A1UEBxMLRHVyYmFudmlsbGUxDzANBgNVBAoTBlRoYXd0ZTEdMBsGA1UECxMUVGhh
-# d3RlIENlcnRpZmljYXRpb24xHzAdBgNVBAMTFlRoYXd0ZSBUaW1lc3RhbXBpbmcg
-# Q0EwHhcNMTIxMjIxMDAwMDAwWhcNMjAxMjMwMjM1OTU5WjBeMQswCQYDVQQGEwJV
-# UzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRpb24xMDAuBgNVBAMTJ1N5bWFu
-# dGVjIFRpbWUgU3RhbXBpbmcgU2VydmljZXMgQ0EgLSBHMjCCASIwDQYJKoZIhvcN
-# AQEBBQADggEPADCCAQoCggEBALGss0lUS5ccEgrYJXmRIlcqb9y4JsRDc2vCvy5Q
-# WvsUwnaOQwElQ7Sh4kX06Ld7w3TMIte0lAAC903tv7S3RCRrzV9FO9FEzkMScxeC
-# i2m0K8uZHqxyGyZNcR+xMd37UWECU6aq9UksBXhFpS+JzueZ5/6M4lc/PcaS3Er4
-# ezPkeQr78HWIQZz/xQNRmarXbJ+TaYdlKYOFwmAUxMjJOxTawIHwHw103pIiq8r3
-# +3R8J+b3Sht/p8OeLa6K6qbmqicWfWH3mHERvOJQoUvlXfrlDqcsn6plINPYlujI
-# fKVOSET/GeJEB5IL12iEgF1qeGRFzWBGflTBE3zFefHJwXECAwEAAaOB+jCB9zAd
-# BgNVHQ4EFgQUX5r1blzMzHSa1N197z/b7EyALt0wMgYIKwYBBQUHAQEEJjAkMCIG
-# CCsGAQUFBzABhhZodHRwOi8vb2NzcC50aGF3dGUuY29tMBIGA1UdEwEB/wQIMAYB
-# Af8CAQAwPwYDVR0fBDgwNjA0oDKgMIYuaHR0cDovL2NybC50aGF3dGUuY29tL1Ro
-# YXd0ZVRpbWVzdGFtcGluZ0NBLmNybDATBgNVHSUEDDAKBggrBgEFBQcDCDAOBgNV
-# HQ8BAf8EBAMCAQYwKAYDVR0RBCEwH6QdMBsxGTAXBgNVBAMTEFRpbWVTdGFtcC0y
-# MDQ4LTEwDQYJKoZIhvcNAQEFBQADgYEAAwmbj3nvf1kwqu9otfrjCR27T4IGXTdf
-# plKfFo3qHJIJRG71betYfDDo+WmNI3MLEm9Hqa45EfgqsZuwGsOO61mWAK3ODE2y
-# 0DGmCFwqevzieh1XTKhlGOl5QGIllm7HxzdqgyEIjkHq3dlXPx13SYcqFgZepjhq
-# IhKjURmDfrYwggSjMIIDi6ADAgECAhAOz/Q4yP6/NW4E2GqYGxpQMA0GCSqGSIb3
-# DQEBBQUAMF4xCzAJBgNVBAYTAlVTMR0wGwYDVQQKExRTeW1hbnRlYyBDb3Jwb3Jh
-# dGlvbjEwMC4GA1UEAxMnU3ltYW50ZWMgVGltZSBTdGFtcGluZyBTZXJ2aWNlcyBD
-# QSAtIEcyMB4XDTEyMTAxODAwMDAwMFoXDTIwMTIyOTIzNTk1OVowYjELMAkGA1UE
-# BhMCVVMxHTAbBgNVBAoTFFN5bWFudGVjIENvcnBvcmF0aW9uMTQwMgYDVQQDEytT
-# eW1hbnRlYyBUaW1lIFN0YW1waW5nIFNlcnZpY2VzIFNpZ25lciAtIEc0MIIBIjAN
-# BgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAomMLOUS4uyOnREm7Dv+h8GEKU5Ow
-# mNutLA9KxW7/hjxTVQ8VzgQ/K/2plpbZvmF5C1vJTIZ25eBDSyKV7sIrQ8Gf2Gi0
-# jkBP7oU4uRHFI/JkWPAVMm9OV6GuiKQC1yoezUvh3WPVF4kyW7BemVqonShQDhfu
-# ltthO0VRHc8SVguSR/yrrvZmPUescHLnkudfzRC5xINklBm9JYDh6NIipdC6Anqh
-# d5NbZcPuF3S8QYYq3AhMjJKMkS2ed0QfaNaodHfbDlsyi1aLM73ZY8hJnTrFxeoz
-# C9Lxoxv0i77Zs1eLO94Ep3oisiSuLsdwxb5OgyYI+wu9qU+ZCOEQKHKqzQIDAQAB
-# o4IBVzCCAVMwDAYDVR0TAQH/BAIwADAWBgNVHSUBAf8EDDAKBggrBgEFBQcDCDAO
-# BgNVHQ8BAf8EBAMCB4AwcwYIKwYBBQUHAQEEZzBlMCoGCCsGAQUFBzABhh5odHRw
-# Oi8vdHMtb2NzcC53cy5zeW1hbnRlYy5jb20wNwYIKwYBBQUHMAKGK2h0dHA6Ly90
-# cy1haWEud3Muc3ltYW50ZWMuY29tL3Rzcy1jYS1nMi5jZXIwPAYDVR0fBDUwMzAx
-# oC+gLYYraHR0cDovL3RzLWNybC53cy5zeW1hbnRlYy5jb20vdHNzLWNhLWcyLmNy
-# bDAoBgNVHREEITAfpB0wGzEZMBcGA1UEAxMQVGltZVN0YW1wLTIwNDgtMjAdBgNV
-# HQ4EFgQURsZpow5KFB7VTNpSYxc/Xja8DeYwHwYDVR0jBBgwFoAUX5r1blzMzHSa
-# 1N197z/b7EyALt0wDQYJKoZIhvcNAQEFBQADggEBAHg7tJEqAEzwj2IwN3ijhCcH
-# bxiy3iXcoNSUA6qGTiWfmkADHN3O43nLIWgG2rYytG2/9CwmYzPkSWRtDebDZw73
-# BaQ1bHyJFsbpst+y6d0gxnEPzZV03LZc3r03H0N45ni1zSgEIKOq8UvEiCmRDoDR
-# EfzdXHZuT14ORUZBbg2w6jiasTraCXEQ/Bx5tIB7rGn0/Zy2DBYr8X9bCT2bW+IW
-# yhOBbQAuOA2oKY8s4bL0WqkBrxWcLC9JG9siu8P+eJRRw4axgohd8D20UaF5Mysu
-# e7ncIAkTcetqGVvP6KUwVyyJST+5z3/Jvz4iaGNTmr1pdKzFHTx/kuDDvBzYBHUw
-# ggahMIIFiaADAgECAhADS1DyPKUAAEvdY0qN2NEFMA0GCSqGSIb3DQEBBQUAMG8x
-# CzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3
-# dy5kaWdpY2VydC5jb20xLjAsBgNVBAMTJURpZ2lDZXJ0IEFzc3VyZWQgSUQgQ29k
-# ZSBTaWduaW5nIENBLTEwHhcNMTMwMzE5MDAwMDAwWhcNMTQwNDAxMTIwMDAwWjBt
-# MQswCQYDVQQGEwJVUzERMA8GA1UECBMITmV3IFlvcmsxFzAVBgNVBAcTDldlc3Qg
-# SGVucmlldHRhMRgwFgYDVQQKEw9Kb2VsIEguIEJlbm5ldHQxGDAWBgNVBAMTD0pv
-# ZWwgSC4gQmVubmV0dDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMPj
-# sSDplpNPrcGhb5o977Z7VdTm/BdBokBbRRD5hGF+E7bnIOEK2FTB9Wypgp+9udd7
-# 6nMgvZpj4gtO6Yj+noUcK9SPDMWgVOvvOe5JKKJArRvR5pDuHKFa+W2zijEWUjo5
-# DcqU2PGDralKrBZVfOonity/ZHMUpieezhqy98wcK1PqDs0Cm4IeRDcbNwF5vU1T
-# OAwzFoETFzPGX8n37INVIsV5cFJ1uGFncvRbAHVbwaoR1et0o01Jsb5vYUmAhb+n
-# qL/IA/wOhU8+LGLhlI2QL5USxnLwxt64Q9ZgO5vu2C2TxWEwnuLz24SAhHl+OYom
-# tQ8qQDJQcfh5cGOHlCsCAwEAAaOCAzkwggM1MB8GA1UdIwQYMBaAFHtozimqwBe+
-# SXrh5T/Wp/dFjzUyMB0GA1UdDgQWBBRfhbxO+IGnJ/yiJPFIKOAXo+DUWTAOBgNV
-# HQ8BAf8EBAMCB4AwEwYDVR0lBAwwCgYIKwYBBQUHAwMwcwYDVR0fBGwwajAzoDGg
-# L4YtaHR0cDovL2NybDMuZGlnaWNlcnQuY29tL2Fzc3VyZWQtY3MtMjAxMWEuY3Js
-# MDOgMaAvhi1odHRwOi8vY3JsNC5kaWdpY2VydC5jb20vYXNzdXJlZC1jcy0yMDEx
-# YS5jcmwwggHEBgNVHSAEggG7MIIBtzCCAbMGCWCGSAGG/WwDATCCAaQwOgYIKwYB
-# BQUHAgEWLmh0dHA6Ly93d3cuZGlnaWNlcnQuY29tL3NzbC1jcHMtcmVwb3NpdG9y
-# eS5odG0wggFkBggrBgEFBQcCAjCCAVYeggFSAEEAbgB5ACAAdQBzAGUAIABvAGYA
-# IAB0AGgAaQBzACAAQwBlAHIAdABpAGYAaQBjAGEAdABlACAAYwBvAG4AcwB0AGkA
-# dAB1AHQAZQBzACAAYQBjAGMAZQBwAHQAYQBuAGMAZQAgAG8AZgAgAHQAaABlACAA
-# RABpAGcAaQBDAGUAcgB0ACAAQwBQAC8AQwBQAFMAIABhAG4AZAAgAHQAaABlACAA
-# UgBlAGwAeQBpAG4AZwAgAFAAYQByAHQAeQAgAEEAZwByAGUAZQBtAGUAbgB0ACAA
-# dwBoAGkAYwBoACAAbABpAG0AaQB0ACAAbABpAGEAYgBpAGwAaQB0AHkAIABhAG4A
-# ZAAgAGEAcgBlACAAaQBuAGMAbwByAHAAbwByAGEAdABlAGQAIABoAGUAcgBlAGkA
-# bgAgAGIAeQAgAHIAZQBmAGUAcgBlAG4AYwBlAC4wgYIGCCsGAQUFBwEBBHYwdDAk
-# BggrBgEFBQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tMEwGCCsGAQUFBzAC
-# hkBodHRwOi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRBc3N1cmVkSURD
-# b2RlU2lnbmluZ0NBLTEuY3J0MAwGA1UdEwEB/wQCMAAwDQYJKoZIhvcNAQEFBQAD
-# ggEBABv8O1PicJ3pbsLtls/jzFKZIG16h2j0eXdsJrGZzx6pBVnXnqvL4ZrF6dgv
-# puQWr+lg6wL+Nxi9kJMeNkMBpmaXQtZWuj6lVx23o4k3MQL5/Kn3bcJGpdXNSEHS
-# xRkGFyBopLhH2We/0ic30+oja5hCh6Xko9iJBOZodIqe9nITxBjPrKXGUcV4idWj
-# +ZJtkOXHZ4ucQ99f7aaM3so30IdbIq/1+jVSkFuCp32fisUOIHiHbl3nR8j20YOw
-# ulNn8czlDjdw1Zp/U1kNF2mtZ9xMYI8yOIc2xvrOQQKLYecricrgSMomX54pG6uS
-# x5/fRyurC3unlwTqbYqAMQMlhP8wggajMIIFi6ADAgECAhAPqEkGFdcAoL4hdv3F
-# 7G29MA0GCSqGSIb3DQEBBQUAMGUxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdp
-# Q2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xJDAiBgNVBAMTG0Rp
-# Z2lDZXJ0IEFzc3VyZWQgSUQgUm9vdCBDQTAeFw0xMTAyMTExMjAwMDBaFw0yNjAy
-# MTAxMjAwMDBaMG8xCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMx
-# GTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xLjAsBgNVBAMTJURpZ2lDZXJ0IEFz
-# c3VyZWQgSUQgQ29kZSBTaWduaW5nIENBLTEwggEiMA0GCSqGSIb3DQEBAQUAA4IB
-# DwAwggEKAoIBAQCcfPmgjwrKiUtTmjzsGSJ/DMv3SETQPyJumk/6zt/G0ySR/6hS
-# k+dy+PFGhpTFqxf0eH/Ler6QJhx8Uy/lg+e7agUozKAXEUsYIPO3vfLcy7iGQEUf
-# T/k5mNM7629ppFwBLrFm6aa43Abero1i/kQngqkDw/7mJguTSXHlOG1O/oBcZ3e1
-# 1W9mZJRru4hJaNjR9H4hwebFHsnglrgJlflLnq7MMb1qWkKnxAVHfWAr2aFdvftW
-# k+8b/HL53z4y/d0qLDJG2l5jvNC4y0wQNfxQX6xDRHz+hERQtIwqPXQM9HqLckvg
-# VrUTtmPpP05JI+cGFvAlqwH4KEHmx9RkO12rAgMBAAGjggNDMIIDPzAOBgNVHQ8B
-# Af8EBAMCAYYwEwYDVR0lBAwwCgYIKwYBBQUHAwMwggHDBgNVHSAEggG6MIIBtjCC
-# AbIGCGCGSAGG/WwDMIIBpDA6BggrBgEFBQcCARYuaHR0cDovL3d3dy5kaWdpY2Vy
-# dC5jb20vc3NsLWNwcy1yZXBvc2l0b3J5Lmh0bTCCAWQGCCsGAQUFBwICMIIBVh6C
-# AVIAQQBuAHkAIAB1AHMAZQAgAG8AZgAgAHQAaABpAHMAIABDAGUAcgB0AGkAZgBp
-# AGMAYQB0AGUAIABjAG8AbgBzAHQAaQB0AHUAdABlAHMAIABhAGMAYwBlAHAAdABh
-# AG4AYwBlACAAbwBmACAAdABoAGUAIABEAGkAZwBpAEMAZQByAHQAIABDAFAALwBD
-# AFAAUwAgAGEAbgBkACAAdABoAGUAIABSAGUAbAB5AGkAbgBnACAAUABhAHIAdAB5
-# ACAAQQBnAHIAZQBlAG0AZQBuAHQAIAB3AGgAaQBjAGgAIABsAGkAbQBpAHQAIABs
-# AGkAYQBiAGkAbABpAHQAeQAgAGEAbgBkACAAYQByAGUAIABpAG4AYwBvAHIAcABv
-# AHIAYQB0AGUAZAAgAGgAZQByAGUAaQBuACAAYgB5ACAAcgBlAGYAZQByAGUAbgBj
-# AGUALjASBgNVHRMBAf8ECDAGAQH/AgEAMHkGCCsGAQUFBwEBBG0wazAkBggrBgEF
-# BQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tMEMGCCsGAQUFBzAChjdodHRw
-# Oi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRBc3N1cmVkSURSb290Q0Eu
-# Y3J0MIGBBgNVHR8EejB4MDqgOKA2hjRodHRwOi8vY3JsMy5kaWdpY2VydC5jb20v
-# RGlnaUNlcnRBc3N1cmVkSURSb290Q0EuY3JsMDqgOKA2hjRodHRwOi8vY3JsNC5k
-# aWdpY2VydC5jb20vRGlnaUNlcnRBc3N1cmVkSURSb290Q0EuY3JsMB0GA1UdDgQW
-# BBR7aM4pqsAXvkl64eU/1qf3RY81MjAfBgNVHSMEGDAWgBRF66Kv9JLLgjEtUYun
-# pyGd823IDzANBgkqhkiG9w0BAQUFAAOCAQEAe3IdZP+IyDrBt+nnqcSHu9uUkteQ
-# WTP6K4feqFuAJT8Tj5uDG3xDxOaM3zk+wxXssNo7ISV7JMFyXbhHkYETRvqcP2pR
-# ON60Jcvwq9/FKAFUeRBGJNE4DyahYZBNur0o5j/xxKqb9to1U0/J8j3TbNwj7aqg
-# TWcJ8zqAPTz7NkyQ53ak3fI6v1Y1L6JMZejg1NrRx8iRai0jTzc7GZQY1NWcEDzV
-# sRwZ/4/Ia5ue+K6cmZZ40c2cURVbQiZyWo0KSiOSQOiG3iLCkzrUm2im3yl/Brk8
-# Dr2fxIacgkdCcTKGCZlyCXlLnXFp9UH/fzl3ZPGEjb6LHrJ9aKOlkLEM/zGCBDQw
-# ggQwAgEBMIGDMG8xCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMx
-# GTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xLjAsBgNVBAMTJURpZ2lDZXJ0IEFz
-# c3VyZWQgSUQgQ29kZSBTaWduaW5nIENBLTECEANLUPI8pQAAS91jSo3Y0QUwCQYF
-# Kw4DAhoFAKB4MBgGCisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkD
-# MQwGCisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJ
-# KoZIhvcNAQkEMRYEFNOcwwTjnsHqWCsu28xkC0xp8b7GMA0GCSqGSIb3DQEBAQUA
-# BIIBAJOlvu6vZ0Sgsb2Rn0iQeZiJ1QhMtlTyCRCQ/rgs6biNwLKObdwsq2zUp/Zr
-# R46GaitH/UDsMVu/Ac+EPDMwV3DQQ6A94jqD9Ss761SunWFEjM9yxtT74MCA35Vi
-# RNr9eBzArtC17oBxgKXHpmskjhsk/M4ugHWg3agCok3hx7W3rnYTBsODPZQOesvj
-# ITFHBRIK8fCGjw4GvN3oVcsyxF6pOc/SWfBzftuZiqZ+C+GrnYC/JFGBVFx0KVAM
-# 7F/xTW7HnMh/dd4IDDwuWhcf2zX2St9TvwOWxzu6IdFoFDISSnz//ssFtcMAmkHk
-# gNWToBYa2k5vi+1v4bsMCeQenWehggILMIICBwYJKoZIhvcNAQkGMYIB+DCCAfQC
-# AQEwcjBeMQswCQYDVQQGEwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRp
-# b24xMDAuBgNVBAMTJ1N5bWFudGVjIFRpbWUgU3RhbXBpbmcgU2VydmljZXMgQ0Eg
-# LSBHMgIQDs/0OMj+vzVuBNhqmBsaUDAJBgUrDgMCGgUAoF0wGAYJKoZIhvcNAQkD
-# MQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMTMwNjEwMDQzMjU2WjAjBgkq
-# hkiG9w0BCQQxFgQUx989jDNmHQALLylfmcD8i1B0KLkwDQYJKoZIhvcNAQEBBQAE
-# ggEABRAV8wO89e5WEW7IAjiosdZYgRDay3kp6CFo/5Q8ESM7EQVgNYpEDLe1vuNu
-# 7JUkTa3fSI7+LTqa4mLM65v50UuXqPH6eVW6f2O5ep1XgvX1AQONIHH3PR5aBsiA
-# Tzq2n61pijtafCUmIVaqYII4e3zJTcGm0A7OJ8UoesmmRl513E7kYPlaQ1zVnsaW
-# eEFolOk4em1iWQeO0F3EDcnEcmTSXeCExpBR/kvr5sCbFwz/kAw0SdWFXiu0ITly
-# m51Dvwli8gS3C+3zT1AIoQ0AZPEHlKhHNq9OpGsL7eBr59fbfk3EG2bj9P/eRp/i
-# Z4fXYGebAwl24IR6MSNzuInrkQ==
-# SIG # End signature block

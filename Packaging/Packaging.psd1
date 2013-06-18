@@ -71,7 +71,8 @@ FunctionsToExport = 'New-ModulePackage', 'Install-ModulePackage', 'Get-ModuleInf
                'Update-ModuleInfo', 'Test-ConfigData', 'Get-ConfigData', 
                'Set-ConfigData', 'Get-SpecialFolder', 'Invoke-Web', 'Get-ConfigData', 
                'Get-ModuleInfo', 'Get-SpecialFolder', 'Install-ModulePackage', 
-               'Set-ConfigData', 'Test-ConfigData', 'Update-ModuleInfo'
+               'Set-ConfigData', 'Test-ConfigData', 'Update-ModuleInfo', 
+               'Update-Module'
 
 # Cmdlets to export from this module
 CmdletsToExport = '*'
