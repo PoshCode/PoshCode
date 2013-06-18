@@ -285,6 +285,7 @@ function Install-ModuleArchive {
     $InstallPath = Expand-ZipFile $ZipFile $InstallPath
   } else {
     # This is the backup plan for the backup plan, lets just please ... unzip the thing!
+    # Note: one problem with this method is that it has GUI!
     $shellApplication = new-object -com shell.application
     $zipPackage = $shellApplication.NameSpace($ZipFile)
     if($zipPackage.Items().Count  -eq 1) {
