@@ -774,7 +774,11 @@ function Get-ModuleInfo {
   }
 }
 
+
+##### Private functions ######
 function Get-ModuleManifestXml {
+  # .Synopsis
+  # Try reading the module manifest from the package
   param( 
     $ModulePath 
   )
@@ -821,7 +825,6 @@ function Get-ModuleManifestXml {
   }
 }
 
-##### Private functions ######
 function Get-FileMarker {
   [CmdletBinding()]
   param(
