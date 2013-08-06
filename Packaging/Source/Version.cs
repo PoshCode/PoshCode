@@ -55,19 +55,27 @@ namespace PoshCode.Packaging
 
 
       /// <summary>
-      /// Initializes a new instance of the <see cref="Version" /> class from the specified decimal
+      /// Initializes a new instance of the <see cref="Version" /> class from the specified long version
       /// </summary>
       /// <param name="version">The version.</param>
-      public Version(decimal version) : this()
+      public Version(long version) : this()
       {
          if (version <= 0.0M)
          {
             throw new ArgumentOutOfRangeException("version", "A Version must be a positive number");
          }
 
-         this.Major = (int)Math.Truncate(version);
-         this.Minor = (int)(Math.Abs(version) - Math.Truncate(Math.Abs(version)));
+         long result;
+         version = Math.DivRem(version, 0x10000, out result );
+         this.Revision = (int)result;
+         version = Math.DivRem(version, 0x10000, out result );
+         this.Build    = (int)result;
+         version = Math.DivRem(version, 0x10000, out result );
+         this.Minor    = (int)result;
+         version = Math.DivRem(version, 0x10000, out result );
+         this.Major    = (int)result;
       }
+
 
       /// <summary>
       /// Initializes a new instance of the <see cref="Version" /> class from a <see cref="System.Version" />.
@@ -224,6 +232,27 @@ namespace PoshCode.Packaging
             version = new Version();
             return false;
          }
+      }
+
+
+      /// <summary>
+      /// Performs an implicit conversion from <see cref="long" /> to <see cref="Version" />.
+      /// </summary>
+      /// <param name="version">The version number.</param>
+      /// <returns>The result of the conversion.</returns>
+      public static implicit operator Version(long version)
+      {
+         return new Version(version);
+      }
+
+      /// <summary>
+      /// Performs an implicit conversion from <see cref="ulong" /> to <see cref="Version" />.
+      /// </summary>
+      /// <param name="version">The version number.</param>
+      /// <returns>The result of the conversion.</returns>
+      public static implicit operator Version(ulong version)
+      {
+         return new Version((long)version);
       }
 
       /// <summary>
