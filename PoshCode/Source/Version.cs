@@ -252,7 +252,7 @@ namespace PoshCode.Packaging
       /// </summary>
       /// <param name="version">The version number.</param>
       /// <returns>The result of the conversion.</returns>
-      public static implicit operator Version(ulong version)
+      public static explicit operator Version(ulong version)
       {
          return new Version(version);
       }

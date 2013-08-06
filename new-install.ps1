@@ -13,7 +13,7 @@ param(
 )
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
 if(!$Version) {
-  $Version = Get-Content $PSScriptRoot\Packaging\Packaging.psd1 | Select-String ModuleVersion | convertfrom-stringdata | % { [Version]$_.ModuleVersion.Trim("'`"") }
+  $Version = Get-Content $PSScriptRoot\PoshCode\PoshCode.psd1 | Select-String ModuleVersion | convertfrom-stringdata | % { [Version]$_.ModuleVersion.Trim("'`"") }
 }
 if($Version -lt "0.0") { throw "Can't calculate a version!" }
 Write-Verbose "Setting Version $Version"
@@ -27,7 +27,10 @@ if($Increment) {
   }
 }
 
-$Installation = (Get-Content $PSScriptRoot\Packaging\Installation.psm1 -Raw) -replace 'Export-ModuleMember.*(?m:;|$)' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
+# Note: in the install script we strip the export command, as well as the signature if it's there, and anything delimited by BEGIN FULL / END FULL 
+$InvokeWeb = (Get-Content $PSScriptRoot\PoshCode\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
+$Configuration = (Get-Content $PSScriptRoot\PoshCode\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
+$Installation = (Get-Content $PSScriptRoot\PoshCode\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
 
 Set-Content $PSScriptRoot\Install.ps1 ((@'
 ########################################################################
@@ -48,11 +51,11 @@ param(
   [Alias("PSModulePath")]
   $InstallPath,
 
-  # If set, the module is installed to the Common module path (as specified in Packaging.ini)
+  # If set, the module is installed to the Common module path (as specified in PoshCode.ini)
   [Parameter(ParameterSetName="CommonPath", Mandatory=$true)]
   [Switch]$Common,
 
-  # If set, the module is installed to the User module path (as specified in Packaging.ini)
+  # If set, the module is installed to the User module path (as specified in PoshCode.ini)
   [Parameter(ParameterSetName="UserPath")]
   [Switch]$User,
 
@@ -96,30 +99,30 @@ param(
   $ProxyCredential= [System.Management.Automation.PSCredential]::Empty     
 )
 end {{
-  Write-Progress "Validating Packaging Module" -Id 0
+  Write-Progress "Validating PoshCode Module" -Id 0
   if($PSBoundParameters.ContainsKey("Package")) {{
     $TargetModulePackage = $PSBoundParameters["Package"]
   }}
 
-  $Module = Get-Module Packaging -ListAvailable
+  $Module = Get-Module PoshCode -ListAvailable
 
   if(!$Module -or $Module.Version -lt "{0}") {{
-    Write-Progress "Installing Packaging Module" -Id 0
+    Write-Progress "Installing PoshCode Module" -Id 0
     if(!$PSBoundParameters.ContainsKey("InstallPath")) {{
       $PSBoundParameters["InstallPath"] = $InstallPath = Select-ModulePath
       Write-Verbose ("Selected Module Path: " + $PSBoundParameters["InstallPath"])
     }}
     # Use the psdxml now that we can, rather than hard-coding the version ;)    
-    $PSBoundParameters["Package"] = "http://PoshCode.org/Modules/Packaging.psdxml"
+    $PSBoundParameters["Package"] = "http://PoshCode.org/Modules/PoshCode.psdxml"
 
-    $PackagingPath = Join-Path $InstallPath Packaging
+    $PoshCodePath = Join-Path $InstallPath PoshCode
 
-    Write-Verbose ("Selected Module Path: '" + $PSBoundParameters["InstallPath"] + "' or '" + $PackagingPath + "'")
+    Write-Verbose ("Selected Module Path: '" + $PSBoundParameters["InstallPath"] + "' or '" + $PoshCodePath + "'")
 
     Install-ModulePackage @PSBoundParameters
-    Import-Module $PackagingPath
+    Import-Module $PoshCodePath
 
-    # Now that we've installed the Packaging module, we will update the config data with the path they picked
+    # Now that we've installed the PoshCode module, we will update the config data with the path they picked
     $ConfigData = Get-ConfigData
     if($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("UserProfile")) + "*")) {{
       $ConfigData["UserPath"] = $InstallPath
@@ -144,16 +147,23 @@ end {{
 
 begin {{
 
+###############################################################################
 {1}
+###############################################################################
+{2}
+###############################################################################
+{3}
+###############################################################################
 
 }}
 '@
-) -f $Version, $Installation)
+) -f $Version, $InvokeWeb, $Configuration, $Installation)
+
 
 Sign $PSScriptRoot\Install.ps1 -WA 0 -EA 0
-Sign -Module Packaging -WA 0 -EA 0
+Sign -Module PoshCode -WA 0 -EA 0
 
 if($Package) {
-  Update-ModuleInfo Packaging -Version $Version
-  New-ModulePackage Packaging $OutputPath | Out-Default
+  Update-ModuleInfo PoshCode -Version $Version
+  New-ModulePackage PoshCode $OutputPath | Out-Default
 }

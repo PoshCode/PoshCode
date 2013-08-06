@@ -8,7 +8,7 @@
 ## Purpose:         Provides cmdlets for working with scripts from the PoshCode Repository:
 ##                  Get-PoshCodeUpgrade - get the latest version of this script from the PoshCode server
 ##                  Get-PoshCode        - Search for and download code snippets
-##                  New-PoshCode        - Upload new code snippets
+##                  Send-PoshCode        - Upload new code snippets
 ##                  Get-WebFile         - Download
 ## ################ ################################################################################
 ## Requirements:    PowerShell Version 2
@@ -53,7 +53,7 @@ $PoshCode = "http://PoshCode.org/" |
       Add-Member -type NoteProperty -Name "ScriptVersion" -Value 3.13 -Passthru |
       Add-Member -type NoteProperty -Name "ApiVersion" -Value 1 -Passthru
 
-function New-PoshCode {
+function Send-PoshCode {
   <#
   .SYNOPSIS
   	Uploads a script to PoshCode
@@ -62,9 +62,9 @@ function New-PoshCode {
   .LINK
   	http://www.poshcode.org
   .EXAMPLE
-  	C:\PS>Get-Content MyScript.ps1 | New-PoshCode "An example for you" "This is just to show how to do it"
+  	C:\PS>Get-Content MyScript.ps1 | Send-PoshCode "An example for you" "This is just to show how to do it"
   	
-  	This command gets the content of MyScript.ps1 and passes it to New-Poshcode which then posts it to poshcode.org with the specified title and description.
+  	This command gets the content of MyScript.ps1 and passes it to Send-PoshCode which then posts it to poshcode.org with the specified title and description.
   .PARAMETER Path
   	Specifies the path to an item.
   .PARAMETER Description
@@ -81,6 +81,7 @@ function New-PoshCode {
   	Overrides the default PoshCode url, to allow posting to other Pastebin sites.
   .NOTES
    	History:
+      v 4.0 - Renamed to Send-PoshCode
   		v 3.1 - Fixed the $URL parameter so that it's settable again. *This* function should work on any pastebin site
   		v 3.0 - Renamed to New-PoshCode.  
       			-	Removed the -Permanent switch, since this is now exclusive to the permanent repository
@@ -378,7 +379,6 @@ filter ConvertTo-Module {
 $PSScriptRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
 
 Set-Alias Search-PoshCode Get-PoshCode
+Set-Alias New-PoshCode Send-PoshCode
 
-# Might want to also export:   Get-Stream, Get-StreamContent, Remove-Stream, Set-StreamContent
-
-Export-ModuleMember Get-PoshCode, New-PoshCode, Get-PoshCodeUpgrade -alias Search-PoshCode
+Export-ModuleMember Get-PoshCode, Send-PoshCode -alias Search-PoshCode, New-PoshCode
