@@ -31,11 +31,11 @@ namespace PoshCode.Packaging
       /// </summary>
       public ModuleManifest() : base()
       {
-         this.FunctionsToExport = new StringList();
-         this.CmdletsToExport = new StringList();
-         this.VariablesToExport = new StringList();
-         this.WorkflowsToExport = new StringList();
-         this.AliasesToExport = new StringList();
+         this.FunctionsToExport = new List<string>();
+         this.CmdletsToExport = new List<string>();
+         this.VariablesToExport = new List<string>();
+         this.WorkflowsToExport = new List<string>();
+         this.AliasesToExport = new List<string>();
 
          // By virtue of being List<String> rather than StringList, 
          // these are serialized as elements rather than csv attributes:
@@ -59,56 +59,65 @@ namespace PoshCode.Packaging
       /// <summary>
       /// Gets the list of scripts to process from this module.
       /// </summary>
-      /// <value>The script files to process.</value>
-      public List<string> ScriptsToProcess { get; private set; }
+      /// <value>The script files to process.</value>    
+      [TypeConverter(typeof(ListOfStringTypeConverter))]  
+      public List<string> ScriptsToProcess { get;  set; }
 
       /// <summary>
       /// Gets the list of type files to process from this module.
       /// </summary>
       /// <value>The type files to process.</value>
-      public List<string> TypesToProcess { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> TypesToProcess { get;  set; }
 
       /// <summary>
       /// Gets the list of format files to process from this module.
       /// </summary>
       /// <value>The format files to process.</value>
-      public List<string> FormatsToProcess { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> FormatsToProcess { get;  set; }
 
       /// <summary>
       /// Gets or sets the list of functions to export from this module.
       /// </summary>
       /// <value>The functions to export from this module.</value>
-      public StringList FunctionsToExport { get; set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> FunctionsToExport { get; set; }
 
       /// <summary>
       /// Gets the list of cmdlets to export from this module.
       /// </summary>
       /// <value>The cmdlets to export from this module.</value>
-      public StringList CmdletsToExport { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> CmdletsToExport { get;  set; }
 
       /// <summary>
       /// Gets the list of aliases to export from this module.
       /// </summary>
       /// <value>The aliases to export from this module.</value>
-      public StringList AliasesToExport { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> AliasesToExport { get;  set; }
 
       /// <summary>
       /// Gets the list of variables to export from this module.
       /// </summary>
       /// <value>The variables to export from this module.</value>
-      public StringList VariablesToExport { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> VariablesToExport { get;  set; }
 
       /// <summary>
       /// Gets the list of workflows to export from this module.
       /// </summary>
       /// <value>The workflows to export from this module.</value>
-      public StringList WorkflowsToExport { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> WorkflowsToExport { get;  set; }
 
       /// <summary>
       /// Gets the list of all the files in this module.
       /// </summary>
       /// <value>The list of files.</value>
-      public List<string> FileList { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> FileList { get;  set; }
 
       /// <summary>
       /// Gets the list of modules contained in this package (if there's more than one).

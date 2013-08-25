@@ -30,7 +30,12 @@ namespace PoshCode.Packaging
       /// <summary>
       /// The separator
       /// </summary>
-      private const char Separator = ',';
+      private const string Separator = "\n";
+
+      /// <summary>
+      /// The Splitter
+      /// </summary>
+      private readonly Regex Splitter = new Regex("(?s:[\\s,;]+)");
 
       /// <summary>
       /// Returns whether this converter can convert the object to the specified type, using the specified context.
@@ -40,7 +45,8 @@ namespace PoshCode.Packaging
       /// <returns>true if this converter can perform the conversion; otherwise, false.</returns>
       public override bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
       {
-         return destinationType == typeof(string) || destinationType == typeof(StringList) || base.CanConvertTo(context, destinationType);
+         Console.WriteLine("CanConvertTo: " + destinationType.FullName);
+         return destinationType == typeof(string) || destinationType == typeof(StringList) || destinationType == typeof(List<string>) || base.CanConvertTo(context, destinationType);
       }
 
       /// <summary>
@@ -51,7 +57,8 @@ namespace PoshCode.Packaging
       /// <returns>true if this converter can perform the conversion; otherwise, false.</returns>
       public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
       {
-         return sourceType == typeof(StringList) || sourceType == typeof(string) || base.CanConvertFrom(context, sourceType);
+         Console.WriteLine("CanConvertFrom: " + sourceType.FullName);
+         return sourceType == typeof(StringList) || sourceType == typeof(List<string>) || sourceType == typeof(string) || base.CanConvertFrom(context, sourceType);
       }
 
       /// <summary>
@@ -64,16 +71,18 @@ namespace PoshCode.Packaging
       /// <returns>An <see cref="T:System.Object" /> that represents the converted value.</returns>
       public override object ConvertTo(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value, Type destinationType)
       {
-         if (destinationType == typeof(string) && value is StringList)
+         Console.WriteLine("ConvertTo: " + destinationType.FullName);
+
+         if (destinationType == typeof(string) && (value is StringList || value is List<string>))
          {
-            return ((StringList)value).Count == 0 ? null : string.Join(new string(Separator, 1), (StringList)value);
+            return ((List<string>)value).Count == 0 ? null : string.Join(Separator, (List<string>)value);
          }
 
-         if (destinationType == typeof(StringList))
+         if (destinationType == typeof(List<string>) || destinationType == typeof(StringList))
          {
             if (value is string)
             {
-               return new StringList((value as string).Split(Separator));
+               return new List<string>(Splitter.Split(value as string));
             }
          }
 
@@ -91,14 +100,16 @@ namespace PoshCode.Packaging
       {
          if (value is string)
          {
-            return new StringList((value as string).Split(Separator));
+            return new StringList(Splitter.Split(value as string));
+         } else {
+            Console.WriteLine("Couldn't convert: " + value.GetType().FullName);
          }
 
          return base.ConvertFrom(context, culture, value);
       }
 
       /// <summary>
-      /// Returns whether the given value object is valid for this type and for the specified context.
+      /// Returns whether the given value object is valid for this type and for the specified conte
       /// </summary>
       /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext" /> that provides a format context.</param>
       /// <param name="value">The <see cref="T:System.Object" /> to test for validity.</param>
@@ -117,7 +128,12 @@ namespace PoshCode.Packaging
       /// <summary>
       /// The separator
       /// </summary>
-      private const char Separator = ',';
+      private const string Separator = "\n";
+
+      /// <summary>
+      /// The Splitter
+      /// </summary>
+      private readonly Regex Splitter = new Regex("(?s:[\\s,;]+)");
 
       /// <summary>
       /// Determines whether the specified object can be converted into a <see cref="T:System.String" />.
@@ -139,7 +155,7 @@ namespace PoshCode.Packaging
       public override string ConvertToString(object value, IValueSerializerContext context)
       {
          var list = (List<string>)value;
-         return string.Join(new string(Separator, 1), list);
+         return string.Join(Separator, list);
       }
 
       /// <summary>
@@ -161,15 +177,16 @@ namespace PoshCode.Packaging
       /// <returns>A new instance of the type that the implementation of <see cref="T:System.Windows.Markup.ValueSerializer" /> supports based on the supplied <paramref name="value" />.</returns>
       public override object ConvertFromString(string value, IValueSerializerContext context)
       {
-         return value.Split(Separator).ToList();
+         return Splitter.Split(value).ToList();
       }
    }
 
    /// <summary>
    /// A nice holder for lists of strings, for serialization purposes
    /// </summary>
-   [TypeConverter(typeof(ListOfStringTypeConverter))]
-   [ValueSerializer(typeof(StringListSerializer))]
+   [TypeConverter(typeof(ListOfStringTypeConverter))]   
+   // [ValueSerializer(typeof(StringListSerializer))]
+   [WhitespaceSignificantCollection]
    public class StringList : List<string>
    {
       /// <summary>

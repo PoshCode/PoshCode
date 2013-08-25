@@ -109,3 +109,5 @@ UpgradeLog*.XML
 Modules/sftp-config.json
 *.psmx
 *.zip
+Install.ps1
+PoshCode/PoshCode.psdxml

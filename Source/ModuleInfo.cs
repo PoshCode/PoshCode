@@ -106,7 +106,14 @@ namespace PoshCode.Packaging
       public StringList Keywords { get; private set; }      
 
       /// <summary>
-      /// Gets or sets the classification category (from the TechNet hierarchy) for this module.
+      /// Gets or sets the classification category <see href="http://gallery.technet.microsoft.com/">from the TechNet hierarchy</see> for this module. 
+      /// Currently, the list is as follows: 
+      /// <list type="bullet">
+      /// <item>Active Directory</item><item>Applications</item><item>App-V</item><item>Backup and System Restore</item><item>Databases</item><item>Desktop Management</item><item>Exchange</item><item>Group Policy</item><item>Hardware</item>
+      /// <item>Interoperability and Migration</item><item>Local Account Management</item><item>Logs and monitoring</item><item>Lync</item><item>Messaging & Communication</item><item>Microsoft Dynamics</item>
+      /// <item>Multimedia</item><item>Networking</item><item>Office</item><item>Operating System</item><item>Other Directory Services</item><item>Printing</item><item>Remote Desktop Services</item><item>Scripting Techniques</item>
+      /// <item>Security</item><item>Servers</item><item>SharePoint</item><item>Storage</item><item>System Center</item><item>UE-V</item><item>Using the Internet</item><item>Windows Azure</item><item>Windows Update</item>
+      /// </list>
       /// </summary>
       /// <value>The category.</value>
       [DefaultValue(null)]
@@ -120,7 +127,8 @@ namespace PoshCode.Packaging
       /// Gets the required assemblies for this module. Maybe simple assembly names, relative paths, or fully qualified assembly names.
       /// </summary>
       /// <value>The required assemblies.</value>
-      public List<string> RequiredAssemblies { get; private set; }
+      [TypeConverter(typeof(ListOfStringTypeConverter))]
+      public List<string> RequiredAssemblies { get; set; }
 
       /// <summary>
       /// Gets the required modules for this module. 

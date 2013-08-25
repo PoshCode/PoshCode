@@ -1,0 +1,49 @@
+﻿<ModuleManifest
+  Author="Joel 'Jaykul' Bennett &lt;Jaykul@HuddledMasses.org&gt;" 
+  ClrVersion="4.0" 
+  CompanyName="http://HuddledMasses.org" 
+  Copyright="Copyright (c) 2013 by Joel Bennett, all rights reserved." 
+  Description="PoshCode Module for PowerShell Module Packaging and Script Sharing"
+  DotNetFrameworkVersion="4.0"
+  FunctionsToExport="Get-ConfigData&#xA;Get-ModuleInfo&#xA;Get-SpecialFolder&#xA;Install-ModulePackage&#xA;Invoke-Web&#xA;New-ModulePackage&#xA;Set-ConfigData&#xA;Test-ConfigData&#xA;Update-ModuleInfo"
+  Guid="88c6579a-27b2-41c8-86c6-cd23acb791e9"
+  HelpInfoUri=""
+  HomePageUri="https://github.com/Jaykul/poshcode"
+  LicenseUri="http://opensource.org/licenses/ms-pl"
+  ModuleInfoUri="http://poshcode.org/Modules/PoshCode.psdx"
+  PackageUri="http://poshcode.org/Modules/PoshCode-1.0.10.psmx"
+  PowerShellVersion="3.0"
+  Name="PoshCode"
+  RootModule="Packaging.psm1"
+  Version="1.0.10"
+  xmlns="http://schemas.poshcode.org/packaging"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ModuleManifest.FileList>
+    <x:String>.\PoshCode.psdxml</x:String>
+    <x:String>.\PoshCode.psd1</x:String>
+    <x:String>.\PoshCode.ini</x:String>
+    <x:String>.\Packaging.psm1</x:String>
+    <x:String>.\Installation.psm1</x:String>
+    <x:String>.\Configuration.psm1</x:String>
+    <x:String>.\InvokeWeb.psm1</x:String>
+    <x:String>.\Scripts.psm1</x:String>
+    <x:String>.\Source\AssemblyInfo.cs</x:String>
+    <x:String>.\Source\ModuleId.cs</x:String>
+    <x:String>.\Source\StringList.cs</x:String>
+    <x:String>.\Source\ModuleInfo.cs</x:String>
+    <x:String>.\Source\ModuleManifest.cs</x:String>
+    <x:String>.\Source\UnitTests.cs</x:String>
+    <x:String>.\Source\Version.cs</x:String>
+    <x:String>.\Source\VersionTypeConverter.cs</x:String>
+  </ModuleManifest.FileList>
+  <ModuleManifest.NestedModules>
+    <ModuleId Name=".\Configuration.psm1" />
+    <ModuleId Name=".\Installation.psm1" />
+    <ModuleId Name=".\Scripts.psm1" />
+    <ModuleId Name=".\InvokeWeb.psm1" />
+  </ModuleManifest.NestedModules>
+  <ModuleManifest.RequiredAssemblies>
+    <x:String>WindowsBase</x:String>
+    <x:String>PresentationFramework</x:String>
+  </ModuleManifest.RequiredAssemblies>
+</ModuleManifest>

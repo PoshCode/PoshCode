@@ -35,23 +35,7 @@
 #requires -version 2.0
 Set-StrictMode -Version Latest
 
-throw "TODO: Fix this header variable for the new submodule install"
-$PoshCode = "http://PoshCode.org/" | 
-      Add-Member -type NoteProperty -Name "UserName" -Value "Anonymous" -Passthru |
-      Add-Member -type ScriptProperty -Name "ScriptLocation" -Value {
-         $module = $null
-         Get-Module PoshCode | Select -expand Path -EA "SilentlyContinue" | Tee -var module
-         if(!$module) { # Try finding it by path, since it's not loaded as "PoshCode"
-            Get-Module | ? {$_.Name -match "^$([RegEx]::Escape($PsScriptRoot))"} | Select -expand Path
-         }
-      } -Passthru |
-      Add-Member -type ScriptProperty -Name "ModuleName" -Value {
-         if( Get-Module PoshCode ) { "PoshCode" } else {
-            Get-Module | ? {$_.Name -match "^$([RegEx]::Escape($PsScriptRoot))"} | Select -expand Name
-         }
-      } -Passthru |      
-      Add-Member -type NoteProperty -Name "ScriptVersion" -Value 3.13 -Passthru |
-      Add-Member -type NoteProperty -Name "ApiVersion" -Value 1 -Passthru
+$PoshCode = "http://PoshCode.org/" | Add-Member -type NoteProperty -Name "ApiVersion" -Value 1 -Passthru
 
 function Send-PoshCode {
   <#
@@ -272,7 +256,7 @@ function Get-PoshCode {
         [switch]$Upgrade
   ,
         [Parameter(Position=1, Mandatory=$false, ValueFromPipelineByPropertyName=$true)]
-        [Alias("FullName")]
+        [Alias("FullName","Title")]
         [string]$SaveAs
   ,
         [Parameter(Position=2, Mandatory=$false, ValueFromPipelineByPropertyName=$true)]
@@ -306,20 +290,24 @@ function Get-PoshCode {
         "Download" {
            if(!$InBrowser) {
               if($SaveAs) {
+                if(![IO.Path]::HasExtension($SaveAs)) {
+                  $SaveAs = "${SaveAs}.ps1"
+                }
+
                 $ScriptFile = Invoke-WebRequest "$($url)?dl=$id" -OutFile $SaveAs -ErrorVariable FourOhFour
                 if($FourOhFour){
                   $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
                 }
                 # If we used the built-in Invoke-WebRequest, we don't have the file yet...
-                $(if($ScriptFile -isnot [System.IO.FileInfo]) { Get-ChildItem $SaveAs })  ConvertTo-Module
+                $(if($ScriptFile -isnot [System.IO.FileInfo]) { Get-ChildItem $SaveAs }) | ConvertTo-Module
               } 
               else {
-                Invoke-WebRequest "$($url)?dl=$id" -OutFile "${id}.ps1" -ErrorVariable FourOhFour
+                $ScriptFile = Invoke-WebRequest "$($url)?dl=$id" -OutFile "${id}.ps1" -ErrorVariable FourOhFour
                 if($FourOhFour){
                   $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
                 }
                 # If we used the built-in Invoke-WebRequest, we don't have the file yet...
-                $(if($ScriptFile -isnot [System.IO.FileInfo]) { Get-ChildItem "${id}.ps1" })  ConvertTo-Module
+                $(if($ScriptFile -isnot [System.IO.FileInfo]) { Get-ChildItem "${id}.ps1" }) | ConvertTo-Module
               }
            } 
            else {

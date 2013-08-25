@@ -180,19 +180,24 @@ function Test-ConfigData {
               $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "Machine") + ";" + $Folder
               $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
               [System.Environment]::SetEnvironmentVariable("PSModulePath",$PsMP,"Machine")
+              $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
             }
             catch [System.Security.SecurityException] 
             {
               Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be added to your Local Machine PSModulePath.")
-              try {
-                $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "User") + ";" + $Folder
-                $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
-                [System.Environment]::SetEnvironmentVariable("PSModulePath", $PsMP, "User")
-                Write-Host "Added '$folder' to your User PSModulePath instead."
-              }
-              catch [System.Security.SecurityException] 
-              {
-                Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be added to your PSModulePath.")
+              if($PSCmdlet.ShouldContinue("Do you want to store the path '$folder' in your <User> PSModulePath instead?", "Configuring <$name> module location:")) {
+                try {
+                  $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "User") + ";" + $Folder
+                  $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
+                  [System.Environment]::SetEnvironmentVariable("PSModulePath", $PsMP, "User")
+                  $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
+                  Write-Host "Added '$folder' to your User PSModulePath instead."
+                }
+                catch [System.Security.SecurityException] 
+                {
+                  Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be permanently added to your User PSModulePath. Adding for this session anyway.")
+                  $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
+                }
               }
             }
           } else {
@@ -200,10 +205,11 @@ function Test-ConfigData {
               $PsMP = [System.Environment]::GetEnvironmentVariable("PSModulePath", "User") + ";" + $Folder
               $PsMP = ($PsMP -split ";" | Where-Object { $_ } | Select-Object -Unique) -Join ";"
               [System.Environment]::SetEnvironmentVariable("PSModulePath", $PsMP, "User")
+              $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
             }
             catch [System.Security.SecurityException] 
             {
-              Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be permanently added to your PSModulePath.")
+              Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be permanently added to your User PSModulePath. Adding for this session anyway.")
               $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
             }
           }

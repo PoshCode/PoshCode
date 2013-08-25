@@ -40,7 +40,7 @@ CLRVersion = '4.0'
 ProcessorArchitecture = 'None'
 
 # Modules that must be imported into the global environment prior to importing this module
-# RequiredModules = @()
+#RequiredModules = @('PoshCode\Configuration.psm1', 'PoshCode\Installation.psm1', 'PoshCode\Scripts.psm1', 'PoshCode\InvokeWeb.psm1')
 
 # Assemblies that must be loaded prior to importing this module
 RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
@@ -55,13 +55,13 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @('.\Configuration.psm1', '.\Installation.psm1', 'Scripts.psm1', 'InvokeWeb.psm1')
+NestedModules = @('.\Configuration.psm1', '.\Installation.psm1', '.\Scripts.psm1', '.\InvokeWeb.psm1')
 
 # Functions to export from this module
 FunctionsToExport = 'Install-ModulePackage', 'Install-ModuleArchive', 'Get-ModuleInfo',
-               'Update-ModuleInfo', 'New-ModulePackage', 'Update-Module',
-               'Get-SpecialFolder', 'Get-ConfigData', 'Set-ConfigData',
-               'Get-PoshCode', 'Send-PoshCode'
+                    'Update-ModuleInfo', 'New-ModulePackage', 'Update-Module',
+                    'Get-SpecialFolder', 'Get-ConfigData', 'Set-ConfigData',
+                    'Get-PoshCode', 'Send-PoshCode'
 
 # Cmdlets to export from this module
 # CmdletsToExport = '*'
