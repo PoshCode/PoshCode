@@ -25,6 +25,8 @@ If you're trying to distribute a module, you can have users install the Packagin
 
 #### Download the module and install it by file path
 
+That is, download the psmx file and run the install script against that file:
+
 ```posh
 \\PoshCode.org\Modules\Install ~\Downloads\WASP-2.0.0.5.psmx
 ```

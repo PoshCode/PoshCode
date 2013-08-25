@@ -1,19 +1,26 @@
+#.Synopsis
+#   Generate the PoshCode Install script 
 [CmdletBinding(DefaultParameterSetName="InstallerOnly")]
 param(
+  # Overrides the PoshCode Module Version
   [Parameter()]
   [Version]$Version,
 
+  # If set, increment the PoshCode version
   [Parameter(ParameterSetName="Package")]
   [Switch]$Increment,
 
+  # Also generate the PoshCode Package
   [Parameter(ParameterSetName="Package", Mandatory=$true)]
   [Switch]$Package,
 
-  $OutputPath = $PSScriptRoot
+  # The path to save the package to
+  $OutputPath = "${PSScriptRoot}\..\Releases\"
 )
+
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
 if(!$Version) {
-  $Version = Get-Content $PSScriptRoot\PoshCode\PoshCode.psd1 | Select-String ModuleVersion | convertfrom-stringdata | % { [Version]$_.ModuleVersion.Trim("'`"") }
+  $Version = (Import-LocalizedData -BaseDirectory $PSScriptRoot -FileName PoshCode.psdxml).ModuleVersion
 }
 if($Version -lt "0.0") { throw "Can't calculate a version!" }
 Write-Verbose "Setting Version $Version"
@@ -28,11 +35,12 @@ if($Increment) {
 }
 
 # Note: in the install script we strip the export command, as well as the signature if it's there, and anything delimited by BEGIN FULL / END FULL 
-$InvokeWeb = (Get-Content $PSScriptRoot\PoshCode\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
-$Configuration = (Get-Content $PSScriptRoot\PoshCode\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
-$Installation = (Get-Content $PSScriptRoot\PoshCode\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
+$InvokeWeb = (Get-Content $PSScriptRoot\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
+$Configuration = (Get-Content $PSScriptRoot\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
+$Installation = (Get-Content $PSScriptRoot\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
+$InstallScript = Join-Path $OutputPath Install.ps1
 
-Set-Content $PSScriptRoot\Install.ps1 ((@'
+Set-Content $InstallScript ((@'
 ########################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice.
@@ -160,10 +168,10 @@ begin {{
 ) -f $Version, $InvokeWeb, $Configuration, $Installation)
 
 
-Sign $PSScriptRoot\Install.ps1 -WA 0 -EA 0
-Sign -Module PoshCode -WA 0 -EA 0
-
+Sign $InstallScript -WA 0 -EA 0
 if($Package) {
+  Sign -Module PoshCode -WA 0 -EA 0
+
   Update-ModuleInfo PoshCode -Version $Version
   New-ModulePackage PoshCode $OutputPath | Out-Default
 }
