@@ -166,7 +166,8 @@ function Test-ConfigData {
         }
       }
 
-      [string[]]$PSModulePaths = $Env:PSModulePath -split ";" | Resolve-Path | Convert-Path
+      ## Note: PSModulePath entries don't necessarily exist
+      [string[]]$PSModulePaths = $Env:PSModulePath -split ";" #| Convert-Path -ErrorAction 0
 
       ## Add it to the PSModulePath, if necessary
       if((Test-Path $folder) -and ($PSModulePaths -notcontains (Convert-Path $folder))) {
@@ -227,5 +228,6 @@ function Test-ConfigData {
     Set-ConfigData -ConfigData $ConfigData
   }
 }
+
 
 Export-ModuleMember -Function Get-SpecialFolder, Get-ConfigData, Set-ConfigData, Test-ConfigData

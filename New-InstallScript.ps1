@@ -172,6 +172,6 @@ Sign $InstallScript -WA 0 -EA 0
 if($Package) {
   Sign -Module PoshCode -WA 0 -EA 0
 
-  Update-ModuleInfo PoshCode -Version $Version
+  # Update-ModuleInfo PoshCode -Version $Version
   New-ModulePackage PoshCode $OutputPath | Out-Default
 }
