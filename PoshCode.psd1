@@ -58,10 +58,10 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 NestedModules = @('.\Configuration.psm1', '.\Installation.psm1', '.\Scripts.psm1', '.\InvokeWeb.psm1')
 
 # Functions to export from this module
-FunctionsToExport = 'Install-ModulePackage', 'Install-ModuleArchive', 'Get-ModuleInfo',
-                    'Update-ModuleInfo', 'New-ModulePackage', 'Update-Module',
+FunctionsToExport = 'Install-ModulePackage', 'Install-ModuleArchive', 'Get-Module',
+                    'New-ModulePackage', 'Update-Module',
                     'Get-SpecialFolder', 'Get-ConfigData', 'Set-ConfigData',
-                    'Get-PoshCode', 'Send-PoshCode'
+                    'Get-PoshCode', 'Send-PoshCode', 'Get-PackageManifest'
 
 # Cmdlets to export from this module
 # CmdletsToExport = '*'

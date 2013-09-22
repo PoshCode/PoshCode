@@ -129,6 +129,7 @@ Additionally, I've got a fairly long task list that starts with these items:
   - Determine the feed format, considering NuGet atom and HelpInfoUri
   - Write Update-Module(Package?) to check for updates
   - Generate the feed during New-ModulePackage
+- Allow arbitrary metadata in the package (as a metadata tag? as extensions? namespaces?)
 - Support for downgrading (I need thoughts on how this should behave)
 - Support for SxS versions (I need thoughts on how this could work)
 - Write .Example sections for the major external functions from the modules. Please be sure they are also added (with verification) as test cases in Tests.ps1
