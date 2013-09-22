@@ -30,7 +30,8 @@ $Script:ModuleContentType       = "http://schemas.poshcode.org/package/module-fi
 # This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
 $Script:ManifestType            = "http://schemas.microsoft.com/packaging/2010/07/manifest"
 # Our Extensions
-$Script:ModuleInfoExtension     = ".psdxml"
+$Script:ModuleInfoFile          = "package.psd1"
+$Script:ModuleInfoExtension     = ".psd1"
 $Script:ModuleManifestExtension = ".psd1"
 $Script:ModulePackageExtension  = ".psmx"
 
@@ -102,11 +103,11 @@ function Install-ModulePackage {
       foreach( $name in (Get-ConfigData).Keys ){
         if("CommonPath","UserPath" -notcontains $name) {
           $param = new-object System.Management.Automation.RuntimeDefinedParameter( $Name, [Switch], (New-Object Parameter -Property @{ParameterSetName=$Name;Mandatory=$true}))
-          $paramdictionary.Add($Name, $param)
+          $paramDictionary.Add($Name, $param)
         }
       } 
     }
-    return $paramdictionary
+    return $paramDictionary
   }  
   begin {
     if($PSCmdlet.ParameterSetName -ne "InstallPath") {
@@ -118,10 +119,6 @@ function Install-ModulePackage {
       }
       $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path"))
       $PsBoundParameters.Add("InstallPath", $InstallPath)
-    }
-    if(!(Test-Path variable:RejectAllOverwriteOnInstall)){
-      $RejectAllOverwriteOnInstall = $false;
-      $ConfirmAllOverwriteOnInstall = $false;
     }
   }
   process {
@@ -154,8 +151,8 @@ function Install-ModulePackage {
     $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
     # TODO: Make this more bullet-proof (it's just testing extensions right now)
-    # If we just got back an xml file, figure out the real package Uri and recurse
-    if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
+    # If we just got back a text file, figure out the real package Uri and recurse
+    if($ModuleInfoFile -eq (Split-Path $PackagePath -Leaf)) {
       $Mi = Get-ModuleInfo $PackagePath
       Remove-Item $PackagePath
       if($Mi.PackageUri) {
@@ -173,15 +170,23 @@ function Install-ModulePackage {
     if(!($ModulePaths -match ([Regex]::Escape($InstallPath) + ".*"))) {
       if((Get-PSCallStack | Where-Object{ $_.Command -eq "Install-ModulePackage" }).Count -le 1) {
         Write-Warning "Install path '$InstallPath' is not in yout PSModulePath!"
+        $InstallPath = Select-ModulePath $InstallPath
       }
     }
 
     # At this point $PackagePath is a local file, but it might be a .zip or .nupkg:
-    $Manifest = Get-ModuleManifestXml $PackagePath
+    $Manifest = Get-PackageManifest $PackagePath
     if(!$Manifest) {
-      Write-Warning "'$Package' is not a valid PoshCode Package, using Install-ModuleArchive"
-      Install-ModuleArchive $PackagePath $InstallPath
-      return
+      ## TODO: This should be Expand-ZipFile
+      if($ModuleFolder = Install-ModuleArchive $PackagePath $InstallPath) {
+        $Manifest = Get-ModuleInfo (Join-Path $InstallPath $ModuleFolder.Name)
+        if(!$Manifest) {
+          Write-Warning "The package was unpacked to $($ModuleFolder.Fullname), but is invalid -- it has no Manifest.psdxml"
+        }
+      }
+    } else {
+      ## TODO: Should merge Expand-Package & Expand-ZipFile so there's just Expand-Package
+      $ModuleFolder = Expand-Package $PackagePath $InstallPath -Force:$Force -Passthru:$Passthru
     }
 
     # We need to verify the RequiredModules are available, or install them.
@@ -210,7 +215,7 @@ function Install-ModulePackage {
         if(($RequiredFile = Get-Item (Join-Path $Folder "$($RequiredModule.Name)*$ModulePackageExtension") | 
                               Sort-Object { [IO.Path]::GetFileNameWithoutExtension($_) } | 
                               Select-Object -First 1) -and
-           (Get-ModuleManifestXml $RequiredFile).Version -ge $RequiredModule.Version)
+           (Get-PackageManifest $RequiredFile).Version -ge $RequiredModule.Version)
         {
           Write-Warning "Installing required module $($RequiredModule.Name) from $RequiredFile"
           Install-ModulePackage $RequiredFile $InstallPath
@@ -234,72 +239,11 @@ function Install-ModulePackage {
       }
     }
 
-    try {
-      $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
-      Write-Host ($Package.PackageProperties|Select-Object Title,Version,@{n="Guid";e={$_.Identifier}},Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
 
-      $ModuleName = $Package.PackageProperties.Title
-      if($InstallPath -match ([Regex]::Escape($ModuleName)+'$')) {
-        $InstallPath = Split-Path $InstallPath
-      }
-
-      if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $($ModuleName)" )) {
-        if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
-          $success = $false
-          if(Test-Path "$InstallPath\$ModuleName") {
-            Remove-Item "$InstallPath\$ModuleName" -Recurse -Force -ErrorAction Stop
-          }
-          $null = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
-          
-          ## Handle the error if they asked for -Common and don't have permissions
-          if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
-            throw "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated."
-          }
-
-          foreach($part in $Package.GetParts() | where Uri -match ("^/" + $ModuleName)) {
-            $fileSuccess = $false
-            # Copy the data to the file system
-            try {
-              if(!(Test-Path ($Folder = Split-Path ($File = Join-Path $InstallPath $Part.Uri)) -EA 0) ){
-                $null = New-Item -Type Directory -Path $Folder -Force
-              }
-              Write-Verbose "Unpacking $File"
-              $writer = [IO.File]::Open( $File, "Create", "Write" )
-              $reader = $part.GetStream()
-
-              Copy-Stream $reader $writer -Activity "Writing $file"
-              $fileSuccess = $true
-            } catch [Exception] {
-              $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-            } finally {
-              if($writer) {
-                $writer.Close()
-                $writer.Dispose()
-              }
-              if($reader) {
-                $reader.Close()
-                $reader.Dispose()
-              }
-            }
-            if(!$fileSuccess) { throw "Couldn't unpack to $File."}
-            if($Passthru) { Get-Item $file }
-          }
-        } else { # !Force
-          $Import = $false # Don't _EVER_ import if they refuse the install
-        }
-        $success = $true
-      } # ShouldProcess
-    } catch [Exception] {
-      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-    } finally {
-      $Package.Close()
-      $Package.Dispose()
-    }
-    if(!$success) { throw "Couldn't unpack $ModuleName." }
-    if($Import) {
-      Import-Module $ModuleName -Passthru:$Passthru
-    } else {
-      Get-Module $ModuleName
+    if($Import -and $ModuleFolder) {
+      Import-Module $ModuleFolder.Name -Passthru:$Passthru
+    } elseif($ModuleFolder) {
+      Get-Module $ModuleFolder.Name
     }
   }
 }
@@ -328,25 +272,28 @@ function Get-ModuleInfo {
       }
       $Module = $null
       $Extension = [IO.Path]::GetExtension($ModulePath)
+
       # It should be either a String or a FileInfo (if it's a string, it might begmo)
       Write-Verbose "Switch on Extension: $Extension  ($ModulePath)"
       switch($Extension) {
-        $ModuleInfoExtension {
-          Write-Verbose "Finding Module by ModuleInfoPath"
-          $ModuleInfoPath = $ModulePath
-          $ModuleManifestPath = [IO.Path]::ChangeExtension($ModuleInfoPath, $ModuleManifestExtension)
-        }
-        $ModuleManifestExtension {
+        ".psd1" {
           Write-Verbose "Finding Module by ModuleManifestPath"
           # We have a path to a .psd1
-          $ModuleManifestPath = $ModulePath
-          $ModuleInfoPath = [IO.Path]::ChangeExtension($ModuleManifestPath, $ModuleInfoExtension)
+          $file = Split-Path $ModulePath -Leaf
+          if($file -eq $ModuleInfoFile) {
+            $ModuleName = Split-Path (Split-Path $ModulePath) -Leaf
+            $ModuleInfoPath = $ModulePath
+            $ModuleManifestPath = Join-Path (Split-Path $ModulePath) $ModuleName
+          } else {
+            $ModuleInfoPath  = Join-Path (Split-Path $ModulePath) $ModuleInfoFile
+            $ModuleManifestPath = $ModulePath
+          }
         }
-        $ModulePackageExtension {
+        ".psmx" {
           Write-Verbose "Finding Module by ModuleManifestPath"
-          Get-ModuleManifestXml $ModulePath |
-          Add-Member NoteProperty PackagePath $ModulePath -Passthru |
-          Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModulePath.Provider, $ModulePath.ProviderPath) -Passthru
+          Get-PackageManifest $ModulePath |
+            Add-Member NoteProperty PackagePath $ModulePath -Passthru |
+            Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModulePath.Provider, $ModulePath.ProviderPath) -Passthru
           return 
         }
         default {
@@ -386,16 +333,19 @@ function Get-ModuleInfo {
       }
     }
     if($Module) {
-      $ModuleInfoPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleInfoExtension"
+      $ModuleInfoPath = Join-Path $Module.ModuleBase $ModuleInfoFile
       $ModuleManifestPath = Join-Path $Module.ModuleBase "$($Module.Name)$ModuleManifestExtension"
     }
 
     if(Test-Path $ModuleInfoPath) {
       Write-Verbose "Loading ModuleManifest"
-      $ModuleInfo = ([xml](gc $ModuleInfoPath)).ModuleManifest | 
-                      Add-Member NoteProperty ModuleInfoPath $ModuleInfoPath -Passthru | 
-                      Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru | 
-                      Add-Member NoteProperty Path $ModuleManifestPath -Passthru
+
+      Import-LocalizedData -BindingVariable "ModuleInfo" -BaseDirectory $ModuleBase -FileName "Package" -ErrorAction "SilentlyContinue"
+
+      $ModuleInfo = $ModuleInfo | 
+         Add-Member NoteProperty ModuleInfoPath $ModuleInfoPath -Passthru | 
+         Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru | 
+         Add-Member NoteProperty Path $ModuleManifestPath -Passthru
       Write-Output $ModuleInfo
     }
     elseif($Module) 
@@ -413,54 +363,111 @@ function Get-ModuleInfo {
 }
 
 ##### Private functions ######
-function Get-ModuleManifestXml {
-  # .Synopsis
-  # Try reading the module manifest from the package
-  param( 
-    $ModulePath 
-  )
-  end {
-    try {
-      $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
-
-      $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
-      if(!$Manifest -or !$Manifest.TargetUri) {
-        Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
-        return
-      }
-
-      $Part = $Package.GetPart( $Manifest.TargetUri )
-      if(!$Part) {
-        Write-Warning "This file is not a valid PoshCode Package, it has no manifest at $($Manifest.TargetUri)"
-        return
-      }
-
+function Get-PackageManifest {
+   # .Synopsis
+   # Try reading the module manifest from the package
+   [CmdletBinding()]
+   param(
+      # Path to a package to get information about
+      $ModulePath
+   )
+   end {
       try {
-        $stream = $part.GetStream()
-        $reader = New-Object System.IO.StreamReader $stream
-        # This gets the ModuleInfo
-        ([xml]$reader.ReadToEnd()).ModuleManifest
-      } catch [Exception] {
-        $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-      } finally {
-        if($reader) {
-          $reader.Close()
-          $reader.Dispose()
-        }
-        if($stream) {
-          $stream.Close()
-          $stream.Dispose()
-        }
-      }
+         $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $ModulePath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
 
-    } catch [Exception] {
-      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-    } finally {
-      $Package.Close()
-      $Package.Dispose()
-    }
+         ## First load the package manifest (which has URLs in it)
+         $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
+         if(!$Manifest -or !$Manifest.TargetUri) {
+            Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
+            return
+         }
+         $Part = $Package.GetPart( $Manifest.TargetUri )
+         if(!$Part) {
+            Write-Warning "This file is not a valid PoshCode Package, it has no manifest at $($Manifest.TargetUri)"
+            return
+         }
+         $PackageManifest = Import-ManifestStream ($Part.GetStream())
+
+         ## Now load the module manifest (which has everything else in it)
+         $Manifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
+         if(!$Manifest -or !$Manifest.TargetUri) {
+            Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
+            return
+         }
+         if($Part = $Package.GetPart( $Manifest.TargetUri )) {
+            if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
+               ## If we got the module manifest, update the PackageManifest
+               $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
+            }
+         }
+         Write-Output $PackageManifest
+      } catch [Exception] {
+         $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+      } finally {
+         $Package.Close()
+         $Package.Dispose()
+      }
   }
 }
+
+
+function Import-ManifestStream {
+   #  .Synopsis
+   #  Import a manifest from an IO Stream
+   param(
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
+      [System.IO.Stream]$stream
+   )   
+   try {
+      $reader = New-Object System.IO.StreamReader $stream
+      # This gets the ModuleInfo
+      Import-Manifest ($reader.ReadToEnd())
+   } catch [Exception] {
+      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+   } finally {
+      if($reader) {
+         $reader.Close()
+         $reader.Dispose()
+      }
+      if($stream) {
+         $stream.Close()
+         $stream.Dispose()
+      }
+   }
+}
+
+function Import-Manifest {
+   #  .Synopsis
+   #  Parse a module manifest the best way we can.
+   param(
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
+      [string]$Manifest
+   )
+   begin {
+      $ValidTokens = "GroupStart", "GroupEnd", "Member", "Operator", "String", "Comment", "NewLine", "StatementSeparator"
+      $ParseErrors = $Null
+   }
+   process {
+      if(Test-Path $Manifest) {
+         $Manifest = Convert-Path $Manifest
+         Import-LocalizedData -BaseDirectory (Split-Path $Manifest) -FileName (Split-Path $Manifest -Leaf)
+      } else {
+         $Tokens = [System.Management.Automation.PSParser]::Tokenize($Manifest,[ref]$ParseErrors)
+         if($ParseErrors -ne $null) {
+            $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading package manifest", "Parse Error", "InvalidData", $ParseErrors) )
+            return
+         }
+         if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
+            $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest", "Parse Error", "InvalidData", $InvalidTokens) )
+            return
+         }
+         # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
+         Invoke-Expression "Data { ${Manifest} } "
+      }
+   }
+
+}
+
 
 function Copy-Stream {
   #.Synopsis
@@ -508,12 +515,18 @@ function Select-ModulePath {
   )
   end {
     $ChoicesWithHelp = @()
-    [Char]$Letter = "D"
+    [Char[]]$Letters = @("P","O","C")
+    [Char]$Letter = "A"
     $default = -1
     $index = -1
-    $common = -1
-    switch -Wildcard ($Env:PSModulePath -split ";" | ? {$_}) {
+    $common = 0
+
+    $PSModulePath = $Env:PSModulePath -split ";" | ? {$_} 
+
+    Write-Verbose ("`n" + ($PSModulePath -join "`n"))
+    switch -Wildcard ((@($Env:PSModulePath -split ";") + $InstallPath) | ? {$_} | Select -Unique) {
       "${PSHome}*" {
+        Write-Verbose "Skipping '$_' we do not support installing to the System location."
         ##### We do not support installing to the System location. #####
         #$index++
         #$ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "S&ystem", $_
@@ -525,67 +538,100 @@ function Select-ModulePath {
         $default = $index
         continue
       }
-      "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) Microsoft)\Windows\PowerShell\Modules*" {
+      "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) \WindowsPowerShell\Modules)" {
         $index++
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+        $K, $C = $( if($common -lt 1){"&Common","C"}elseif($common -lt 2){"Co&mmon","M"}else{"Commo&n","N"} )
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $K, $_
+        $Letters += $C
         $common++
         if($Default -lt 0){$Default = $index}
         continue
       }
       "$(Join-Path ([Environment]::GetFolderPath("CommonProgramFiles")) Modules)*" {
         $index++
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+        $K, $C = $( if($common -lt 1){"&Common","C"}elseif($common -lt 2){"Co&mmon","M"}else{"Commo&n","N"} )
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $K, $_
+        $Letters += $C
         $common++
         if($Default -lt 0){$Default = $index}
         continue
       }
       "$(Join-Path ([Environment]::GetFolderPath("CommonDocuments")) Modules)*" {
         $index++
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+        $K, $C = $( if($common -lt 1){"&Common","C"}elseif($common -lt 2){"Co&mmon","M"}else{"Commo&n","N"} )
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $K, $_
+        $Letters += $C
         $common++
         if($Default -lt 0){$Default = $index}
         continue
       }
       "$([Environment]::GetFolderPath("MyDocuments"))*" { 
         $index++
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&MyDocuments", $_
+        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "My&Documents", $_
+        $Letters += "D"
         if($Default -lt 0){$Default = $index}
         continue
       }
       default {
         $index++
         $Key = $_ -replace [regex]::Escape($Env:USERPROFILE),'~' -replace "((?:[^\\]*\\){2}).+((?:[^\\]*\\){2})",'$1...$2'
-        $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&$Letter $Key", $_
-        $Letter = 1 + $Letter
+        $Characters = ($Key -replace "\W").ToCharArray() | Select -Unique
+        Write-Verbose "Characters: $(($Characters | ? { $Letters -notcontains $_ } ) -join '')"
+        $Found = $False
+        foreach($c in $Characters) {
+          if($Letters -notcontains $c) {
+            $Letters += $c
+            $Key = $Key -replace "(${c})(.*)","&`$1`$2"
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $Key, $_
+            $Found = $True
+            break
+          }
+        }
+        if(!$Found) {
+          while($Letters -contains $Letter) { 
+            $Letter = 1 + $Letter
+            $Letters += $Letter
+          }
+          $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&$Letter $Key", $_
+        }
         continue
       }
     }
+  
+    Write-Verbose ("`n" + ($ChoicesWithHelp | ft -auto| Out-String))
+
+    if($InstallPath) { $default = $index }
+
     # Let's try and make sure they have one of our two known "Common" locations:
     if($common -lt 1) {
       $index++
-      $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Common", "$([Environment]::GetFolderPath("CommonDocuments"))\Modules"
+      $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Common", "$([Environment]::GetFolderPath("ProgramFiles"))\WindowsPowerShell\Modules"
     }
     # And we always offer the "Other" location:
     $index++
     $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Other", "Type in your own path!"
 
-    while(!$InstallPath -or !(Test-Path $InstallPath)) {
-      if($InstallPath -and !(Test-Path $InstallPath)){
-        if($PSCmdlet.ShouldProcess(
-          "Verifying module install path '$InstallPath'", 
-          "Create folder '$InstallPath'?", 
-          "Creating Module Install Path" )) {
+    if($PSModulePath -notcontains $InstallPath) {
+      Write-Warning "InstallPath '$InstallPath' is not in your PSModulePath."
 
-          $null = New-Item -Type Directory -Path $InstallPath -Force -ErrorVariable FailMkDir
-        
-          ## Handle the error if they asked for -Common and don't have permissions
-          if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
-            Write-Warning "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated. (Press Ctrl+C to cancel)"
-          } 
+      do {
+        if($InstallPath -and !(Test-Path $InstallPath)){
+          if($PSCmdlet.ShouldProcess(
+            "Verifying module install path '$InstallPath'", 
+            "Create folder '$InstallPath'?", 
+            "Creating Module Install Path" )) {
+
+            $null = New-Item -Type Directory -Path $InstallPath -Force -ErrorVariable FailMkDir
+          
+            ## Handle the error if they asked for -Common and don't have permissions
+            if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
+              Write-Warning "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated. (Press Ctrl+C to cancel)"
+            } else {
+              continue
+            }
+          }
         }
-      }
 
-      if(!$InstallPath -or !(Test-Path $InstallPath)){
         $Answer = $Host.UI.PromptForChoice(
           "Please choose an install path.",
           "Choose a Module Folder (use ? to see the full paths)",
@@ -599,9 +645,8 @@ function Select-ModulePath {
         } else {
           $InstallPath = $ChoicesWithHelp[$Answer].HelpMessage
         }
-      }
+      } while(!$InstallPath -or !(Test-Path $InstallPath))
     }
-
     return $InstallPath
   }
 }
@@ -633,7 +678,370 @@ function Test-ExecutionPolicy {
   } 
 }
 
-# FULL # BEGIN FULL: This cmdlet is only needed in the full version of the module
+function Expand-ZipFile {
+  #.Synopsis
+  #   Expand a zip file, ensuring it's contents go to a single folder ...
+  [CmdletBinding(SupportsShouldContinue=$true)]
+  param(
+    # The path of the zip file that needs to be extracted
+    [Parameter(Position=0, Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+    [Alias("PSPath")]
+    $FilePath,
+
+    # The base path where we want the output folder to end up
+    [Parameter(Position=1)] 
+    $OutputPath,
+
+    # Make sure the resulting folder is always named the same as the archive
+    [Switch]$Force
+  )
+  process {
+    $ZipFile = Get-Item $FilePath -ErrorAction Stop
+    $OutputFolderName = $ZipFile.BaseName
+
+    # Figure out where we'd prefer to end up:
+    if(Test-Path $OutputPath -Type Container) {
+      # If they pass a path that exists, resolve it:
+      $OutputPath = Convert-Path $OutputPath
+
+      # If it's not empty, assume they want us to make a folder there:
+      if(Get-ChildItem $OutputPath) {
+        $Destination = (New-Item (Join-Path $OutputPath $OutputFolderName) -Type Directory -Force).FullName
+        # Otherwise, we could just use that folder (maybe):
+      } else {
+        $Destination = $OutputPath
+      }
+    } else {
+      # Otherwise, assume they want us to make a new folder:
+      $Destination = (New-Item $OutputPath -Type Directory -Force).FullName
+    }
+
+    if("System.IO.Compression.ZipFile" -as [Type]) {
+      # If we have .Net 4, this is better (no GUI)
+      try {
+        $Archive = [System.IO.Compression.ZipFile]::Open( $ZipFile.FullName, "Read" )
+        [System.IO.Compression.ZipFileExtensions]::ExtractToDirectory( $Archive, $Destination )
+      } catch { Write-Error $_.Message } finally {
+        $Archive.Dispose()
+      }
+    } else {
+      # Note: the major problem with this method is that it has GUI!
+      $shellApplication = new-object -com Shell.Application
+      $zipPackage = $shellApplication.NameSpace($ZipFile.FullName)
+      $shellApplication.NameSpace($Destination).CopyHere($zipPackage.Items())
+    }
+
+    # Now, a few corrective options:
+    # If there are no items, bail.
+    $RootItems = @(Get-ChildItem $Destination)
+    $RootItemCount = $RootItems.Count
+    if($RootItemCount -lt 1) {
+      throw "There were no items in the Archive: $($ZipFile.FullName)"
+    }
+
+    # If there's nothing there but another folder, move it up one.
+    while($RootItemCount -eq 1 -and $RootItems[0].PSIsContainer) {
+      Write-Verbose "Extracted One Folder ($RootItems) - Moving"
+      if($Force -or ($RootItems[0].Name -eq (Split-Path $Destination -Leaf))) { 
+        # Keep the archive named folder
+        Move-Item (join-path $RootItems[0].FullName *) $destination
+        # Remove the child folder
+        Remove-Item $RootItems[0].FullName
+      } else {
+
+        $NewDestination = (Join-Path (Split-Path $Destination) $RootItems[0].Name)
+        if(Test-Path $NewDestination) {
+          if(Get-ChildItem $NewDestination) {
+            if($Force -or $PSCmdlet.ShouldContinue("The OutputPath exists and is not empty. Do you want to replace the contents of '$NewDestination'?", "Deleting contents of '$NewDestination'")) {
+              Remove-Item $NewDestination -Recurse -ErrorAction Stop
+            } else {
+              throw "OutputPath '$NewDestination' Exists and is not empty."
+            }
+          }
+          # move the contents to the new location
+          Move-Item (join-path $RootItems[0].FullName *) $NewDestination
+          Remove-Item $RootItems[0].FullName
+        } else {
+          # move the whole folder to the new location
+          Move-Item $RootItems[0].FullName (Split-Path $NewDestination -Leaf)
+        }
+        Remove-Item $Destination
+        $Destination = $NewDestination
+      }
+
+      $RootItems = @(Get-ChildItem $Destination)
+      $RootItemCount = $RootItems.Count
+      if($RootItemCount -lt 1) {
+        throw "There were no items in the Archive: $($ZipFile.FullName)"
+      }
+    }
+    # Output the new folder
+    Get-Item $Destination
+  }
+}
+
+function Expand-Package {
+  #.Synopsis
+  #   Expand a zip file, ensuring it's contents go to a single folder ...
+  [CmdletBinding(SupportsShouldContinue=$true)]
+  param(
+    # The path of the module package that needs to be extracted
+    [Parameter(Position=0, Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+    [Alias("PSPath")]
+    $PackagePath,
+
+    # The base path where we want the module folder to end up
+    [Parameter(Position=1)] 
+    $InstallPath,
+
+    # If set, overwrite existing modules without prompting
+    [Switch]$Force,
+
+    # If set, output information about the files as well as the module 
+    [Switch]$Passthru    
+  )
+  begin {
+    if(!(Test-Path variable:RejectAllOverwriteOnInstall)){
+      $RejectAllOverwriteOnInstall = $false;
+      $ConfirmAllOverwriteOnInstall = $false;
+    }
+  }
+  process {
+    try {
+      $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
+      Write-Host ($Package.PackageProperties|Select-Object Title,Version,@{n="Guid";e={$_.Identifier}},Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
+
+      $ModuleResult = $ModuleName = $Package.PackageProperties.Title
+      if($InstallPath -match ([Regex]::Escape($ModuleName)+'$')) {
+        $InstallPath = Split-Path $InstallPath
+      }
+
+      if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $($ModuleName)" )) {
+        if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
+          $success = $false
+          if(Test-Path "$InstallPath\$ModuleName") {
+            Remove-Item "$InstallPath\$ModuleName" -Recurse -Force -ErrorAction Stop
+          }
+          $ModuleResult = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
+          
+          ## Handle the error if they asked for -Common and don't have permissions
+          if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
+            throw "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated."
+          }
+
+          foreach($part in $Package.GetParts() | where Uri -match ("^/" + $ModuleName)) {
+            $fileSuccess = $false
+            # Copy the data to the file system
+            try {
+              if(!(Test-Path ($Folder = Split-Path ($File = Join-Path $InstallPath $Part.Uri)) -EA 0) ){
+                $null = New-Item -Type Directory -Path $Folder -Force
+              }
+              Write-Verbose "Unpacking $File"
+              $writer = [IO.File]::Open( $File, "Create", "Write" )
+              $reader = $part.GetStream()
+
+              Copy-Stream $reader $writer -Activity "Writing $file"
+              $fileSuccess = $true
+            } catch [Exception] {
+              $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+            } finally {
+              if($writer) {
+                $writer.Close()
+                $writer.Dispose()
+              }
+              if($reader) {
+                $reader.Close()
+                $reader.Dispose()
+              }
+            }
+            if(!$fileSuccess) { throw "Couldn't unpack to $File."}
+            if($Passthru) { Get-Item $file }
+          }
+          $success = $true
+        } else { # !Force
+          $Import = $false # Don't _EVER_ import if they refuse the install
+        }        
+      } # ShouldProcess
+      if(!$success) { $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.Management.Automation.HaltCommandException "Can't overwrite $ModuleName module: User Refused"), "ShouldContinue:False", "OperationStopped", $_) ) }
+    } catch [Exception] {
+      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+    } finally {
+      $Package.Close()
+      $Package.Dispose()
+    }
+    if($success) {
+      Write-Output $ModuleResult
+    }
+  }
+}
+
+# FULL # BEGIN FULL: These cmdlets are only needed in the full version of the module
+
+function Get-Module {
+  [CmdletBinding(DefaultParameterSetName='Loaded', HelpUri='http://go.microsoft.com/fwlink/?LinkID=141552')]
+  param(
+      [Parameter(ParameterSetName='PsSession', Position=0, ValueFromPipeline=$true)]
+      [Parameter(ParameterSetName='Available', Position=0, ValueFromPipeline=$true)]
+      [Parameter(ParameterSetName='CimSession', Position=0, ValueFromPipeline=$true)]
+      [Parameter(ParameterSetName='Loaded', Position=0, ValueFromPipeline=$true)]
+      [string[]]
+      ${Name},
+
+      [Parameter(ParameterSetName='Available')]
+      [Parameter(ParameterSetName='Loaded')]
+      [switch]
+      ${All},
+
+      [Parameter(ParameterSetName='PsSession')]
+      [Parameter(ParameterSetName='CimSession')]
+      [Parameter(ParameterSetName='Available', Mandatory=$true)]
+      [switch]
+      ${ListAvailable},
+
+      [Parameter(ParameterSetName='CimSession')]
+      [Parameter(ParameterSetName='Available')]
+      [Parameter(ParameterSetName='PsSession')]
+      [switch]
+      ${Refresh},
+
+      [Parameter(ParameterSetName='PsSession', Mandatory=$true)]
+      [ValidateNotNull()]
+      [System.Management.Automation.Runspaces.PSSession]
+      ${PSSession},
+
+      [Parameter(ParameterSetName='CimSession', Mandatory=$true)]
+      [ValidateNotNull()]
+      [Microsoft.Management.Infrastructure.CimSession]
+      ${CimSession},
+
+      [Parameter(ParameterSetName='CimSession')]
+      [ValidateNotNull()]
+      [uri]
+      ${CimResourceUri},
+
+      [Parameter(ParameterSetName='CimSession')]
+      [ValidateNotNullOrEmpty()]
+      [string]
+      ${CimNamespace})
+
+  begin
+  {
+    function Local:Update-ModuleInfo {
+      [CmdletBinding()]param([Parameter(ValueFromPipeline=$true)]$ModuleInfo)
+      process {
+        if($ModuleInfo) {
+          $ModulePath = Split-Path $ModuleInfo.Path
+          $PackageInfo = @{}
+          ## This is the PoshCode metadata file: Package.psd1
+          Import-LocalizedData -BindingVariable "PackageInfo" -BaseDirectory $ModulePath -FileName "Package" -ErrorAction "SilentlyContinue"
+          Write-Verbose "Loading package info from path: $ModulePath\Package.psd1"
+          if($PackageInfo) {
+            Update-Dictionary $ModuleInfo $PackageInfo
+          } else {
+            Write-Output $ModuleInfo
+          }
+        }
+      }
+    }
+
+    try {
+      $outBuffer = $null
+      if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
+      {
+          $PSBoundParameters['OutBuffer'] = 1
+      }
+      $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
+      $scriptCmd = {& $wrappedCmd @PSBoundParameters | Update-ModuleInfo }
+      $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
+      $steppablePipeline.Begin($PSCmdlet)
+    } catch {
+      throw
+    }
+  }
+
+  process
+  {
+      try {
+         $steppablePipeline.Process($_)
+      } catch {
+         throw
+      }
+  }
+
+  end
+  {
+      try {
+         $steppablePipeline.End()
+      } catch {
+         throw
+      }
+  }
+  <#
+    .ForwardHelpTargetName Get-Module
+    .ForwardHelpCategory Cmdlet
+  #>
+}
+
+
+function Update-Dictionary {
+   param(
+      $Authoritative,
+      $Additional
+   )
+   ## TODO: Rewrite this generically to deal with arrays of hashtables based on a $KeyField parameter
+   foreach($prop in $Additional.GetEnumerator()) {
+      #    $value = $(
+      #       if($Value -isnot [System.Collections.IDictionary] -and $Value -is [System.Collections.IList]) {
+      #          foreach($value in $prop.Value) { $value }
+      #       } else { $prop.Value }
+      #    )
+      #    if($Value -is [System.Collections.IDictionary]) {
+      #    ....
+
+      # So far we only have special handling for RequiredModules:
+      Write-Verbose "Updating $($prop.Name)"
+      switch($prop.Name) {
+         "RequiredModules" {
+            [string[]]$rmNames = @($Authoritative.RequiredModules) | ForEach-Object { if($_.Name){$_.Name}else{$_.ModuleName} }
+            Write-Verbose "Module Requires: $($rmNames -join ',')"
+            # The only reason to bother with RequiredModules is if they have a ModuleInfoUri
+            foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.ModuleInfoUri })) {
+               $name = $(if($depInfo.ModuleName){$depInfo.ModuleName}else{$depInfo.Name})
+               Write-Verbose "PackageInfo Requires: $name"
+               # If this Required Module is already listed, then just add the uri
+               # Otherwise should we add it? (as a hashtable with the info we have?)
+               if($rmNames -contains $name) {
+                  foreach($required in $Authoritative.RequiredModules) {
+                     if($required.Name -eq $name -or $required.ModuleName -eq $name) {
+                        Write-Verbose "Update RequiredModule ($name) with ModuleInfoUri ($($depInfo.ModuleInfoUri))"
+                        if($required -is [System.Collections.IDictionary]) {
+                           if(!$required.Contains("ModuleInfoUri")) {
+                              $required.Add("ModuleInfoUri", $depInfo.ModuleInfoUri)
+                           }
+                        } else {
+                           Add-Member -InputObject $required -Type NoteProperty -Name "ModuleInfoUri" -Value $depInfo.ModuleInfoUri
+                        }
+                     }
+                  }
+               }
+            }
+         }
+         default {
+            ## We only add properties, never replace, so hide errors
+            if($Authoritative -is [System.Collections.IDictionary]) {
+               if(!$Authoritative.Contains($prop.Name)) {
+                  $Authoritative.Add($prop.Name, $prop.Value)
+               }
+            } else {
+               Add-Member -in $Authoritative -type NoteProperty -Name $prop.Name -Value $prop.Value -ErrorAction SilentlyContinue
+            }            
+         }
+      }
+   }
+   $Authoritative
+}
+
+
 function Update-Module {
   #.Synopsis
   #   Checks if you have the latest version of each module
@@ -796,51 +1204,9 @@ function Install-ModuleArchive {
   }
 
   Write-Verbose "Expand ZipFile '$ZipFile' to '$InstallPath'"
+  # NOTE: This could change the output folder (if the module inside isn't named the same as the zip)
+  $InstallPath = Expand-ZipFile $ZipFile $InstallPath
 
-  if(Get-Command Expand-ZipFile) {
-    $InstallPath = Expand-ZipFile $ZipFile $InstallPath
-  } else {
-    # This is the backup plan for the backup plan, lets just please ... unzip the thing!
-    # Note: one problem with this method is that it has GUI!
-    $shellApplication = new-object -com shell.application
-    $zipPackage = $shellApplication.NameSpace($ZipFile)
-    if($zipPackage.Items().Count  -eq 1) {
-      $InstallPathParent = Split-Path $InstallPath
-      $InstallPath = Join-Path $InstallPathParent (@($zipPackage.Items())[0].Path -replace ([Regex]::Escape($ZipFile)))
-    }
-
-    if(Test-Path $InstallPath) {
-      if($Force -or $PSCmdlet.ShouldContinue("The InstallPath exists and is not empty. Are you sure you want to overwrite '$InstallPath'?", "Deleting contents of '$InstallPath'")) {
-        Remove-Item $InstallPath -Recurse -ErrorAction Stop
-      } else {
-        throw "InstallPath '$InstallPath' Exists."
-      }
-    }
-    [string]$InstallPathParent = New-Item $InstallPath -Type Directory -Force
-    $shellApplication.NameSpace($InstallPathParent).CopyHere($zipPackage.Items())
-  }
-
-  Write-Verbose "Extracted '$ZipFile' to '$InstallPath'"
-
-  # If there's only one child, that's probably a module folder:
-  $Children = Get-ChildItem $InstallPath
-  if(@($Children).Count -eq 1 -and $Children.PSIsContainer) {
-    $ChildName = $Children.Name
-    if($Children.Name -eq (Split-Path $InstallPath -Leaf)) {
-      Write-Verbose "Moving items in '$($Children.FullName)' up a level to '$(Join-Path (Split-Path $InstallPath) $ChildName)'"
-      Move-Item "$($Children.FullName)\*" $InstallPath
-      Remove-Item $Children.FullName
-    } else {
-      $InstallPath = Join-Path (Split-Path $InstallPath) $ChildName
-      if(Test-Path $InstallPath) {
-        if($Force -or $PSCmdlet.ShouldContinue("The InstallPath exists and is not empty. Are you sure you want to overwrite '$InstallPath'?", "Deleting contents of '$InstallPath'")) {
-          Remove-Item $InstallPath -Recurse -ErrorAction Stop
-        } else {
-          throw "InstallPath '$InstallPath' Exists."
-        }
-      }
-    }
-  }
 
   $ModulePath = $InstallPath
   $Children = Get-ChildItem $InstallPath
@@ -909,103 +1275,6 @@ function Install-ModuleArchive {
   }
 }
 
-try {
-  Add-Type -As System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-
-  function Expand-ZipFile {
-    #.Synopsis
-    #  Expand a zip file, ensuring it's contents go to a single folder ...
-    [CmdletBinding()]
-    param(
-      # The path of the zip file that needs to be extracted
-      [Parameter(ValueFromPipelineByPropertyName=$true, Position=0, Mandatory=$true)]
-      [Alias("PSPath")]
-      $FilePath,
-
-      # The path where we want the output folder to end up
-      [Parameter(Position=1)]
-      $OutputPath = $Pwd,
-
-      # Make sure the resulting folder is always named the same as the archive
-      [Switch]$Force
-    )
-    process {
-      $ZipFile = Get-Item $FilePath
-      $Archive = [System.IO.Compression.ZipFile]::Open( $ZipFile, "Read" )
-
-      # Figure out where we'd prefer to end up
-      if(Test-Path $OutputPath) {
-        if($Force -or $PSCmdlet.ShouldContinue("The OutputPath exists and is not empty. Are you sure you want to overwrite '$OutputPath'?", "Deleting contents of '$OutputPath'")) {
-          Remove-Item $OutputPath -Recurse -Force -ErrorAction Stop
-        } else {
-          throw "OutputPath '$OutputPath' Exists."
-        }
-        $Destination = $OutputPath
-      } else {
-        # Otherwise, since they passed a folder, they must want us to use it
-        $Destination = $OutputPath
-      }
-
-      # The root folder of the first entry ...
-      $ArchiveRoot = ($Archive.Entries[0].FullName -Split "/|\\")[0]
-
-      Write-Verbose "Desired Destination: $Destination"
-      Write-Verbose "Archive Root: $ArchiveRoot"
-
-      # If any of the files are not in the same root folder ...
-      if($Archive.Entries.FullName | Where-Object { @($_ -Split "/|\\")[0] -ne $ArchiveRoot }) {
-        if(Test-Path $Destination) {
-          if($Force -or $PSCmdlet.ShouldContinue("The Destination exists and is not empty. Are you sure you want to overwrite '$Destination'?", "Deleting contents of '$Destination'")) {
-            Remove-Item $Destination -Recurse -Force -ErrorAction Stop
-          } else {
-            throw "Destination '$Destination' Exists."
-          }
-        }
-
-        # extract it into a new folder:
-        New-Item $Destination -Type Directory -Force
-        [System.IO.Compression.ZipFileExtensions]::ExtractToDirectory( $Archive, $Destination )
-      } else {
-        $OutputPath = (Split-Path $Destination)
-        Write-Verbose "Output Path: $OutputPath (+ $ArchiveRoot)"
-
-        $ArchivePath = Join-Path $OutputPath $ArchiveRoot
-
-        if(Test-Path $ArchivePath) {
-          if($Force -or $PSCmdlet.ShouldContinue("The Destination exists and is not empty. Are you sure you want to overwrite '$ArchivePath'?", "Deleting contents of '$ArchivePath'")) {
-            Remove-Item $ArchivePath -Recurse -Force -ErrorAction Stop
-          } else {
-            throw "ArchivePath '$ArchivePath' Exists."
-          }
-        }
-
-        # otherwise, extract it up a level and lets see what we get
-        [System.IO.Compression.ZipFileExtensions]::ExtractToDirectory( $Archive, $OutputPath )
-
-        # If there was only a single file in the archive, then we'll just output that file...
-        if($Archive.Entries.Count -eq 1) {
-          # Except, if they asked for an OutputPath with an extension on it, we'll rename the file to that ... 
-          if([System.IO.Path]::GetExtension($Destination)) {
-            Move-Item (Join-Path $OutputPath $Archive.Entries[0].FullName) $Destination -Passthru
-          } else {
-            Get-Item (Join-Path $OutputPath $Archive.Entries[0].FullName)
-          }
-        } elseif($Force) {
-          # Otherwise let's make sure that we move it to where we expect it to go, in case the zip's been renamed
-          if((Join-Path $OutputPath $ArchiveRoot) -ne $Destination) {
-            Move-Item $ArchivePath $Destination -Passthru
-          } else {
-            Get-Item $ArchivePath
-          }
-        } else {
-          Get-Item $ArchivePath
-        }
-      }
-
-      $Archive.Dispose()
-    }
-  }
-} catch { }
 # FULL # END FULL
 
-Export-ModuleMember -Function Install-ModulePackage, Install-ModuleArchive, Update-Module, Get-ModuleInfo, Copy-Stream -Alias * -Variable *
+Export-ModuleMember -Function Install-ModulePackage, Install-ModuleArchive, Update-Module, Get-Module, Get-PackageManifest, Copy-Stream -Alias * -Variable *
