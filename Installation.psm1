@@ -16,6 +16,8 @@ if(!(Get-Command Invoke-WebRequest -ErrorAction SilentlyContinue)){
 # NOTE: these types are needed elsewhere (Packaging Module)
 #       the types aren't needed for the installer
 #       but they are part of the "packaging light" module, so here they are.
+# This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
+$Script:ManifestType            = "http://schemas.microsoft.com/packaging/2010/07/manifest"
 # We need to make up a URL for the metadata psd1 relationship type
 $Script:ModuleMetadataType      = "http://schemas.poshcode.org/package/module-metadata"
 $Script:ModuleHelpInfoType      = "http://schemas.poshcode.org/package/help-info"
@@ -25,10 +27,10 @@ $Script:PackageThumbnailType    = "http://schemas.openxmlformats.org/package/200
 $Script:CorePropertiesType      = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
 $Script:ModuleRootType          = "http://schemas.poshcode.org/package/module-root"
 $Script:ModuleContentType       = "http://schemas.poshcode.org/package/module-file"
+$Script:ModuleReleaseType       = "http://schemas.poshcode.org/package/module-release"
+$Script:ModuleLicenseType       = "http://schemas.poshcode.org/package/module-license"
 # FULL # END FULL
 
-# This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
-$Script:ManifestType            = "http://schemas.microsoft.com/packaging/2010/07/manifest"
 # Our Extensions
 $Script:ModuleInfoFile          = "package.psd1"
 $Script:ModuleInfoExtension     = ".psd1"

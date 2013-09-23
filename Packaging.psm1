@@ -550,16 +550,16 @@ function New-ModulePackage {
                }
 
                if($Module.HelpInfoUri) {
-                  $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
+                  $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
                }
                if($Module.ModuleInfoUri) {
-                  $Package.CreateRelationship( $Module.ModuleInfoUri, "External", $ModuleReleaseType )
+                  $null = $Package.CreateRelationship( $Module.ModuleInfoUri, "External", $ModuleReleaseType )
                }
                if($Module.LicenseUri) {
-                  $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
+                  $null = $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
                }
                if($Module.PackageUri) {
-                  $Package.CreateRelationship( $Module.PackageUri, "External", $ModuleReleaseType )
+                  $null = $Package.CreateRelationship( $Module.PackageUri, "External", $ModuleReleaseType )
                }
 
             } catch [Exception] {
