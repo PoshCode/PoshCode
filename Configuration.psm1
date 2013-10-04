@@ -86,23 +86,30 @@ function Select-ModulePath {
             $default = $index
             continue
          }
-         "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) Microsoft)\Windows\PowerShell\Modules*" {
+         "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) WindowsPowerShell\Modules*)" {
             $index++
-            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $(if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}elseif($common -lt 2){"Co&mmon"}else{"Commo&n"}), $_
+            $common++
+            if($Default -lt 0){$Default = $index}
+            continue
+         }
+         "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) Microsoft\Windows\PowerShell\Modules*)" {
+            $index++
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $(if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}elseif($common -lt 2){"Co&mmon"}else{"Commo&n"}), $_
             $common++
             if($Default -lt 0){$Default = $index}
             continue
          }
          "$(Join-Path ([Environment]::GetFolderPath("CommonProgramFiles")) Modules)*" {
             $index++
-            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $(if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}elseif($common -lt 2){"Co&mmon"}else{"Commo&n"}), $_
             $common++
             if($Default -lt 0){$Default = $index}
             continue
          }
          "$(Join-Path ([Environment]::GetFolderPath("CommonDocuments")) Modules)*" {
             $index++
-            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription $(if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}elseif($common -lt 2){"Co&mmon"}else{"Commo&n"}), $_
             $common++
             if($Default -lt 0){$Default = $index}
             continue
@@ -121,10 +128,10 @@ function Select-ModulePath {
             continue
          }
       }
-      # Let's try and make sure they have one of our two known "Common" locations:
-      if($common -lt 1) {
+      # Let's make sure they have at least one of the "Common" locations:
+      if($common -lt 0) {
          $index++
-         $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Common", "$([Environment]::GetFolderPath("CommonDocuments"))\Modules"
+         $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Common", (Join-Path ([Environment]::GetFolderPath("ProgramFiles")) WindowsPowerShell\Modules)
       }
       # And we always offer the "Other" location:
       $index++
