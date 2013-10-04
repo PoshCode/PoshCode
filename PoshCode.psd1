@@ -4,9 +4,9 @@
 RootModule = 'Packaging.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.10'
+ModuleVersion = '4.0.0'
 
-# ID used to uniquely identify this module
+# ID used to uniquely identify the PoshCode module
 GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'
 
 # Author of this module
@@ -55,13 +55,14 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @('.\Configuration.psm1', '.\Installation.psm1', '.\Scripts.psm1', '.\InvokeWeb.psm1')
+# Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
+NestedModules = @('.\Configuration.psm1', '.\ModuleInfo.psm1', '.\Installation.psm1', '.\Scripts.psm1')
 
 # Functions to export from this module
-FunctionsToExport = 'Install-ModulePackage', 'Install-ModuleArchive', 'Get-Module',
-                    'New-ModulePackage', 'Update-Module',
-                    'Get-SpecialFolder', 'Get-ConfigData', 'Set-ConfigData',
-                    'Get-PoshCode', 'Send-PoshCode', 'Get-PackageManifest'
+FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Get-ModuleManifest',
+                    'Get-ConfigData', 'Set-ConfigData', # 'Test-ExecutionPolicy', 'Get-SpecialFolder',
+                    'Get-PoshCode', 'Send-PoshCode'
+                     
 
 # Cmdlets to export from this module
 # CmdletsToExport = '*'
@@ -73,16 +74,13 @@ FunctionsToExport = 'Install-ModulePackage', 'Install-ModuleArchive', 'Get-Modul
 AliasesToExport = '*'
 
 # List of all modules packaged with this module.
-ModuleList = @('Packaging', 'Installation', 'Configuration', 'Scripts', 'InvokeWeb')
+ModuleList = @('Configuration', 'ModuleInfo', 'InvokeWeb', 'Installation', 'Packaging', 'Scripts')
 
 # List of all files packaged with this module
-FileList = '.\PoshCode.psdxml', '.\PoshCode.psd1', '.\Packaging.psm1', 
-           '.\PoshCode.ini', '.\Configuration.psm1', '.\Installation.psm1',
-           '.\InvokeWeb.psm1', '.\Scripts.psm1',
-           '.\Source\AssemblyInfo.cs', '.\Source\ModuleId.cs', 
-           '.\Source\StringList.cs', '.\Source\ModuleInfo.cs', 
-           '.\Source\ModuleManifest.cs', '.\Source\UnitTests.cs', 
-           '.\Source\Version.cs', '.\Source\VersionTypeConverter.cs'
+FileList = '.\package.psd1', '.\PoshCode.psd1', '.\Constants.ps1',
+           '.\Configuration.psm1', '.\ModuleInfo.psm1', '.\InvokeWeb.psm1', 
+           '.\Installation.psm1', '.\Packaging.psm1', '.\Scripts.psm1',
+           '.\PoshCode.ini'
            
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess
@@ -95,4 +93,3 @@ FileList = '.\PoshCode.psdxml', '.\PoshCode.psd1', '.\Packaging.psm1',
 # DefaultCommandPrefix = ''
 
 }
-

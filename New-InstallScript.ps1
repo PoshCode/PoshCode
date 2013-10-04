@@ -15,14 +15,18 @@ param(
   [Switch]$Package,
 
   # The path to save the package to
-  $OutputPath = "${PSScriptRoot}\..\Releases\"
+  $OutputPath = "${PSScriptRoot}\Releases\"
 )
 
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
+
 if(!$Version) {
-  $Version = (Import-LocalizedData -BaseDirectory $PSScriptRoot -FileName PoshCode.psdxml).ModuleVersion
+  $Version = (Import-LocalizedData -BaseDirectory $PSScriptRoot -FileName PoshCode.psd1).ModuleVersion
 }
-if($Version -lt "0.0") { throw "Can't calculate a version!" }
+
+if($Version -le "0.0") { throw "Can't calculate a version!" }
+
+## TODO: Increment the version number in the psd1 file(s) when asked
 Write-Verbose "Setting Version $Version"
 if($Increment) {
   if($Version.Revision -ge 0) {
@@ -32,11 +36,14 @@ if($Increment) {
   } elseif($Version.Minor -ge 0) {
     $Version = New-Object Version $Version.Major, ($Version.Minor + 1)
   }
+  Write-Warning "Incremented version to $Version in the install.ps1 but not in the package."
 }
 
 # Note: in the install script we strip the export command, as well as the signature if it's there, and anything delimited by BEGIN FULL / END FULL 
-$InvokeWeb = (Get-Content $PSScriptRoot\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
+$Constants = (Get-Content $PSScriptRoot\Constants.ps1 -Raw) -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" 
+$ModuleInfo = (Get-Content $PSScriptRoot\ModuleInfo.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
 $Configuration = (Get-Content $PSScriptRoot\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
+$InvokeWeb = (Get-Content $PSScriptRoot\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
 $Installation = (Get-Content $PSScriptRoot\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*)# FULL # END FULL"
 $InstallScript = Join-Path $OutputPath Install.ps1
 
@@ -107,30 +114,40 @@ param(
   $ProxyCredential= [System.Management.Automation.PSCredential]::Empty     
 )
 end {{
+  $EAP, $ErrorActionPreference = $ErrorActionPreference, "Stop"
+
   Write-Progress "Validating PoshCode Module" -Id 0
   if($PSBoundParameters.ContainsKey("Package")) {{
     $TargetModulePackage = $PSBoundParameters["Package"]
   }}
 
-  $Module = Get-Module PoshCode -ListAvailable
-
-  if(!$Module -or $Module.Version -lt "{0}") {{
+  if($PoshCodeModule.GUID -eq '88c6579a-27b2-41c8-86c6-cd23acb791e9' -and $PoshCodeModule.Version -gt '4.0') {{
+    $PoshCodeModule = Import-Module PoshCode -Passthru -ErrorAction Stop
+    Upgrade-Module PoshCode -Confirm
+  }} else {{
     Write-Progress "Installing PoshCode Module" -Id 0
+
+    ## Figure out where to install PoshCode initially 
     if(!$PSBoundParameters.ContainsKey("InstallPath")) {{
       $PSBoundParameters["InstallPath"] = $InstallPath = Select-ModulePath
       Write-Verbose ("Selected Module Path: " + $PSBoundParameters["InstallPath"])
     }}
-    # Use the psdxml now that we can, rather than hard-coding the version ;)    
-    $PSBoundParameters["Package"] = "http://PoshCode.org/Modules/PoshCode.psdxml"
 
-    $PoshCodePath = Join-Path $InstallPath PoshCode
+    $Package = Invoke-WebRequest -Uri "http://PoshCode.org/Modules/PoshCode.psmx" -OutFile (Join-Path $InstallPath PoshCode.psmx) -ErrorVariable FourOhFour | Convert-Path
+    if($FourOhFour){{
+      $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
+    }}
+    if(!$Package){{ $Package = Join-Path $InstallPath PoshCode.psmx }}
 
-    Write-Verbose ("Selected Module Path: '" + $PSBoundParameters["InstallPath"] + "' or '" + $PoshCodePath + "'")
+    $PSBoundParameters["Package"] = $Package
+    Install-Module @PSBoundParameters
 
-    Install-ModulePackage @PSBoundParameters
-    Import-Module $PoshCodePath
+    # Ditch the temporary module and import the real one
+    Remove-Module PoshCodeTemp
+    $PoshCodeModule = Import-Module PoshCode -Passthru -ErrorAction Stop
+    Write-Warning "PoshCode Module Installed"
 
-    # Now that we've installed the PoshCode module, we will update the config data with the path they picked
+    # Since we just installed the PoshCode module, we will update the config data with the path they picked
     $ConfigData = Get-ConfigData
     if($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("UserProfile")) + "*")) {{
       $ConfigData["UserPath"] = $InstallPath
@@ -145,15 +162,22 @@ end {{
   }}
 
   if($TargetModulePackage) {{
-    Write-Progress "Installing Package" -Id 0
+    Write-Progress "Installing Package $TargetModulePackage" -Id 0
     $PSBoundParameters["Package"] = $TargetModulePackage
-    Install-ModulePackage @PSBoundParameters
+    Install-Module @PSBoundParameters -ErrorAction Stop
+    Write-Progress "Package Installed Successfully" -Id 0
   }}
   
-  Test-ExecutionPolicy
+  &$PoshCodeModule {{ Test-ExecutionPolicy }}
 }}
 
 begin {{
+
+  $PoshCodeModule = Get-Module PoshCode -ListAvailable
+
+  if(!$PoshCodeModule -or ($PoshCodeModule.GUID -ne '88c6579a-27b2-41c8-86c6-cd23acb791e9') -or $PoshCodeModule.Version -lt '4.0.0') {{
+
+    New-Module -Name PoshCodeTemp {{
 
 ###############################################################################
 {1}
@@ -162,16 +186,26 @@ begin {{
 ###############################################################################
 {3}
 ###############################################################################
+{4}
+###############################################################################
+{5}
+###############################################################################
 
+    }} | Import-Module
+  }}
 }}
 '@
-) -f $Version, $InvokeWeb, $Configuration, $Installation)
+) -f $Version, $Constants, $ModuleInfo, $Configuration, $InvokeWeb, $Installation)
 
 
 Sign $InstallScript -WA 0 -EA 0
 if($Package) {
   Sign -Module PoshCode -WA 0 -EA 0
 
+  Write-Host
   # Update-ModuleInfo PoshCode -Version $Version
-  New-ModulePackage PoshCode $OutputPath | Out-Default
+  $Files = Compress-Module PoshCode $OutputPath
+  $Files += $Files | Where-Object { $_.Name.EndsWith(".psmx") } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.psmx) -Passthru
+  $Files | Out-Default
+
 }

@@ -370,3 +370,4 @@ Set-Alias Search-PoshCode Get-PoshCode
 Set-Alias New-PoshCode Send-PoshCode
 
 Export-ModuleMember Get-PoshCode, Send-PoshCode -alias Search-PoshCode, New-PoshCode
+

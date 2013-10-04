@@ -6,7 +6,7 @@
 ## It also includes Get-SpecialFolder for resolving special folder paths
 
 # The config file
-$ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
+$Script:ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
 
 function Get-SpecialFolder {
   #.Synopsis
@@ -59,25 +59,167 @@ function Get-SpecialFolder {
   }
 }
 
+function Select-ModulePath {
+   #.Synopsis
+   #   Interactively choose (and validate) a folder from the Env:PSModulePath
+   [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+   param(
+      # The folder to install to. This folder should be one of the ones in the PSModulePath, NOT a subfolder.
+      $InstallPath
+   )
+   end {
+      $ChoicesWithHelp = @()
+      [Char]$Letter = "D"
+      $default = -1
+      $index = -1
+      $common = -1
+      switch -Wildcard ($Env:PSModulePath -split ";" | ? {$_}) {
+         "${PSHome}*" {
+            ##### We do not support installing to the System location. #####
+            #$index++
+            #$ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "S&ystem", $_
+            continue
+         }
+         "$(Split-Path $PROFILE)*" {
+            $index++
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Profile", $_
+            $default = $index
+            continue
+         }
+         "$(Join-Path ([Environment]::GetFolderPath("ProgramFiles")) Microsoft)\Windows\PowerShell\Modules*" {
+            $index++
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+            $common++
+            if($Default -lt 0){$Default = $index}
+            continue
+         }
+         "$(Join-Path ([Environment]::GetFolderPath("CommonProgramFiles")) Modules)*" {
+            $index++
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+            $common++
+            if($Default -lt 0){$Default = $index}
+            continue
+         }
+         "$(Join-Path ([Environment]::GetFolderPath("CommonDocuments")) Modules)*" {
+            $index++
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription (if($common -lt 0){"&Common"}elseif($common -lt 1){"C&ommon"}else{"Co&mmon"}), $_
+            $common++
+            if($Default -lt 0){$Default = $index}
+            continue
+         }
+         "$([Environment]::GetFolderPath("MyDocuments"))*" { 
+            $index++
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&MyDocuments", $_
+            if($Default -lt 0){$Default = $index}
+            continue
+         }
+         default {
+            $index++
+            $Key = $_ -replace [regex]::Escape($Env:USERPROFILE),'~' -replace "((?:[^\\]*\\){2}).+((?:[^\\]*\\){2})",'$1...$2'
+            $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&$Letter $Key", $_
+            $Letter = 1 + $Letter
+            continue
+         }
+      }
+      # Let's try and make sure they have one of our two known "Common" locations:
+      if($common -lt 1) {
+         $index++
+         $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Common", "$([Environment]::GetFolderPath("CommonDocuments"))\Modules"
+      }
+      # And we always offer the "Other" location:
+      $index++
+      $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Other", "Type in your own path!"
+   
+      while(!$InstallPath -or !(Test-Path $InstallPath)) {
+         if($InstallPath -and !(Test-Path $InstallPath)){
+            if($PSCmdlet.ShouldProcess(
+               "Verifying module install path '$InstallPath'", 
+               "Create folder '$InstallPath'?", 
+               "Creating Module Install Path" )) {
+      
+               $null = New-Item -Type Directory -Path $InstallPath -Force -ErrorVariable FailMkDir
+            
+               ## Handle the error if they asked for -Common and don't have permissions
+               if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
+                  Write-Warning "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated. (Press Ctrl+C to cancel)"
+               } 
+            }
+         }
+   
+         if(!$InstallPath -or !(Test-Path $InstallPath)){
+            $Answer = $Host.UI.PromptForChoice(
+               "Please choose an install path.",
+               "Choose a Module Folder (use ? to see the full paths)",
+               ([System.Management.Automation.Host.ChoiceDescription[]]$ChoicesWithHelp),
+               $Default)
+      
+            if($Answer -ge $index) {
+               $InstallPath = Read-Host ("You should pick a path that's already in your PSModulePath. " + 
+                                          "To choose again, press Enter.`n" +
+                                          "Otherwise, type the path for a 'Modules' folder you want to create")
+            } else {
+               $InstallPath = $ChoicesWithHelp[$Answer].HelpMessage
+            }
+         }
+      }
+   
+      return $InstallPath
+   }
+}
+
+function Test-ExecutionPolicy {
+  #.Synopsis
+  #   Validate the ExecutionPolicy
+  param()
+
+  $Policy = Get-ExecutionPolicy
+  if(([Microsoft.PowerShell.ExecutionPolicy[]]"Restricted","Default") -contains $Policy) {
+    $Warning = "Your execution policy is $Policy, so you will not be able import script modules."
+  } elseif(([Microsoft.PowerShell.ExecutionPolicy[]]"AllSigned") -eq $Policy) {
+    $Warning = "Your execution policy is $Policy, if modules are not signed, you won't be able to import them."
+  }
+  if($Warning) {
+    Write-Warning ("$Warning`n" +
+        "You may want to change your execution policy to RemoteSigned, Unrestricted or even Bypass.`n" +
+        "`n" +
+        "        PS> Set-ExecutionPolicy RemoteSigned`n" +
+        "`n" +
+        "For more information, read about execution policies by executing:`n" +
+        "        `n" +
+        "        PS> Get-Help about_execution_policies`n")
+  } elseif(([Microsoft.PowerShell.ExecutionPolicy]"Unrestricted") -eq $Policy) {
+    Write-Host "Your execution policy is $Policy and should be fine. Note that modules flagged as internet may still cause warnings."
+  } elseif(([Microsoft.PowerShell.ExecutionPolicy]"RemoteSigned") -contains $Policy) {
+    Write-Host "Your execution policy is $Policy and should be fine. Note that modules flagged as internet will not load if they're not signed."
+  } 
+}
+
+# FULL # BEGIN FULL: This cmdlet is only needed in the full version of the module
 function Get-ConfigData {
   #.Synopsis
   #   Gets the modulename.ini settings as a hashtable
   #.Description
   #   Parses the non-comment lines in the config file as a simple hashtable, 
   #   parsing it as string data, and replacing {SpecialFolder} paths
-  [CmdletBinding()]
+  [CmdletBinding(DefaultParameterSetname="FromFile")]
   param(
-    # A path to a file with FolderPath ini strings in it, or 
-    # A string with path names in it like {MyDocuments} and {ProgramFiles}
-    [Parameter(ValueFromPipeline=$true, Position=0)]
-    [string]$StringData = $Script:ConfigFile
+    # A path to a file with FolderPath ini strings in it
+    [Parameter(ValueFromPipelineByPropertyName=$true, Position=0, ParameterSetName="FromFile")]
+    [Alias("PSPath")]
+    [string]$ConfigFile = $Script:ConfigFile,
+
+    # A key = value string (optionally, with special folder tokens in it like {MyDocuments} and {ProgramFiles})
+    [Parameter(ValueFromPipeline=$true, Mandatory=$true, ParameterSetName="FromData")]
+    [string]$StringData
   )
   begin {
     $Names = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
 
-    if(Test-Path $StringData -Type Leaf) {
-      $StringData = Get-Content $StringData -Delim ([char]0)
+    if($PSCmdlet.ParameterSetName -eq "FromFile") {
+      $StringData = Get-Content $ConfigFile -Delim ([char]0) -ErrorAction Stop
       $StringData = $StringData -replace '(?m)^[#;].*[\r\n]+'
+    } else {
+
     }
   }
 
@@ -228,6 +370,6 @@ function Test-ConfigData {
     Set-ConfigData -ConfigData $ConfigData
   }
 }
+# FULL # END FULL
 
-
-Export-ModuleMember -Function Get-SpecialFolder, Get-ConfigData, Set-ConfigData, Test-ConfigData
+Export-ModuleMember -Function Get-SpecialFolder, Get-ConfigData, Set-ConfigData, Test-ConfigData, Select-ModulePath, Test-ExecutionPolicy
