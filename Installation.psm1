@@ -95,16 +95,18 @@ function Update-Module {
          #       requires the URL to have NO query string, and end in a file name
          #       it would be better to have Invoke-Web figure out the file name...
          $WebParam.OutFile = Join-Path ([IO.path]::GetTempPath()) (Split-Path $M.ModuleInfoUri -Leaf)
-         try { # A 404 is a terminating error, but I want to handle it my way.
-            $VPR = "SilentlyContinue"
-            $VPR, $VerbosePreference = $VerbosePreference, $VPR
-            $ModuleInfoFile = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
-         } catch [System.Net.WebException]{
-            if(!$WebException) { $WebException = $_.Exception }
+         try { # A 404 is a terminating error, but I still want to handle it my way.
+            $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
+            $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
+         } catch [System.Net.WebException] {
+            if(!$WebException) { $WebException = @($_.Exception) }
          } finally {
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
          }
          if($WebException){
+            $Source = $WebException[0].InnerException.Response.StatusCode
+            if(!$Source) { $Source = $WebException[0].InnerException }
+
             Write-Warning "Can't fetch ModuleInfo from $($M.ModuleInfoUri) for $($M.Name): $(@($WebException)[0].Message)"
             continue # Check the rest of the modules...
          }
@@ -385,10 +387,22 @@ function Install-Module {
          $WebParam.Add("OutFile",$OutFile)
          $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru" | % { $WebParam.Remove($_) }
    
-         $Package = Invoke-WebRequest @WebParam -ErrorVariable FourOhFour
-         if($FourOhFour){
-            $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
+
+         try { # A 404 is a terminating error, but I still want to handle it my way.
+            $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
+            $Package = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
+         } catch [System.Net.WebException] {
+            if(!$WebException) { $WebException = @($_.Exception) }
+         } finally {
+            $VPR, $VerbosePreference = $VerbosePreference, $VPR
          }
+         if($WebException){
+            $Source = $WebException[0].InnerException.Response.StatusCode
+            if(!$Source) { $Source = $WebException[0].InnerException }
+
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord $WebException[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source) )
+         }
+
          # If we used the built-in Invoke-WebRequest, we don't have the file yet...
          if($Package -isnot [System.IO.FileInfo]) { $Package = Get-ChildItem $OutFile }
       }

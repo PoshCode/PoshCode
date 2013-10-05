@@ -5,9 +5,6 @@
 ## Configuration.psm1 defines the Get/Set functionality for ConfigData
 ## It also includes Get-SpecialFolder for resolving special folder paths
 
-# The config file
-$Script:ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
-
 function Get-SpecialFolder {
   #.Synopsis
   #   Gets the current value for a well known special folder
@@ -201,7 +198,10 @@ function Test-ExecutionPolicy {
   } 
 }
 
-# FULL # BEGIN FULL: This cmdlet is only needed in the full version of the module
+# FULL # BEGIN FULL: These cmdlets are only useful in the full version of the module
+# The config file
+$Script:ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
+
 function Get-ConfigData {
   #.Synopsis
   #   Gets the modulename.ini settings as a hashtable

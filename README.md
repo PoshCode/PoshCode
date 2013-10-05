@@ -9,10 +9,10 @@ PoshCode's purpose is (and has always been) to make it easier to distribute modu
 \\PoshCode.org\Modules\Install
 ```
 
-Note: that sometimes fails because Windows' WebDAV is a bit slow making initial connections. Usually running it again will work, but you can always run this instead, it's just that this way digital signatures are bypassed:
+Note: that sometimes fails because Windows' WebDAV is a bit slow making initial connections. Usually running it again will work (or opening the root `\\PoshCode.org\Modules` in explorer before running the command in PowerShell) but you can always run this instead (NOTE it overwrites `PC.ps1` in your current path):
 
 ```posh
-iex (iwr http://PoshCode.org/Modules/Install.ps1)
+iwr http://PoshCode.org/Modules/Install.ps1 -OutF PC.ps1; .\PC; rm .\PC.ps1
 ```
 
 If you're trying to distribute a module, you can have users install the Packaging module at the same time as they install your module. For instance, if you've published your module on your website (I have one published here: http://poshcode.org/Modules/WASP.psd1) you can point users at the package manifest or at the actual module psmx package:
