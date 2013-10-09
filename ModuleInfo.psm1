@@ -345,6 +345,7 @@ function Import-ManifestStream {
    }
 }
 
+
 # Internal Function for parsing Module and Package Manifests
 function Get-ModuleManifest {
    #  .Synopsis
@@ -358,6 +359,7 @@ function Get-ModuleManifest {
       $ParseErrors = $Null
    }
    process {
+      $ModuleInfo = $null
       # When we have a file, use Import-LocalizedData (via Import-PSD1)
       if(Test-Path $Manifest) {
          Write-Verbose "Importing Module Manifest From Path: $Manifest"
@@ -365,11 +367,16 @@ function Get-ModuleManifest {
             $Manifest = Join-Path $Manifest ((Split-Path $Manifest -Leaf) + $ModuleInfoExtension)
          }
          $Manifest = Convert-Path $Manifest
-         Import-PSD1 $Manifest -ErrorAction "SilentlyContinue"
+         Import-PSD1 -BindingVariable ModuleInfo -FileName $Manifest -ErrorAction "SilentlyContinue"
+         if(!$ModuleInfo.Count) {
+            $Manifest = Get-Content $Manifest -Delimiter ([char]0)
+         }
+      }
 
       # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
-      } else {
-         Write-Verbose "Importing Module Manifest From Content: $($Manifest.Length)"
+      if(!$ModuleInfo) {
+         $Manifest = $Manifest -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
+         Write-Verbose "Importing Module Manifest From Content: $($Manifest.Length) bytes"
          $Tokens = [System.Management.Automation.PSParser]::Tokenize($Manifest,[ref]$ParseErrors)
          if($ParseErrors -ne $null) {
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading package manifest", "Parse Error", "InvalidData", $ParseErrors) )
@@ -380,8 +387,16 @@ function Get-ModuleManifest {
             return
          }
          # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
-         Invoke-Expression "Data { ${Manifest} } "
+         try {
+            $ModuleInfo = Invoke-Expression "Data { ${Manifest} }"
+         } catch {
+            Write-Error $_.Message
+         }
+         if(!$ModuleInfo) {
+            Write-Warning "Couldn't parse anything from the data:`n${Manifest}"
+         }
       }
+      Write-Output $ModuleInfo
    }
 }
 
@@ -391,11 +406,11 @@ function Get-ModuleManifest {
 function Import-PSD1 {
    [CmdletBinding()]
    param(
-      # [Parameter(Position=0)]
-      # [Alias('Variable')]
-      # [ValidateNotNullOrEmpty()]
-      # [string]
-      # ${BindingVariable},
+      [Parameter(Position=0)]
+      [Alias('Variable')]
+      [ValidateNotNullOrEmpty()]
+      [string]
+      ${BindingVariable} = "ModuleInfo",
 
       # [Parameter(Position=1)]
       # [string]
@@ -404,7 +419,7 @@ function Import-PSD1 {
       # [string]
       # ${BaseDirectory},
 
-      [Parameter(Position=0)]
+      [Parameter()]
       [string]
       ${FileName},
 
@@ -414,12 +429,12 @@ function Import-PSD1 {
 
    begin
    {
-      if($Folder = Split-Path $FileName) {
-         $PsBoundParameters["FileName"] = [IO.Path]::GetFileName($FileName)
-         $PsBoundParameters.Add("BaseDirectory", $Folder)
+      if($FilePath = Convert-Path $FileName -ErrorAction SilentlyContinue) {
+         $PsBoundParameters["FileName"] = [IO.Path]::GetFileNameWithoutExtension($FilePath)
+         $PsBoundParameters.Add("BaseDirectory", (Split-Path $FilePath))
       }
       try {
-         Write-Verbose $($PsBoundParameters|OUt-String)
+         Write-Verbose $($PsBoundParameters|Out-String)
          $outBuffer = $null
          if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
          {
@@ -452,4 +467,3 @@ function Import-PSD1 {
       }
    }
 }
-
