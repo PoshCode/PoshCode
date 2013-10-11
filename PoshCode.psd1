@@ -1,7 +1,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'Packaging.psm1'
+ModuleToProcess = 'Packaging.psm1'
 
 # Version number of this module.
 ModuleVersion = '4.0.0.2'
@@ -56,12 +56,14 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
-NestedModules = @('.\Configuration.psm1', '.\ModuleInfo.psm1', '.\Installation.psm1', '.\Scripts.psm1')
+# Note: Bitbucket is for test only! remove it! 
+NestedModules = @('.\Configuration.psm1', '.\ModuleInfo.psm1', '.\Installation.psm1', '.\Scripts.psm1','Repository.psm1','.\RepositoryGitHub.psm1',
+                '.\RepositoryBitBucket.psm1') ## remove this one later
 
 # Functions to export from this module
 FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Get-ModuleManifest',
                     'Get-ConfigData', 'Set-ConfigData', # 'Test-ExecutionPolicy', 'Get-SpecialFolder',
-                    'Get-PoshCode', 'Send-PoshCode'
+                    'Get-PoshCode', 'Send-PoshCode','Find-Module'
                      
 
 # Cmdlets to export from this module
@@ -74,13 +76,15 @@ FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-M
 AliasesToExport = '*'
 
 # List of all modules packaged with this module.
-ModuleList = @('Configuration', 'ModuleInfo', 'InvokeWeb', 'Installation', 'Packaging', 'Scripts')
+ModuleList = @('Configuration', 'ModuleInfo', 'InvokeWeb', 'Installation', 'Packaging', 'Scripts','Repository','RepositoryGitHub','RepositoryBitbucket')
 
 # List of all files packaged with this module
 FileList = '.\package.psd1', '.\PoshCode.psd1', '.\Constants.ps1',
            '.\Configuration.psm1', '.\ModuleInfo.psm1', '.\InvokeWeb.psm1', 
            '.\Installation.psm1', '.\Packaging.psm1', '.\Scripts.psm1',
-           '.\PoshCode.ini'
+           '.\PoshCode.ini','.\Repository.psm1',
+           'RepositoryGitHub.psm1',
+           'RepositoryBitBucket.psm1' ##remove this one later
            
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess
