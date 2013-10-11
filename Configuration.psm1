@@ -70,6 +70,8 @@ function Select-ModulePath {
       $default = -1
       $index = -1
       $common = -1
+      #  Suppress error when running in remote sessions by making sure $PROFILE is defined
+      if(!$PROFILE) { $PROFILE = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "WindowsPowerShell\Profile.ps1" }
       switch -Wildcard ($Env:PSModulePath -split ";" | ? {$_}) {
          "${PSHome}*" {
             ##### We do not support installing to the System location. #####

@@ -16,9 +16,9 @@
 if(!(Get-Command Invoke-WebRequest -ErrorAction SilentlyContinue)){
   Import-Module $PSScriptRoot\InvokeWeb
 }
-if(!(Get-Command Get-ModuleManifest -ErrorAction SilentlyContinue)){
-  Import-Module $PSScriptRoot\ModuleInfo
-}
+# if(!(Get-Command Get-ModuleManifest -ErrorAction SilentlyContinue)){
+#   Import-Module $PSScriptRoot\ModuleInfo
+# }
 
 function Update-Module {
    <#

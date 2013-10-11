@@ -330,7 +330,7 @@ function Import-ManifestStream {
    try {
       $reader = New-Object System.IO.StreamReader $stream
       # This gets the ModuleInfo
-      Get-ModuleManifest ($reader.ReadToEnd())
+      $ManifestContent = $reader.ReadToEnd()
    } catch [Exception] {
       $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
    } finally {
@@ -343,8 +343,8 @@ function Import-ManifestStream {
          $stream.Dispose()
       }
    }
+   Get-ModuleManifest $ManifestContent
 }
-
 
 # Internal Function for parsing Module and Package Manifests
 function Get-ModuleManifest {
@@ -367,7 +367,12 @@ function Get-ModuleManifest {
             $Manifest = Join-Path $Manifest ((Split-Path $Manifest -Leaf) + $ModuleInfoExtension)
          }
          $Manifest = Convert-Path $Manifest
-         Import-PSD1 -BindingVariable ModuleInfo -FileName $Manifest -ErrorAction "SilentlyContinue"
+         try {
+            Import-PSD1 -BindingVariable ModuleInfo -FileName $Manifest -ErrorAction "Stop"
+         } catch {
+            Write-Warning "Couldn't get ModuleManifest from the file:`n${Manifest}"
+            $PSCmdlet.ThrowTerminatingError( $_ )
+         }
          if(!$ModuleInfo.Count) {
             $Manifest = Get-Content $Manifest -Delimiter ([char]0)
          }
@@ -379,21 +384,17 @@ function Get-ModuleManifest {
          Write-Verbose "Importing Module Manifest From Content: $($Manifest.Length) bytes"
          $Tokens = [System.Management.Automation.PSParser]::Tokenize($Manifest,[ref]$ParseErrors)
          if($ParseErrors -ne $null) {
-            $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading package manifest", "Parse Error", "InvalidData", $ParseErrors) )
-            return
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading package manifest", "Parse Error", "InvalidData", $ParseErrors) )
          }
          if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
-            $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest", "Parse Error", "InvalidData", $InvalidTokens) )
-            return
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest", "Parse Error", "InvalidData", $InvalidTokens) )
          }
          # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
          try {
             $ModuleInfo = Invoke-Expression "Data { ${Manifest} }"
          } catch {
-            Write-Error $_.Message
-         }
-         if(!$ModuleInfo) {
-            Write-Warning "Couldn't parse anything from the data:`n${Manifest}"
+            Write-Warning "Couldn't get ModuleManifest from the data:`n${Manifest}"
+            $PSCmdlet.ThrowTerminatingError( $_ )
          }
       }
       Write-Output $ModuleInfo
