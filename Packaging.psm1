@@ -141,7 +141,6 @@ function Compress-Module {
             Set-PackageProperties $Package.PackageProperties $Module
 
             try {
-
                # Now pack up all the files we've found:
                $Target = $FileList.Count
                $Count = 0
@@ -230,31 +229,6 @@ function Compress-Module {
                         Write-Verbose "    Added Relationship: $ModuleContentType"
                      }
                   }
-               }
-
-               # When the manifest can't be written out (and doesn't exist on disk), as a last-ditch effort
-               # We have this way around it by generating a manifest in memory (Of course, it won't have URLS)
-               if((Test-Path variable:ManifestContent) -and !(Test-Path $ModuleInfoPath)){
-                  $FileUri = [System.IO.Packaging.PackUriHelper]::CreatePartUri( ($ModuleInfoPath -replace $ModuleRootRex, "") )
-                  $part = $Package.CreatePart( $FileUri, "text/xaml", "Maximum" ); 
-                  $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ManifestType)
-                  Write-Verbose "    Added Relationship: $ManifestType"
-
-                  # Copy the data to the Document Part 
-                  try {
-                     $writer = $part.GetStream()
-                     $bytes = [System.Text.Encoding]::UTF8.GetBytes($ManifestContent)
-                     $writer.Write($bytes, 0, $bytes.Count)
-                  } catch [Exception]{
-                     $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-                  } finally {
-                     if($writer) {
-                        $writer.Close()
-                        $writer.Dispose()
-                     }
-                  }
-                  # TODO: Make mandatory parts of the Module Manifest mandatory, and change this warning.
-                  Write-Warning "The module package manifest was NOT found (it should be created with Update-ModuleInfo at '$ModuleInfoPath'). Without it, the module is not fully valid."
                }
 
                if($Module.HelpInfoUri) {
