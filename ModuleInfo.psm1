@@ -193,9 +193,7 @@ function Update-ModuleInfo {
    process {
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
          $ModuleManifestPath = Resolve-Path $ModuleInfo
-         Write-Verbose "Get-ModuleManifest: $ModuleManifestPath"
-         $ModuleInfo = Get-ModuleManifest $ModuleManifestPath
-         Write-Verbose "Get-ModuleManifest: $ModuleInfo"
+         $ModuleInfo = Import-Metadata $ModuleManifestPath
          $ModuleInfo.ModuleManifestPath = $ModuleInfo.Path = $ModuleManifestPath 
          $ModuleInfo.PSPath = "{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath
       } else {
@@ -210,7 +208,7 @@ function Update-ModuleInfo {
          # Since we're not using anything else, we won't add the aliases...
          if(Test-Path $PackageInfoPath) {
             Write-Verbose "Loading package info from $PackageInfoPath"
-            $PackageInfo = Get-ModuleManifest $PackageInfoPath
+            $PackageInfo = Import-Metadata $PackageInfoPath
             if($PackageInfo) {
                $PackageInfo.ModuleManifestPath = $ModuleManifestPath
                Update-Dictionary $ModuleInfo $PackageInfo
@@ -343,128 +341,5 @@ function Import-ManifestStream {
          $stream.Dispose()
       }
    }
-   Get-ModuleManifest $ManifestContent
-}
-
-# Internal Function for parsing Module and Package Manifests
-function Get-ModuleManifest {
-   #  .Synopsis
-   #  Parse a module manifest the best way we can.
-   param(
-      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
-      [string]$Manifest
-   )
-   begin {
-      $ValidTokens = "GroupStart", "GroupEnd", "Member", "Operator", "String", "Comment", "NewLine", "StatementSeparator"
-      $ParseErrors = $Null
-   }
-   process {
-      $ModuleInfo = $null
-      # When we have a file, use Import-LocalizedData (via Import-PSD1)
-      if(Test-Path $Manifest) {
-         Write-Verbose "Importing Module Manifest From Path: $Manifest"
-         if(!(Test-Path $Manifest -PathType Leaf)) {
-            $Manifest = Join-Path $Manifest ((Split-Path $Manifest -Leaf) + $ModuleInfoExtension)
-         }
-         $Manifest = Convert-Path $Manifest
-         try {
-            Import-PSD1 -BindingVariable ModuleInfo -FileName $Manifest -ErrorAction "Stop"
-         } catch {
-            Write-Warning "Couldn't get ModuleManifest from the file:`n${Manifest}"
-            $PSCmdlet.ThrowTerminatingError( $_ )
-         }
-         if(!$ModuleInfo.Count) {
-            $Manifest = Get-Content $Manifest -Delimiter ([char]0)
-         }
-      }
-
-      # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
-      if(!$ModuleInfo) {
-         $Manifest = $Manifest -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block"
-         Write-Verbose "Importing Module Manifest From Content: $($Manifest.Length) bytes"
-         $Tokens = [System.Management.Automation.PSParser]::Tokenize($Manifest,[ref]$ParseErrors)
-         if($ParseErrors -ne $null) {
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading package manifest", "Parse Error", "InvalidData", $ParseErrors) )
-         }
-         if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest", "Parse Error", "InvalidData", $InvalidTokens) )
-         }
-         # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
-         try {
-            $ModuleInfo = Invoke-Expression "Data { ${Manifest} }"
-         } catch {
-            Write-Warning "Couldn't get ModuleManifest from the data:`n${Manifest}"
-            $PSCmdlet.ThrowTerminatingError( $_ )
-         }
-      }
-      Write-Output $ModuleInfo
-   }
-}
-
-# Internal function. This is a wrapper for Import-LocalizedData to make it easier to (mis)use ;)
-# This is HALF the functionality of Get-ModuleManifest (this part gets called for files)
-# NOTE: Even internally, we should call Get-ModuleManifest instead of Import-PSD1
-function Import-PSD1 {
-   [CmdletBinding()]
-   param(
-      [Parameter(Position=0)]
-      [Alias('Variable')]
-      [ValidateNotNullOrEmpty()]
-      [string]
-      ${BindingVariable} = "ModuleInfo",
-
-      # [Parameter(Position=1)]
-      # [string]
-      # ${UICulture},
-
-      # [string]
-      # ${BaseDirectory},
-
-      [Parameter()]
-      [string]
-      ${FileName},
-
-      [string[]]
-      ${SupportedCommand}
-   )
-
-   begin
-   {
-      if($FilePath = Convert-Path $FileName -ErrorAction SilentlyContinue) {
-         $PsBoundParameters["FileName"] = [IO.Path]::GetFileNameWithoutExtension($FilePath)
-         $PsBoundParameters.Add("BaseDirectory", (Split-Path $FilePath))
-      }
-      try {
-         Write-Verbose $($PsBoundParameters|Out-String)
-         $outBuffer = $null
-         if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
-         {
-            $PSBoundParameters['OutBuffer'] = 1
-         }
-         $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Import-LocalizedData', [System.Management.Automation.CommandTypes]::Cmdlet)
-         $scriptCmd = {& $wrappedCmd @PSBoundParameters | Add-SimpleNames }
-         $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
-         $steppablePipeline.Begin($PSCmdlet)
-      } catch {
-         throw
-      }
-   }
-
-   process
-   {
-      try {
-         $steppablePipeline.Process($_)
-      } catch {
-         throw
-      }
-   }
-
-   end
-   {
-      try {
-         $steppablePipeline.End()
-      } catch {
-         throw
-      }
-   }
+   Import-Metadata $ManifestContent
 }

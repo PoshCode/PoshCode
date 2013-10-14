@@ -207,7 +207,7 @@ function New-Module {
 
          if($Force -Or $Upgrade -or !(Test-Path "${ModuleName}.psd1") -or $PSCmdlet.ShouldContinue("The specified '${ModuleName}.psd1' already exists in '$ModulePath'. Do you want to update it?", "Creating new '${ModuleName}.psd1'")) {
             if($Upgrade -and (Test-Path "${ModuleName}.psd1")) {
-               $ModuleInfo = Get-ModuleManifest (Join-Path $ModulePath "${ModuleName}.psd1" )
+               $ModuleInfo = Import-Metadata (Join-Path $ModulePath "${ModuleName}.psd1" )
             } else {
                # If there's no upgrade, then we want to use all the parameter (default) values, not just the PSBoundParameters:
                $ModuleInfo = @{

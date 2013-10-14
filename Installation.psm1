@@ -16,7 +16,7 @@
 if(!(Get-Command Invoke-WebRequest -ErrorAction SilentlyContinue)){
   Import-Module $PSScriptRoot\InvokeWeb
 }
-# if(!(Get-Command Get-ModuleManifest -ErrorAction SilentlyContinue)){
+# if(!(Get-Command Import-Metadata -ErrorAction SilentlyContinue)){
 #   Import-Module $PSScriptRoot\ModuleInfo
 # }
 
@@ -116,7 +116,7 @@ function Update-Module {
       
          # Now lets find out what the latest version is:
          $ModuleInfoFile = Resolve-Path $ModuleInfoFile -ErrorAction Stop
-         $Mi = Get-ModuleManifest $ModuleInfoFile
+         $Mi = Import-Metadata $ModuleInfoFile
    
          $M.Update = [Version]$Mi.ModuleVersion
          Write-Verbose "Latest version of $($M.Name) is $($mi.ModuleVersion)"
@@ -416,7 +416,7 @@ function Install-Module {
       # TODO: Check the file contents instead (it's just testing extensions right now)
       if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
          Write-Verbose "Downloaded file '$PackagePath' is just a manifest, get PackageUri."
-         $MI = Get-ModuleManifest $PackagePath -ErrorAction "SilentlyContinue"
+         $MI = Import-Metadata $PackagePath -ErrorAction "SilentlyContinue"
          Remove-Item $PackagePath
 
          if($Mi.PackageUri) {

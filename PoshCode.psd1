@@ -61,7 +61,7 @@ NestedModules = @('.\ModuleInfo.psm1', '.\Configuration.psm1', '.\Installation.p
                   '.\Repository.psm1', '.\RepositoryGitHub.psm1')
 
 # Functions to export from this module
-FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Get-ModuleManifest',
+FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Import-Metadata','Export-Metadata'
                     'Get-ConfigData', 'Set-ConfigData', # 'Test-ExecutionPolicy', 'Get-SpecialFolder',
                     'Get-PoshCode', 'Send-PoshCode','Find-Module'
                      
