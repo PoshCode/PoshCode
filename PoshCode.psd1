@@ -52,7 +52,7 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 # TypesToProcess = @()
 
 # Format files (.ps1xml) to be loaded when importing this module
-# FormatsToProcess = @()
+FormatsToProcess = @('.\PoshCode.Search.ModuleInfo.format.ps1xml')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
@@ -83,8 +83,11 @@ FileList = '.\package.psd1', '.\PoshCode.psd1', '.\Constants.ps1',
            '.\Configuration.psm1', '.\ModuleInfo.psm1', '.\InvokeWeb.psm1', 
            '.\Installation.psm1', '.\Packaging.psm1', '.\Scripts.psm1',
            '.\PoshCode.ini','.\Repository.psm1',
+           ## search repos
            'RepositoryGitHub.psm1',
-           'RepositoryBitBucket.psm1' ##remove this one later
+           'RepositoryBitBucket.psm1', ##remove this one later
+           #Format Files
+           '.\PoshCode.Search.ModuleInfo.format.ps1xml'
            
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess

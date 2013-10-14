@@ -1,3 +1,7 @@
+#####################################################
+#### TODO: DELETE THIS FILE AND CLEANUP PoshCode.psd1
+#####################################################
+
 function FindModule
 {
     [CmdletBinding(DefaultParameterSetName='GetAll')]
