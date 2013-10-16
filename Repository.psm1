@@ -18,17 +18,18 @@ function Find-Module
     [CmdletBinding()]
     Param
     (
-        # Search for Modules published by a particular user.
-        [Parameter(Mandatory=$false,ParameterSetName='Owner')]
-        [Parameter(Mandatory=$true,ParameterSetName='Repo',Position=0)]
+                #Term to Search for
         [string]
-        $Owner,
+        $SearchTerm,
+        
+        # Search for modules published by a particular author.
+        [string]
+        $Author,
 
-        # Search for a certain Module based on the Owner and the repository name, Owner IS required to use this.
-        [Parameter(Mandatory=$true,ParameterSetName='Repo',Position=1)]
-        [Alias('Repo')]
+        # Search for a specific module.
+        [alias('Repo')]
         [string]
-        $Name
+        $ModuleName
     )
     
     ## get all FindModule cmdlets

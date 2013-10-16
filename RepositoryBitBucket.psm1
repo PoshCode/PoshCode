@@ -7,17 +7,18 @@ function FindModule
     [CmdletBinding(DefaultParameterSetName='GetAll')]
     Param
     (
-        # Search for Modules published by a particular user.
-        [Parameter(Mandatory=$false,ParameterSetName='Owner')]
-        [Parameter(Mandatory=$true,ParameterSetName='Repo')]
+                #Term to Search for
         [string]
-        $Owner,
+        $SearchTerm,
+        
+        # Search for modules published by a particular author.
+        [string]
+        $Author,
 
-        # Search for a certain Module based on the Owner and the repository name
-        [Parameter(Mandatory=$true,ParameterSetName='Repo')]
-        [Alias('Repo')]
+        # Search for a specific module.
+        [alias('Repo')]
         [string]
-        $Name
+        $ModuleName
     )
 
         $obj = new-object psobject -property @{

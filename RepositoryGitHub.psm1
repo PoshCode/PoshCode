@@ -4,32 +4,46 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type])
 
 function FindModule
 {
-    [CmdletBinding(DefaultParameterSetName='GetAll')]
+    [CmdletBinding()]
     Param
     (
-        # Search for Modules published by a particular user.
-        [Parameter(Mandatory=$false,ParameterSetName='Owner')]
-        [Parameter(Mandatory=$true,ParameterSetName='Repo')]
+                #Term to Search for
         [string]
-        $Owner,
+        $SearchTerm,
+        
+        # Search for modules published by a particular author.
+        [string]
+        $Author,
 
-        # Search for a certain Module based on the Owner and the repository name
-        [Parameter(Mandatory=$true,ParameterSetName='Repo')]
-        [Alias('Repo')]
+        # Search for a specific module.
+        [alias('Repo')]
         [string]
-        $Name
+        $ModuleName
     )
 
-    $search=$null
-    switch($PSCmdlet.ParameterSetName)
-    {
-        "Repo" {$search ="@$Owner/$Name ";break}
-        "Owner"{if($Owner){$search = "@$Owner ";break}}
-    }
 
+    if($Author -and $ModuleName) # SAM,AM
+    {
+        $search = "$SearchTerm @$Author/$ModuleName"
+    }
+    elseif($Author) # A,AS
+    {
+        $search = "$SearchTerm @$Author"
+    }
+    elseif($ModuleName) #M,MS
+    {
+        $search = "$SearchTerm $ModuleName"
+    }
+    else # S
+    {
+        $search = $SearchTerm
+    }
+    
+    Write-Verbose $search
+    
     Add-Type -AssemblyName System.Web.Extensions
 
-    $pagedata = Invoke-WebRequest https://api.github.com/search/code -Body @{q="$search`"package.psd1`" in:path extension:psd1"} -Headers @{Accept='application/vnd.github.preview'}
+    $pagedata = Invoke-WebRequest https://api.github.com/search/code -Body @{q="$search path:package.psd1"} -Headers @{Accept='application/vnd.github.preview'}
     $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
     $json = $ser.DeserializeObject($pagedata)
 
@@ -41,10 +55,17 @@ function FindModule
             'PackageManifestUri'=$_.html_url -replace "(https?://)",'$1raw.' -replace "/blob",""
             'Owner'=$_.repository.owner.login
             'Repository'='GitHub'
-         }
-         $obj.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
-         $obj.pstypenames.Insert(0,'PoshCode.Search.GitModuleInfo')
-         $obj
+        }
+        $obj.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
+        $obj.pstypenames.Insert(0,'PoshCode.Search.GitModuleInfo')
+        if($ModuleName)
+        {
+            $obj | Where-Object { $_.Name -eq $ModuleName }
+        }
+        else
+        {
+            $obj
+        }
      }
      
 }
@@ -53,3 +74,4 @@ Export-ModuleMember -Function FindModule
 
 }
 else { write-Warning "Github Searching is unavailable because it requires the JavaScriptSerializer from .Net 3.5" }
+
