@@ -1,3 +1,7 @@
+# We're not using Requires because it just gets in the way on PSv2
+#!Requires -Modules ModuleInfo, LocalStorage
+
+
 ########################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
@@ -199,9 +203,6 @@ function Test-ExecutionPolicy {
 }
 
 # FULL # BEGIN FULL: These cmdlets are only necessary in the full version of the module
-# The config file
-$Script:ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
-
 function Get-ConfigData {
   #.Synopsis
   #   Gets the modulename.ini settings as a hashtable
@@ -209,36 +210,27 @@ function Get-ConfigData {
   #   Parses the non-comment lines in the config file as a simple hashtable, 
   #   parsing it as string data, and replacing {SpecialFolder} paths
   [CmdletBinding(DefaultParameterSetname="FromFile")]
-  param(
-    # A path to a file with FolderPath ini strings in it
-    [Parameter(ValueFromPipelineByPropertyName=$true, Position=0, ParameterSetName="FromFile")]
-    [Alias("PSPath")]
-    [string]$ConfigFile = $Script:ConfigFile,
+  param()
+  end {
+    $Results = Import-LocalStorage $PSScriptRoot UserSettings.psd1
 
-    # A key = value string (optionally, with special folder tokens in it like {MyDocuments} and {ProgramFiles})
-    [Parameter(ValueFromPipeline=$true, Mandatory=$true, ParameterSetName="FromData")]
-    [string]$StringData
-  )
-  begin {
-    $Names = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
+    # Our ConfigData has InstallPaths and Repositories
+    # Some repositories can have file paths too...
 
-    if($PSCmdlet.ParameterSetName -eq "FromFile") {
-      $StringData = Get-Content $ConfigFile -Delim ([char]0) -ErrorAction Stop
-      $StringData = $StringData -replace '(?m)^[#;].*[\r\n]+'
-    } else {
-
-    }
-  }
-
-  process {
-    $Paths = [Regex]::Matches($StringData, "{(?:$($Names -Join "|"))}")
-    for($i = $Paths.Count - 1; $i -ge 0; $i--) {
-      if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
-        $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+    foreach($Setting in "InstallPaths","Repositories") {
+      foreach($Key in $($Results.($Setting).Keys)) {
+        $StringData = $Results.($Setting).$Key
+        $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+        for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+          if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+            $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+            break
+          }
+        }
+        $Results.($Setting).$Key = $StringData
       }
     }
-
-    ConvertFrom-StringData ($StringData -replace "\\","\\")
+    return $Results
   }
 }
 
@@ -247,40 +239,35 @@ function Set-ConfigData {
   #   Updates the config file with the specified hashtable
   [CmdletBinding()]
   param(
-    # A path to a file with FolderPath ini strings in it, or 
-    # A string with path names in it like {MyDocuments} and {ProgramFiles}
-    [Parameter(ValueFromPipeline=$true, Position=0)]
-    [string]$Path = $Script:ConfigFile,
-
     # The config hashtable to save
+    [Parameter(ValueFromPipeline=$true, Position=0)]
     [Hashtable]$ConfigData
   )
+  end {
+    # When serializing the ConfigData we want to tokenize the path
+    # So that it will be user-agnostic
+    $table = Get-SpecialFolder
+    $table = $table.GetEnumerator() | Sort-Object Value -Descending
 
-  # When serializing the ConfigData, we want to tokenize the path
-  # So that it will be user-agnostic
-  $table = Get-SpecialFolder
-  $table = $table.GetEnumerator() | Sort-Object Value -Descending
+    # Our ConfigData has InstallPaths and Repositories
+    # We'll explicitly save just those:
+    $SaveData = @{ InstallPaths = @{}; Repositories = @{} }
 
-  foreach($setting in @($ConfigData.Keys)) {
-    foreach($kvPath in $table) {
-      if($ConfigData.$setting -like ($kvPath.Value +"*")) {
-        $ConfigData.$setting = $ConfigData.$setting -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+    # Some repositories can have file paths too...
+    foreach($Setting in "InstallPaths","Repositories") {
+      foreach($Key in $ConfigData.($Setting).Keys) {
+        $SaveData.($Setting).$Key = $ConfigData.($Setting).$Key
+        foreach($kvPath in $table) {
+          if($ConfigData.($Setting).$Key -like ($kvPath.Value +"*")) {
+            $SaveData.($Setting).$Key = $ConfigData.($Setting).$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+            break
+          }
+        }
       }
     }
+
+    Export-LocalStorage $PSScriptRoot UserSettings.psd1 $ConfigData
   }
-
-  $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
-                  "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n" +
-                  "# Note that the defaults here are the ones recommended by Microsoft:`n" +
-                  "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350%28v=vs.85%29.aspx`n"
-
-  $ConfigString += $(
-    foreach($k in $ConfigData.Keys) {
-      "{0} = {1}" -f $k, $ConfigData.$k
-    }
-  ) -join "`n"
-
-  Set-Content $Path $ConfigString  
 }
 
 function Test-ConfigData {
@@ -292,7 +279,7 @@ function Test-ConfigData {
     $ConfigData = $(Get-ConfigData)
   )
 
-  foreach($path in @($ConfigData.Keys)) {
+  foreach($path in @($ConfigData.InstallPaths.Keys)) {
     $name = $path -replace 'Path$'
     $folder = $ConfigData.$path
     do {
@@ -378,265 +365,231 @@ function Test-ConfigData {
   }
 }
 
-# These functions are just simple helpers for use in data sections (see about_data_sections) and .psd1 files (see Import-LocalizedData)
-function PSObject {
-   <#
-      .Synopsis
-         Creates a new PSCustomObject with the specified properties
-      .Description
-         This is just a wrapper for the PSObject constructor with -Property $Value
-         It exists purely for the sake of psd1 serialization
-      .Parameter Value
-         The hashtable of properties to add to the created objects
-   #>
-   param([hashtable]$Value)
-   New-Object System.Management.Automation.PSObject -Property $Value 
-}
-
-function Guid {
-   <#
-      .Synopsis
-         Creates a GUID with the specified value
-      .Description
-         This is basically just a type cast to GUID.
-         It exists purely for the sake of psd1 serialization
-      .Parameter Value
-         The GUID value.
-   #>   
-   param([string]$Value)
-   [Guid]$Value
-}
-
-function DateTime {
-   <#
-      .Synopsis
-         Creates a DateTime with the specified value
-      .Description
-         This is basically just a type cast to DateTime, the string needs to be castable.
-         It exists purely for the sake of psd1 serialization
-      .Parameter Value
-         The DateTime value, preferably from .Format('o'), the .Net round-trip format
-   #>   
-   param([string]$Value)
-   [DateTime]$Value
-}
-
-function DateTimeOffset {
-   <#
-      .Synopsis
-         Creates a DateTimeOffset with the specified value
-      .Description
-         This is basically just a type cast to DateTimeOffset, the string needs to be castable.
-         It exists purely for the sake of psd1 serialization
-      .Parameter Value
-         The DateTimeOffset value, preferably from .Format('o'), the .Net round-trip format
-   #>    
-   param([string]$Value)
-   [DateTimeOffset]$Value
-}
-
-# Import and Export are the external functions. 
-function Import-Metadata {
-   <#
-      .Synopsis
-         Creates a data object from the items in a Manifest file
-   #>
-   [CmdletBinding()]
+# These are special functions just for saving in the AppData folder...
+function Get-LocalStoragePath {
+   #.Synopsis
+   #   Gets the LocalApplicationData path for the specified company\module 
+   #.Description
+   #   Appends Company\Module to the LocalApplicationData, and ensures that the folder exists.
    param(
-      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
-      [string]$Path
+      # The name of the module you want to access storage for (defaults to SplunkStanzaName)
+      [Parameter(Position=0)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Module Name '$_' at $invalid"
+         }
+      })]         
+      [string]$Module = $SplunkStanzaName,
+
+      # The name of a "company" to use in the storage path (defaults to "PowerShell Package Manager")
+      [Parameter(Position=1)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Company Name '$_' at $invalid"
+         }
+      })]         
+      [string]$Company = "PowerShell Package Manager"      
+
    )
-
-   process {
-      $ModuleInfo = $null
-      # When we have a file, use Import-LocalizedData (via Import-PSD1)
-      if(Test-Path $Path) {
-         Write-Verbose "Importing Module Manifest From Path: $Path"
-         if(!(Test-Path $Path -PathType Leaf)) {
-            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
-         }
-         try {
-            if($FilePath = Convert-Path $Path -ErrorAction SilentlyContinue) {
-               $ModuleInfo = @{}
-               Import-LocalizedData -BindingVariable ModuleInfo -BaseDirectory (Split-Path $FilePath) -FileName (Split-Path $FilePath -Leaf) -SupportedCommand "PSObject", "GUID"
-               $ModuleInfo = $ModuleInfo | Add-SimpleNames
-            }
-         } catch {
-            Write-Warning "Couldn't get ModuleManifest from the file:`n${Manifest}"
-            $PSCmdlet.ThrowTerminatingError( $_ )
-         }
-         if(!$ModuleInfo.Count) {
-            $Path = Get-Content $Path -Delimiter ([char]0)
-         }
-      }
-
-      # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
-      if(!$ModuleInfo) {
-         ConvertFrom-Metadata $Path
-      }
-      Write-Output $ModuleInfo
-   }
-}
-
-function Export-Metadata {
-   <#
-      .Synopsis
-         A metadata export function that works like json
-      .Description
-         Converts simple objects to psd1 data files
-         Exportable data is limited the rules of data sections (see about_Data_Sections)
-
-         The only things exportable are Strings and Numbers, and Arrays or Hashtables where the values are all strings or numbers.
-         NOTE: Hashtable keys must be simple strings or numbers
-         NOTE: Simple dynamic objects can also be exported (they come back as PSObject)
-   #>
-   [CmdletBinding()]
-   param(
-      # Specifies the path to the PSD1 output file.
-      [Parameter(Mandatory=$true, Position=0)]
-      $Path,
-
-      # Specifies the objects to export as metadata structures.
-      # Enter a variable that contains the objects or type a command or expression that gets the objects.
-      # You can also pipe objects to Export-Metadata.
-      [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
-      $InputObject
-   )
-   begin { $data = @() }
-
-   process {
-      $data += @($InputObject)
-   }
-
    end {
-      ConvertTo-Metadata -Path $Path -Value (ConvertTo-Metadata $data)
+      if(!($path = $SplunkCheckpointPath)) {
+         $path = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) $Company
+      } 
+      $path  = Join-Path $path $Module
+
+      if(!(Test-Path $path -PathType Container)) {
+         $null = New-Item $path -Type Directory -Force
+      }
+      Write-Output $path
    }
 }
 
-# At this time there's not a lot of value in exporting the ConvertFrom/ConvertTo functions
-# Private Functions (which could be exported)
-function ConvertFrom-Metadata {
-   [CmdletBinding()]
-   param($InputObject)
-   begin {
-      $ValidTokens = "Keyword", "Command", "Variable", "CommandParameter", "GroupStart", "GroupEnd", "Member", "Operator", "String", "Number", "Comment", "NewLine", "StatementSeparator"
-      $ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData"
-      $ValidParameters = "-StringData", "-Value"
-      $ValidKeywords = "if","else","elseif"
-      $ValidVariables = "PSCulture","PSUICulture","True","False","Null"
-      $ParseErrors = $Null
-   }   
-   process {
-      # You can't stuff signatures into a data block
-      $InputObject = $InputObject -replace "# SIG # Begin(?s:.*)# SIG # End signature block"
-      Write-Verbose "Converting Metadata From Content: $($InputObject.Length) bytes"
-
-      # Safety checks just to make sure they can't escape the data block
-      # If there are unbalanced curly braces, it will fail to tokenize
-      $Tokens = [System.Management.Automation.PSParser]::Tokenize(${InputObject},[ref]$ParseErrors)
-      if($ParseErrors -ne $null) {
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
-      }
-      if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
-      }
-
-      $InvalidTokens = $(switch($Tokens){
-         {$_.Type -eq "Keyword"} { if($ValidKeywords -notcontains $_.Content) { $_ } }
-         {$_.Type -eq "CommandParameter"} { if(!($ValidParameters -match $_.Content)) { $_ } }
-         {$_.Type -eq "Command"} { if($ValidCommands -notcontains $_.Content) { $_ } }
-         {$_.Type -eq "Variable"} { if($ValidVariables -notcontains $_.Content) { $_ } }
-      })
-      if($InvalidTokens) {
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
-      }
-
-      # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
-      try {
-         Invoke-Expression "Data -SupportedCommand PSObject, GUID, DateTime, DateTimeOffset, ConvertFrom-StringData { ${InputObject} }"
-      } catch {
-         Write-Warning "Couldn't get ModuleManifest from the data:`n${Manifest}"
-         $PSCmdlet.ThrowTerminatingError( $_ )
-      }
-   }
-}
-
-function ConvertTo-Metadata {
-   [CmdletBinding()]
+function Export-LocalStorage {
+   #.Synopsis
+   #   Saves the object to local storage with the specified name
+   #.Description
+   #   Persists objects to disk using Get-LocalStoragePath and Export-Metadata
    param(
-      [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=0)]
+      # A unique valid module name to use when persisting the object to disk
+      [Parameter(Mandatory=$true, Position=0)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Module Name '$_' at $invalid"
+         }
+      })]      
+      [string]$Module,
+
+      # A unique object name to use when persisting the object to disk
+      [Parameter(Mandatory=$true, Position=1)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Object Name '$_' at $invalid"
+         }
+      })]      
+      [string]$Name,
+
+      # The scope to store the data in. Defaults to storing in the ModulePath
+      [ValidateSet("Module", "User")]
+      $Scope,
+
+      # comments to place on the top of the file (to explain it's settings)
+      [string[]]$CommentHeader,
+
+      # The object to persist to disk
+      [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=1)]
       $InputObject
    )
-   begin { $t = "  " }
+   begin {
+      $invalid = $Module.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
 
+      if(($Scope -ne "User") -and $invalid -and (Test-Path $Module))
+      {
+         $ModulePath = Resolve-Path $Module
+      } 
+      elseif($Scope -eq "Module") 
+      {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath =Get-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+      }
+
+      # Scope -eq "User"
+      if(!$ModulePath -or !(Test-Path $ModulePath)) {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath = Get-LocalStoragePath $Module
+         if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
+            $Null = New-Item -ItemType Directory $ModulePath
+         }
+      }
+
+      if(!(Test-Path $ModulePath)) {
+         Write-Error "The folder for storage doesn't exist: $ModulePath"
+      }
+
+      $ModulePath = Resolve-Path $ModulePath -ErrorAction Stop
+
+      # Make sure it has a PSD1 extension
+      if($Name -notmatch '.*\.psd1$') {
+        $Name = "${Name}.psd1"
+      }
+
+      $Path = Join-Path $ModulePath $Name
+
+      if($PSBoundParameters.ContainsKey("InputObject")) {
+         Write-Verbose "Clean Export"
+         Export-Metadata -Path $Path -InputObject $InputObject -CommentHeader $CommentHeader
+      } else {
+         $Output = @()
+      }
+   }
    process {
-      if($InputObject -is [Int16] -or 
-         $InputObject -is [Int32] -or 
-         $InputObject -is [Int64] -or 
-         $InputObject -is [Double] -or 
-         $InputObject -is [Decimal] -or 
-         $InputObject -is [Byte]) { 
-         Write-Verbose "Numbers"
-         "$InputObject" 
-      }
-      elseif($InputObject -is [bool])  {
-         Write-Verbose "Boolean"
-         if($InputObject) { '$True' } else { '$False' }
-      }
-      elseif($InputObject -is [DateTime])  {
-         Write-Verbose "DateTime"
-         "DateTime '{0}'" -f $InputObject.ToString('o')
-      }
-      elseif($InputObject -is [DateTimeOffset])  {
-         Write-Verbose "DateTime"
-         "DateTimeOffset '{0}'" -f $InputObject.ToString('o')
-      }
-      elseif($InputObject -is [String])  {
-         Write-Verbose "String"
-         "'$InputObject'" 
-      }
-      elseif($InputObject -is [System.Collections.IDictionary]) {
-         Write-Verbose "Dictionary"
-         "@{{`n$t{0}`n}}" -f ($(
-         ForEach($key in $InputObject.Keys) {
-            if("$key" -match '^(\w+|-?\d+\.?\d*)$') {
-               "$key = " + (ConvertTo-Metadata $InputObject.($key))
-            }
-            else {
-               "'$key' = " + (ConvertTo-Metadata $InputObject.($key))
-            }
-         }) -split "`n" -join "`n$t")
-      } 
-      elseif($InputObject -is [System.Collections.IEnumerable]) {
-         Write-Verbose "Enumarable"
-         "@($($(ForEach($item in $InputObject.GetEnumerator()) { ConvertTo-Metadata $item }) -join ','))"
-      }
-      elseif($InputObject -is [Guid]) {
-         Write-Verbose "GUID:"
-         "Guid '$InputObject'"
-      }
-      elseif($InputObject.GetType().FullName -eq 'System.Management.Automation.PSCustomObject') {
-         Write-Verbose "Dictionary"
-
-         "PSObject @{{`n$t{0}`n}}" -f ($(
-            ForEach($key in $InputObject | Get-Member -Type Properties | Select -Expand Name) {
-               if("$key" -match '^(\w+|-?\d+\.?\d*)$') {
-                  "$key = " + (ConvertTo-Metadata $InputObject.($key))
-               }
-               else {
-                  "'$key' = " + (ConvertTo-Metadata $InputObject.($key))
-               }
-            }
-         ) -split "`n" -join "`n$t")
-      } 
-      else {
-         Write-Warning "$($InputObject.GetType().FullName) is not serializable. Serializing as string"
-         "'{0}'" -f $InputObject.ToString()
+      $Output += $InputObject
+   }
+   end {
+      if($PSBoundParameters.ContainsKey("InputObject")) {
+         Write-Verbose "Tail Export"
+         # Avoid arrays when they're not needed:
+         if($Output.Count -eq 1) { $Output = $Output[0] }
+         Export-Metadata -Path $Path -InputObject $Output -CommentHeader $CommentHeader
       }
    }
 }
 
-Export-ModuleMember -Function Get-SpecialFolder, Select-ModulePath, Test-ExecutionPolicy, 
-                              Get-ConfigData, Set-ConfigData, Test-ConfigData, 
-                              Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata
+function Import-LocalStorage {
+   #.Synopsis
+   #   Loads an object with the specified name from local storage 
+   #.Description
+   #   Retrieves objects from disk using Get-LocalStoragePath and Import-CliXml
+   param(
+      # A unique valid module name to use when persisting the object to disk
+      [Parameter(Mandatory=$true, Position=0)]
+      [string]$Module,
+
+      # A unique object name to use when persisting the object to disk
+      [Parameter(Position=1)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Object Name '$_' at $invalid"
+         }
+      })]      
+      [string]$Name = '*',
+
+      # The scope to store the data in. Defaults to storing in the ModulePath
+      [ValidateSet("Module", "User")]
+      $Scope,
+
+      # A default value (used in case there's an error importing):
+      [Parameter()]
+      [Object]$DefaultValue
+   )
+   end {
+      $invalid = $Module.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+      if(($Scope -ne "User") -and $invalid -and (Test-Path $Module)) 
+      {
+         $ModulePath = Resolve-Path $Module
+      } 
+      elseif($Scope -eq "Module") 
+      {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath =Get-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+      }
+
+      # Scope -eq "User"
+      if(!$ModulePath -or !(Test-Path $ModulePath)) {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath = Get-LocalStoragePath $Module
+         if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
+            $Null = New-Item -ItemType Directory $ModulePath
+         }
+      }
+
+      if(!(Test-Path $ModulePath)) {
+         Write-Error "The folder for storage doesn't exist: $ModulePath"
+      }
+
+      # Make sure it has a PSD1 extension
+      if($Name -notmatch '.*\.psd1$') {
+        $Name = "${Name}.psd1"
+      }
+
+      $Path = Join-Path $ModulePath $Name
+
+      try {
+         $Path = Resolve-Path $Path -ErrorAction Stop
+         if(@($Path).Count -gt 1) {
+            $Output = @{}
+            foreach($Name in $Path) {
+               $Key = Split-Path $Name -Leaf
+               $Output.$Key = Import-Metadatae -Path $Name
+            }
+         } else {
+            Import-Metadata -Path $Path
+         }
+      } catch {
+         if($PSBoundParameters.ContainsKey("DefaultValue")) {
+            Write-Output $DefaultValue
+         } else {
+            throw
+         }
+      }
+   }
+}
+                              
+Export-ModuleMember -Function Import-LocalStorage, Export-LocalStorage, Get-LocalStoragePath,
+                              Get-SpecialFolder, Select-ModulePath, Test-ExecutionPolicy, 
+                              Get-ConfigData, Set-ConfigData, Test-ConfigData
 # FULL # END FULL

@@ -150,13 +150,13 @@ end {{
     # Since we just installed the PoshCode module, we will update the config data with the path they picked
     $ConfigData = Get-ConfigData
     if($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("UserProfile")) + "*")) {{
-      $ConfigData["UserPath"] = $InstallPath
+      $ConfigData.InstallPaths["UserPath"] = $InstallPath
     }} elseif($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("CommonDocuments")) + "*")) {{
-      $ConfigData["CommonPath"] = $InstallPath
+      $ConfigData.InstallPaths["CommonPath"] = $InstallPath
     }} elseif($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("CommonProgramFiles")) + "*")) {{
-      $ConfigData["CommonPath"] = $InstallPath
+      $ConfigData.InstallPaths["CommonPath"] = $InstallPath
     }} else {{
-      $ConfigData["Default"] = $InstallPath
+      $ConfigData.InstallPaths["Default"] = $InstallPath
     }}
     Set-ConfigData -ConfigData $ConfigData
   }}

@@ -343,3 +343,269 @@ function Import-ManifestStream {
    }
    Import-Metadata $ManifestContent
 }
+
+
+# These functions are just simple helpers for use in data sections (see about_data_sections) and .psd1 files (see Import-LocalizedData)
+function PSObject {
+   <#
+      .Synopsis
+         Creates a new PSCustomObject with the specified properties
+      .Description
+         This is just a wrapper for the PSObject constructor with -Property $Value
+         It exists purely for the sake of psd1 serialization
+      .Parameter Value
+         The hashtable of properties to add to the created objects
+   #>
+   param([hashtable]$Value)
+   New-Object System.Management.Automation.PSObject -Property $Value 
+}
+
+function Guid {
+   <#
+      .Synopsis
+         Creates a GUID with the specified value
+      .Description
+         This is basically just a type cast to GUID.
+         It exists purely for the sake of psd1 serialization
+      .Parameter Value
+         The GUID value.
+   #>   
+   param([string]$Value)
+   [Guid]$Value
+}
+
+function DateTime {
+   <#
+      .Synopsis
+         Creates a DateTime with the specified value
+      .Description
+         This is basically just a type cast to DateTime, the string needs to be castable.
+         It exists purely for the sake of psd1 serialization
+      .Parameter Value
+         The DateTime value, preferably from .Format('o'), the .Net round-trip format
+   #>   
+   param([string]$Value)
+   [DateTime]$Value
+}
+
+function DateTimeOffset {
+   <#
+      .Synopsis
+         Creates a DateTimeOffset with the specified value
+      .Description
+         This is basically just a type cast to DateTimeOffset, the string needs to be castable.
+         It exists purely for the sake of psd1 serialization
+      .Parameter Value
+         The DateTimeOffset value, preferably from .Format('o'), the .Net round-trip format
+   #>    
+   param([string]$Value)
+   [DateTimeOffset]$Value
+}
+
+# Import and Export are the external functions. 
+function Import-Metadata {
+   <#
+      .Synopsis
+         Creates a data object from the items in a Manifest file
+   #>
+   [CmdletBinding()]
+   param(
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
+      [string]$Path
+   )
+
+   process {
+      $ModuleInfo = $null
+      # When we have a file, use Import-LocalizedData (via Import-PSD1)
+      if(Test-Path $Path) {
+         Write-Verbose "Importing Module Manifest From Path: $Path"
+         if(!(Test-Path $Path -PathType Leaf)) {
+            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
+         }
+         try {
+            if($FilePath = Convert-Path $Path -ErrorAction SilentlyContinue) {
+               $ModuleInfo = @{}
+               Import-LocalizedData -BindingVariable ModuleInfo -BaseDirectory (Split-Path $FilePath) -FileName (Split-Path $FilePath -Leaf) -SupportedCommand "PSObject", "GUID"
+               $ModuleInfo = $ModuleInfo | Add-SimpleNames
+            }
+         } catch {
+            Write-Warning "Couldn't get ModuleManifest from the file:`n${Manifest}"
+            $PSCmdlet.ThrowTerminatingError( $_ )
+         }
+         if(!$ModuleInfo.Count) {
+            $Path = Get-Content $Path -Delimiter ([char]0)
+         }
+      }
+
+      # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
+      if(!$ModuleInfo) {
+         ConvertFrom-Metadata $Path
+      }
+      Write-Output $ModuleInfo
+   }
+}
+
+function Export-Metadata {
+   <#
+      .Synopsis
+         A metadata export function that works like json
+      .Description
+         Converts simple objects to psd1 data files
+         Exportable data is limited the rules of data sections (see about_Data_Sections)
+
+         The only things exportable are Strings and Numbers, and Arrays or Hashtables where the values are all strings or numbers.
+         NOTE: Hashtable keys must be simple strings or numbers
+         NOTE: Simple dynamic objects can also be exported (they come back as PSObject)
+   #>
+   [CmdletBinding()]
+   param(
+      # Specifies the path to the PSD1 output file.
+      [Parameter(Mandatory=$true, Position=0)]
+      $Path,
+
+      # comments to place on the top of the file (to explain it's settings)
+      [string[]]$CommentHeader,
+
+      # Specifies the objects to export as metadata structures.
+      # Enter a variable that contains the objects or type a command or expression that gets the objects.
+      # You can also pipe objects to Export-Metadata.
+      [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+      $InputObject
+   )
+   begin { $data = @() }
+
+   process {
+      $data += @($InputObject)
+   }
+
+   end {
+      # Avoid arrays when they're not needed:
+      if($data.Count -eq 1) { $data = $data[0] }
+      Set-Content -Path $Path -Value ((@($CommentHeader) + @(ConvertTo-Metadata $data)) -Join "`n")
+   }
+}
+
+# At this time there's not a lot of value in exporting the ConvertFrom/ConvertTo functions
+# Private Functions (which could be exported)
+function ConvertFrom-Metadata {
+   [CmdletBinding()]
+   param($InputObject)
+   begin {
+      $ValidTokens = "Keyword", "Command", "Variable", "CommandParameter", "GroupStart", "GroupEnd", "Member", "Operator", "String", "Number", "Comment", "NewLine", "StatementSeparator"
+      $ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData"
+      $ValidParameters = "-StringData", "-Value"
+      $ValidKeywords = "if","else","elseif"
+      $ValidVariables = "PSCulture","PSUICulture","True","False","Null"
+      $ParseErrors = $Null
+   }   
+   process {
+      # You can't stuff signatures into a data block
+      $InputObject = $InputObject -replace "# SIG # Begin(?s:.*)# SIG # End signature block"
+      Write-Verbose "Converting Metadata From Content: $($InputObject.Length) bytes"
+
+      # Safety checks just to make sure they can't escape the data block
+      # If there are unbalanced curly braces, it will fail to tokenize
+      $Tokens = [System.Management.Automation.PSParser]::Tokenize(${InputObject},[ref]$ParseErrors)
+      if($ParseErrors -ne $null) {
+         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
+      }
+      if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
+         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
+      }
+
+      $InvalidTokens = $(switch($Tokens){
+         {$_.Type -eq "Keyword"} { if($ValidKeywords -notcontains $_.Content) { $_ } }
+         {$_.Type -eq "CommandParameter"} { if(!($ValidParameters -match $_.Content)) { $_ } }
+         {$_.Type -eq "Command"} { if($ValidCommands -notcontains $_.Content) { $_ } }
+         {$_.Type -eq "Variable"} { if($ValidVariables -notcontains $_.Content) { $_ } }
+      })
+      if($InvalidTokens) {
+         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
+      }
+
+      # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
+      try {
+         Invoke-Expression "Data -SupportedCommand PSObject, GUID, DateTime, DateTimeOffset, ConvertFrom-StringData { ${InputObject} }"
+      } catch {
+         Write-Warning "Couldn't get ModuleManifest from the data:`n${Manifest}"
+         $PSCmdlet.ThrowTerminatingError( $_ )
+      }
+   }
+}
+
+function ConvertTo-Metadata {
+   [CmdletBinding()]
+   param(
+      [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=0)]
+      $InputObject
+   )
+   begin { $t = "  " }
+
+   process {
+      if($InputObject -is [Int16] -or 
+         $InputObject -is [Int32] -or 
+         $InputObject -is [Int64] -or 
+         $InputObject -is [Double] -or 
+         $InputObject -is [Decimal] -or 
+         $InputObject -is [Byte]) { 
+         # Write-Verbose "Numbers"
+         "$InputObject" 
+      }
+      elseif($InputObject -is [bool])  {
+         # Write-Verbose "Boolean"
+         if($InputObject) { '$True' } else { '$False' }
+      }
+      elseif($InputObject -is [DateTime])  {
+         # Write-Verbose "DateTime"
+         "DateTime '{0}'" -f $InputObject.ToString('o')
+      }
+      elseif($InputObject -is [DateTimeOffset])  {
+         # Write-Verbose "DateTime"
+         "DateTimeOffset '{0}'" -f $InputObject.ToString('o')
+      }
+      elseif($InputObject -is [String])  {
+         # Write-Verbose "String"
+         "'$InputObject'" 
+      }
+      elseif($InputObject -is [System.Collections.IDictionary]) {
+         # Write-Verbose "Dictionary"
+         "@{{`n$t{0}`n}}" -f ($(
+         ForEach($key in $InputObject.Keys) {
+            if("$key" -match '^(\w+|-?\d+\.?\d*)$') {
+               "$key = " + (ConvertTo-Metadata $InputObject.($key))
+            }
+            else {
+               "'$key' = " + (ConvertTo-Metadata $InputObject.($key))
+            }
+         }) -split "`n" -join "`n$t")
+      } 
+      elseif($InputObject -is [System.Collections.IEnumerable]) {
+         # Write-Verbose "Enumarable"
+         "@($($(ForEach($item in $InputObject.GetEnumerator()) { ConvertTo-Metadata $item }) -join ','))"
+      }
+      elseif($InputObject -is [Guid]) {
+         # Write-Verbose "GUID:"
+         "Guid '$InputObject'"
+      }
+      elseif($InputObject.GetType().FullName -eq 'System.Management.Automation.PSCustomObject') {
+         # Write-Verbose "Dictionary"
+
+         "PSObject @{{`n$t{0}`n}}" -f ($(
+            ForEach($key in $InputObject | Get-Member -Type Properties | Select -Expand Name) {
+               if("$key" -match '^(\w+|-?\d+\.?\d*)$') {
+                  "$key = " + (ConvertTo-Metadata $InputObject.($key))
+               }
+               else {
+                  "'$key' = " + (ConvertTo-Metadata $InputObject.($key))
+               }
+            }
+         ) -split "`n" -join "`n$t")
+      } 
+      else {
+         Write-Warning "$($InputObject.GetType().FullName) is not serializable. Serializing as string"
+         "'{0}'" -f $InputObject.ToString()
+      }
+   }
+}
+
+Export-ModuleMember -Function Get-Module, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata

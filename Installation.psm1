@@ -345,7 +345,7 @@ function Install-Module {
    dynamicparam {
       $paramDictionary = new-object System.Management.Automation.RuntimeDefinedParameterDictionary
       if(Get-Command Get-ConfigData -ListImported -ErrorAction SilentlyContinue) {
-         foreach( $name in (Get-ConfigData).Keys ){
+         foreach( $name in (Get-ConfigData).InstallPaths.Keys ){
             if("CommonPath","UserPath" -notcontains $name) {
                $param = new-object System.Management.Automation.RuntimeDefinedParameter( $Name, [Switch], (New-Object Parameter -Property @{ParameterSetName=$Name;Mandatory=$true}))
                $paramDictionary.Add($Name, $param)
@@ -358,9 +358,9 @@ function Install-Module {
       if($PSCmdlet.ParameterSetName -ne "InstallPath") {
          $Config = Get-ConfigData
          switch($PSCmdlet.ParameterSetName){
-            "UserPath"   { $InstallPath = $Config.UserPath }
-            "CommonPath" { $InstallPath = $Config.CommonPath }
-            # "SystemPath" { $InstallPath = $Config.SystemPath }
+            "UserPath"   { $InstallPath = $Config.InstallPaths.UserPath }
+            "CommonPath" { $InstallPath = $Config.InstallPaths.CommonPath }
+            # "SystemPath" { $InstallPath = $Config.InstallPaths.SystemPath }
          }
          $null = $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path"))
          $null = $PsBoundParameters.Add("InstallPath", $InstallPath)
