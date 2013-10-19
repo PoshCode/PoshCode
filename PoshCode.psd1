@@ -56,9 +56,9 @@ FormatsToProcess = @('.\PoshCode.Search.ModuleInfo.format.ps1xml')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
-# Note: Bitbucket is for test only! remove it! 
-NestedModules = @('.\Configuration.psm1', '.\ModuleInfo.psm1', '.\Installation.psm1', '.\Scripts.psm1','Repository.psm1','.\RepositoryGitHub.psm1',
-                '.\RepositoryBitBucket.psm1') ## remove this one later
+NestedModules = @('.\ModuleInfo.psm1', '.\Configuration.psm1', '.\Installation.psm1', '.\Scripts.psm1', 
+                  # Repository Modules
+                  '.\Repository.psm1', '.\RepositoryGitHub.psm1')
 
 # Functions to export from this module
 FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Get-ModuleManifest',
@@ -76,17 +76,16 @@ FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-M
 AliasesToExport = '*'
 
 # List of all modules packaged with this module.
-ModuleList = @('Configuration', 'ModuleInfo', 'InvokeWeb', 'Installation', 'Packaging', 'Scripts','Repository','RepositoryGitHub','RepositoryBitbucket')
+ModuleList = @('Configuration', 'ModuleInfo', 'InvokeWeb', 'Installation', 'Packaging', 'Scripts')
 
 # List of all files packaged with this module
 FileList = '.\package.psd1', '.\PoshCode.psd1', '.\Constants.ps1',
            '.\Configuration.psm1', '.\ModuleInfo.psm1', '.\InvokeWeb.psm1', 
            '.\Installation.psm1', '.\Packaging.psm1', '.\Scripts.psm1',
            '.\PoshCode.ini','.\Repository.psm1',
-           ## search repos
+           # Repository Modules
            'RepositoryGitHub.psm1',
-           'RepositoryBitBucket.psm1', ##remove this one later
-           #Format Files
+           # Format Files
            '.\PoshCode.Search.ModuleInfo.format.ps1xml'
            
 
