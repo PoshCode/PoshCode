@@ -173,7 +173,7 @@ end {{
 
 begin {{
 
-  $PoshCodeModule = Get-Module PoshCode -ListAvailable
+  $PoshCodeModule = Read-Module PoshCode -ListAvailable
 
   if(!$PoshCodeModule -or ($PoshCodeModule.GUID -ne '88c6579a-27b2-41c8-86c6-cd23acb791e9') -or $PoshCodeModule.Version -lt '4.0.0') {{
 

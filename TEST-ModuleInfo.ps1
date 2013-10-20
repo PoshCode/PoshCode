@@ -19,9 +19,9 @@ test "Add Simple Names" {
 } -Category AddSimpleNames
 
 
-test "Get-Module Adds Simple Names" {
+test "Read-Module Adds Simple Names" {
    arrange {
-      $ModuleInfo = Get-Module PSAINT
+      $ModuleInfo = Read-Module PSAINT
    }
    act {
       $RequiredModules = $ModuleInfo.RequiredModules | Select -First 1
@@ -35,7 +35,7 @@ test "Get-Module Adds Simple Names" {
 
 test "Update-ModuleInfo Adds Simple Names" {
    arrange {
-      $ModuleInfo = Get-Module PSAINT | Select -First 1
+      $ModuleInfo = Read-Module PSAINT | Select -First 1
       $ModuleManifest = Update-ModuleInfo $ModuleInfo.Path
    }
    act {
@@ -50,7 +50,7 @@ test "Update-ModuleInfo Adds Simple Names" {
 
 test "Update-ModuleInfo Imports Package Manifest" {
    arrange {
-      $ModuleInfo = Get-Module PSAINT | Select -First 1
+      $ModuleInfo = Read-Module PSAINT | Select -First 1
       $ModuleManifest = Update-ModuleInfo $ModuleInfo.Path
    }
    act {

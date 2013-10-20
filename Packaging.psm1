@@ -8,7 +8,7 @@
 ## Packaging.psm1 defines the core Compress-Module command for creating Module packages:
 ## Install-Module and Expand-ZipFile and Expand-Package
 ## It depends on the Installation module for the Copy-Stream function
-## It depends on the ModuleInfo module for the Get-Module command
+## It depends on the ModuleInfo module for the Read-Module command
 
 # FULL # BEGIN FULL: Don't include this in the installer script
 Write-Verbose "Importing Constants $PSScriptRoot\Constants.ps1"
@@ -51,7 +51,7 @@ function Compress-Module {
          $ModuleName = $Module
          ## Workaround PowerShell Bug https://connect.microsoft.com/PowerShell/feedback/details/802030
          Push-Location $Script:EmptyPath
-         $Module = Get-Module $ModuleName -ListAvailable | Select-Object -First 1
+         $Module = Read-Module $ModuleName -ListAvailable | Select-Object -First 1
          Pop-Location
       }
       Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    

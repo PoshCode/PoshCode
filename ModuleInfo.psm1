@@ -5,7 +5,7 @@
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ###############################################################################
 ## Installation.psm1 defines the core commands for installing packages:
-## Get-ModuleInfo and Install-Module 
+## Read-Module and Install-Module 
 ## It depends on the Configuration module and the Invoke-WebRequest cmdlet
 
 # FULL # BEGIN FULL: Don't include this in the installer script
@@ -13,13 +13,11 @@
 
 # Public Function
 # This is a wrapper for Get-Module which uses Update-ModuleInfo to load the package manifest
-# It simply extends the output of Get-Module with anything from package.psd1
-function Get-Module {
-   [CmdletBinding(DefaultParameterSetName='Loaded', HelpUri='http://go.microsoft.com/fwlink/?LinkID=141552')]
+# It doesn't support PSSession or CimSession, and it simply extends the output
+function Read-Module {
+   [CmdletBinding(DefaultParameterSetName='Loaded')]
    param(
-      [Parameter(ParameterSetName='PsSession', Position=0, ValueFromPipeline=$true)]
       [Parameter(ParameterSetName='Available', Position=0, ValueFromPipeline=$true)]
-      [Parameter(ParameterSetName='CimSession', Position=0, ValueFromPipeline=$true)]
       [Parameter(ParameterSetName='Loaded', Position=0, ValueFromPipeline=$true)]
       [string[]]
       ${Name},
@@ -29,37 +27,13 @@ function Get-Module {
       [switch]
       ${All},
 
-      [Parameter(ParameterSetName='PsSession')]
-      [Parameter(ParameterSetName='CimSession')]
       [Parameter(ParameterSetName='Available', Mandatory=$true)]
       [switch]
       ${ListAvailable},
 
-      [Parameter(ParameterSetName='CimSession')]
       [Parameter(ParameterSetName='Available')]
-      [Parameter(ParameterSetName='PsSession')]
       [switch]
-      ${Refresh},
-
-      [Parameter(ParameterSetName='PsSession', Mandatory=$true)]
-      [ValidateNotNull()]
-      [System.Management.Automation.Runspaces.PSSession]
-      ${PSSession},
-
-      [Parameter(ParameterSetName='CimSession', Mandatory=$true)]
-      [ValidateNotNull()]
-      [Microsoft.Management.Infrastructure.CimSession]
-      ${CimSession},
-
-      [Parameter(ParameterSetName='CimSession')]
-      [ValidateNotNull()]
-      [uri]
-      ${CimResourceUri},
-
-      [Parameter(ParameterSetName='CimSession')]
-      [ValidateNotNullOrEmpty()]
-      [string]
-      ${CimNamespace}
+      ${Refresh}
    )
    begin
    {
@@ -125,8 +99,8 @@ function Get-Module {
 }
 # FULL # END FULL
 
-# Private Function Called by Get-Module when you explicitly pass it a psmx file
-# Basically the same as Get-Module, but for working with Package (psmx) files 
+# Private Function Called by Read-Module when you explicitly pass it a psmx file
+# Basically the same as Read-Module, but for working with Package (psmx) files 
 # TODO: Make this work for simple .zip files if they have a "package.psd1" file in them.
 #       That way, we can use it for source zips from GitHub etc.
 # TODO: Make this work for nuget packages (parse the xml, and if they have a module, parse it's maifest)
@@ -608,4 +582,4 @@ function ConvertTo-Metadata {
    }
 }
 
-Export-ModuleMember -Function Get-Module, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata
+Export-ModuleMember -Function Read-Module, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata

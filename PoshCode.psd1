@@ -52,19 +52,19 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 # TypesToProcess = @()
 
 # Format files (.ps1xml) to be loaded when importing this module
-FormatsToProcess = @('.\PoshCode.Search.ModuleInfo.format.ps1xml')
+FormatsToProcess = @('PoshCode.Search.ModuleInfo.format.ps1xml')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
-NestedModules = @('.\ModuleInfo.psm1', '.\Configuration.psm1', '.\Installation.psm1', '.\Scripts.psm1', 
+NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 
                   # Repository Modules
-                  '.\Repository.psm1', '.\RepositoryGitHub.psm1')
+                  'Repository.psm1', 'RepositoryGitHub.psm1')
 
 # Functions to export from this module
-FunctionsToExport = 'Get-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Import-Metadata','Export-Metadata'
-                    'Get-ConfigData', 'Set-ConfigData', # 'Test-ExecutionPolicy', 'Get-SpecialFolder',
+FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Import-Metadata','Export-Metadata',
+                    'Get-ConfigData', 'Set-ConfigData',  # 'Test-ExecutionPolicy', 'Get-SpecialFolder',
                     'Get-PoshCode', 'Send-PoshCode','Find-Module'
-                     
+
 
 # Cmdlets to export from this module
 # CmdletsToExport = '*'
@@ -79,14 +79,14 @@ AliasesToExport = '*'
 ModuleList = @('Configuration', 'ModuleInfo', 'InvokeWeb', 'Installation', 'Packaging', 'Scripts')
 
 # List of all files packaged with this module
-FileList = '.\package.psd1', '.\PoshCode.psd1', '.\Constants.ps1',
-           '.\Configuration.psm1', '.\ModuleInfo.psm1', '.\InvokeWeb.psm1', 
-           '.\Installation.psm1', '.\Packaging.psm1', '.\Scripts.psm1',
-           '.\PoshCode.ini','.\Repository.psm1',
+FileList = 'package.psd1', 'PoshCode.psd1', 'Constants.ps1',
+           'Configuration.psm1', 'ModuleInfo.psm1', 'InvokeWeb.psm1', 
+           'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1',
+           'PoshCode.ini','Repository.psm1',
            # Repository Modules
            'RepositoryGitHub.psm1',
            # Format Files
-           '.\PoshCode.Search.ModuleInfo.format.ps1xml'
+           'PoshCode.Search.ModuleInfo.format.ps1xml'
            
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess
