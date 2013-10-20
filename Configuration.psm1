@@ -266,7 +266,12 @@ function Set-ConfigData {
       }
     }
 
-    Export-LocalStorage $PSScriptRoot UserSettings.psd1 $ConfigData
+    $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
+                    "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n" +
+                    "# Note that the defaults here are the ones recommended by Microsoft:`n" +
+                    "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350`n"
+
+    Export-LocalStorage $PSScriptRoot UserSettings.psd1 $ConfigData -CommentHeader $ConfigString
   }
 }
 
@@ -461,7 +466,7 @@ function Export-LocalStorage {
       elseif($Scope -eq "Module") 
       {
          $Module = Split-Path $Module -Leaf
-         $ModulePath =Get-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+         $ModulePath = Read-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
       }
 
       # Scope -eq "User"
@@ -545,7 +550,7 @@ function Import-LocalStorage {
       elseif($Scope -eq "Module") 
       {
          $Module = Split-Path $Module -Leaf
-         $ModulePath =Get-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+         $ModulePath = Read-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
       }
 
       # Scope -eq "User"

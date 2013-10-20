@@ -28,7 +28,7 @@
     )
     
     ## Get all the "FindModule" cmdlets from already loaded modules
-    Get-Command FindModule* -Module Repository* | %{ &$_ @PSBoundParameters }
+    Get-Command FindModul[e] -Module Repository* | %{ &$_ @PSBoundParameters }
 }
 
 Export-ModuleMember -Function 'Find-Module'

@@ -5,7 +5,7 @@
 ###############################################################################
 ## InvokeWeb.psm1 defines a subset of the Invoke-WebRequest functionality
 ## On PowerShell 3 and up we'll just use the built-in Invoke-WebRequest
-if(!(Get-Command Invoke-WebRequest)) {
+if(!(Get-Command Invoke-WebReques[t])) {
   function Invoke-WebRequest {
     <#
       .Synopsis

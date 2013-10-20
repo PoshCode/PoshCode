@@ -98,7 +98,7 @@ The Compress-Module command is in the Packaging submodule, it is the core comman
 
 ### ModuleInfo
 
-ModuleInfo contains a wrapper/replacement for the built-in Get-Module command, and a Import-Metadata command which can load a psd1 directly by path.  I'll probably hide Import-Metadata later and include it's functionality in Get-Module. There are many other functions in this module also -- they are used internally by the Get-Module command (and other modules within PoshCode), but not exported for users.
+ModuleInfo contains Read-Module: a wrapper for the built-in Get-Module command, which can also load a psd1 directly by path, or read from a module package. There are many other functions in this module also, but they are used internally by the Read-Module command (and other modules within PoshCode), not exported for users.
 
 ### Configuration
 

@@ -13,10 +13,10 @@
 # FULL # BEGIN FULL: Don't include this in the installer script
 . $PSScriptRoot\Constants.ps1
 
-if(!(Get-Command Invoke-WebRequest -ErrorAction SilentlyContinue)){
+if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
   Import-Module $PSScriptRoot\InvokeWeb
 }
-# if(!(Get-Command Import-Metadata -ErrorAction SilentlyContinue)){
+# if(!(Get-Command Import-Metadat[a] -ErrorAction SilentlyContinue)){
 #   Import-Module $PSScriptRoot\ModuleInfo
 # }
 
