@@ -151,7 +151,10 @@ function Get-ModulePackage {
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
          } finally {
             $Package.Close()
-            $Package.Dispose()
+            # # ZipPackage doesn't contain a method named Dispose (causes error in PS 2)
+            # # For the Package class, Dispose and Close perform the same operation
+            # # There is no reason to call Dispose if you call Close, or vice-versa.
+            # $Package.Dispose()
          }
       }
    }

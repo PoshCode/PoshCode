@@ -232,7 +232,8 @@ if(!(Get-Command Invoke-WebReques[t])) {
       }
       if(Test-Path variable:response) {
         $response.Close(); 
-        $response.Dispose(); 
+        # HttpWebResponse doesn't have Dispose (in .net 2?)
+        # $response.Dispose(); 
       }
     }
   }

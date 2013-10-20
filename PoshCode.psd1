@@ -22,7 +22,7 @@ Copyright = 'Copyright (c) 2013 by Joel Bennett, all rights reserved.'
 Description = 'PoshCode Module for PowerShell Module Packaging and Script Sharing'
 
 # Minimum version of the Windows PowerShell engine required by this module
-PowerShellVersion = '3.0'
+PowerShellVersion = '2.0'
 
 # Name of the Windows PowerShell host required by this module
 # PowerShellHostName = ''
@@ -31,10 +31,10 @@ PowerShellVersion = '3.0'
 # PowerShellHostVersion = ''
 
 # Minimum version of the .NET Framework required by this module
-DotNetFrameworkVersion = '4.0'
+DotNetFrameworkVersion = '2.0'
 
 # Minimum version of the common language runtime (CLR) required by this module
-CLRVersion = '4.0'
+CLRVersion = '2.0'
 
 # Processor architecture (None, X86, Amd64) required by this module
 ProcessorArchitecture = 'None'

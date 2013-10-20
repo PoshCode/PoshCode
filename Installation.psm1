@@ -82,7 +82,7 @@ function Update-Module {
    
       Write-Verbose "Testing for new versions of $(@($ModuleInfo).Count) modules."
       foreach($M in $ModuleInfo){
-         Write-Progress "Updating module $($M.Name)" "Checking for new version (current: $($M.Version))" -id 0
+         Write-Progress -Activity "Updating module $($M.Name)" -Status "Checking for new version (current: $($M.Version))" -id 0
          if(!$M.ModuleInfoUri) {
             # TODO: once the search domain is up, we need to do a search here.
             Write-Warning "Unable to check for update to $($M.Name) because there is no ModuleInfoUri"
@@ -132,7 +132,7 @@ function Update-Module {
          }
    
          # If we need to update ...
-         if(!$TestOnly -and $M.Update -gt $M.Version) {
+         if(!$ListAvailable -and $M.Update -gt $M.Version) {
    
             if($PSCmdlet.ShouldProcess("Upgrading the module '$($M.Name)' from version $($M.Version) to $($M.Update)", "Update '$($M.Name)' from version $($M.Version) to $($M.Update)?", "Updating $($M.Name)" )) {
                if(!$InstallPath) {
@@ -140,7 +140,7 @@ function Update-Module {
                }
       
                $InstallParam = @{InstallPath = $InstallPath} + $PsBoundParameters
-               $null = "Module", "TestOnly" | % { $InstallParam.Remove($_) }
+               $null = "Module", "ListAvailable" | % { $InstallParam.Remove($_) }
       
                # If the InfoUri and the PackageUri are the same, then we already downloaded it
                if($M.ModuleInfoUri -eq $Mi.PackageUri) {
@@ -155,7 +155,7 @@ function Update-Module {
       
                Install-Module @InstallParam
             }
-         } elseif($TestOnly) {
+         } elseif($ListAvailable) {
             $M | Select-Object Name, Author, Version, Update, PackageUri, ModuleInfoUri, ModuleInfoPath, @{name="PSModulePath"; expression={$InstallPath}}
          }
       }
@@ -344,7 +344,7 @@ function Install-Module {
    )
    dynamicparam {
       $paramDictionary = new-object System.Management.Automation.RuntimeDefinedParameterDictionary
-      if(Get-Command Get-ConfigData -ListImported -ErrorAction SilentlyContinue) {
+      if(Get-Command Get-ConfigDat[a] -ListImported -ErrorAction SilentlyContinue) {
          foreach( $name in (Get-ConfigData).InstallPaths.Keys ){
             if("CommonPath","UserPath" -notcontains $name) {
                $param = new-object System.Management.Automation.RuntimeDefinedParameter( $Name, [Switch], (New-Object Parameter -Property @{ParameterSetName=$Name;Mandatory=$true}))
@@ -365,6 +365,40 @@ function Install-Module {
          $null = $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path"))
          $null = $PsBoundParameters.Add("InstallPath", $InstallPath)
       }
+
+
+      if(Test-Path $InstallPath) {
+         if(Test-Path $InstallPath -PathType Leaf) {
+            $InstallPath = Split-Path $InstallPath
+         }
+      } else {
+
+         $InstallPath = "$InstallPath".TrimEnd("\")
+   
+         # Warn them if they're installing in an irregular location
+         [string[]]$ModulePaths = $(
+            foreach($psmPath in $Env:PSModulePath -split "\\;") {
+               Resolve-Path $psmPath -ErrorAction SilentlyContinue -ErrorVariable psmpErr
+               if($psmpErr) { $psmPath }
+            }
+         )
+
+         if(!($ModulePaths -match ([Regex]::Escape($InstallPath) + ".*"))) {
+            if((Get-PSCallStack | Where-Object { $_.Command -eq "Install-Module" }).Count -le 1) {
+               Write-Warning "Install path '$InstallPath' does not exist, and is not in your PSModulePath!"
+
+               if($Force -Or $PSCmdlet.ShouldContinue("Do you want to create module folder: '$InstallPath'", "Creating module folder that's not in PSModulePath")) {
+                  $null = New-Item $InstallPath -ItemType Directory
+               } else {
+                  $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.DirectoryNotFoundException "$InstallPath does not exist"), "InstallPath not found", "ObjectNotFound", $InstallPath) )
+               }
+            }
+         } elseif($PSCmdlet.ShouldProcess("Creating Module InstallPath: '$InstallPath'", "Creating Module Path", "Create Module InstallPath" )) {
+            $null = New-Item $InstallPath -ItemType Directory
+         } else {
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.DirectoryNotFoundException "$InstallPath does not exist"), "InstallPath not found", "ObjectNotFound", $InstallPath) )
+         }
+      }
    }
    process {
       # There are a few possibilities here: they might be installing from a web module, in which case we need to download first
@@ -375,7 +409,8 @@ function Install-Module {
          #       requires the URL to have NO query string, and end in a file name
          #       it would be better to have Invoke-Web figure out the file name...
          if(Test-Path $InstallPath -PathType Container) {
-            $OutFile = Join-Path $InstallPath (Split-Path $Package -Leaf)
+            # You can't use Split-Path on urls in PS2
+            $OutFile = Join-Path $InstallPath ([IO.Path]::GetFileName($Package))
          } else {
             $OutFile = $InstallPath
          }
@@ -397,10 +432,10 @@ function Install-Module {
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
          }
          if($WebException){
-            $Source = $WebException[0].InnerException.Response.StatusCode
-            if(!$Source) { $Source = $WebException[0].InnerException }
+            $Source = @($WebException)[0].InnerException.Response.StatusCode
+            if(!$Source) { $Source = @($WebException)[0].InnerException }
 
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord $WebException[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source) )
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord @($WebException)[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source) )
          }
 
          # If we used the built-in Invoke-WebRequest, we don't have the file yet...
@@ -430,16 +465,6 @@ function Install-Module {
          }
       }
 
-      $InstallPath = "$InstallPath".TrimEnd("\")
-   
-      # Warn them if they're installing in an irregular location
-      [string[]]$ModulePaths = $Env:PSModulePath -split ";" | Resolve-Path -ErrorAction SilentlyContinue | Convert-Path -ErrorAction SilentlyContinue
-      if(!($ModulePaths -match ([Regex]::Escape($InstallPath) + ".*"))) {
-         if((Get-PSCallStack | Where-Object{ $_.Command -eq "Install-Module" }).Count -le 1) {
-            Write-Warning "Install path '$InstallPath' is not in your PSModulePath!"
-            $InstallPath = Select-ModulePath $InstallPath
-         }
-      }
 
       # At this point $PackagePath is a local file, but it might be a .psmx, or .zip or .nupkg instead
       Write-Verbose "PackagePath: $PackagePath"
@@ -550,6 +575,8 @@ function Expand-Package {
       }
    }
    process {
+      Write-Verbose "PackagePath $PackagePath"
+      Write-Verbose "InstallPath $InstallPath"
       try {
          $PackagePath = Convert-Path $PackagePath
          $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
@@ -593,7 +620,7 @@ function Expand-Package {
                   throw "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated."
                }
 
-               foreach($part in $Package.GetParts() | where Uri -match ("^/" + $ModuleName)) {
+               foreach($part in $Package.GetParts() | Where-Object {$_.Uri -match ("^/" + $ModuleName)}) {
                   $fileSuccess = $false
                   # Copy the data to the file system
                   try {
@@ -632,7 +659,10 @@ function Expand-Package {
       } finally {
          if($Package) {
             $Package.Close()
-            $Package.Dispose()
+            # # ZipPackage doesn't contain a method named Dispose (causes error in PS 2)
+            # # For the Package class, Dispose and Close perform the same operation
+            # # There is no reason to call Dispose if you call Close, or vice-versa.
+            # $Package.Dispose()
          }
       }
       if($success) {
@@ -675,6 +705,6 @@ function Copy-Stream {
          Write-Progress -Activity $Activity  -Status "Copied $sofar bytes..." -ParentId 0 -Id 1
       }
     }
-    Write-Progress -Activity "File Packing" -ParentId 0 -Id 1 -Complete
+    Write-Progress -Activity "File Packing" -Status "Complete" -ParentId 0 -Id 1 -Complete
   }
 }
