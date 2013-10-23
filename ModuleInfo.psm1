@@ -57,12 +57,18 @@ function Read-Module {
             if(($moduleName.Count -gt 0) -and ($PSBoundParameters['Name'].Count -eq 0)) {
                $PSBoundParameters['Name'] = " "
             }
+         } else {
+            $PSBoundParameters['Name'] = "*"
          }
 
-         $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
-         $scriptCmd = {& $wrappedCmd @PSBoundParameters | Update-ModuleInfo }
-         $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
-         $steppablePipeline.Begin($PSCmdlet)
+         Write-Verbose "Get-Module $($moduleName -join ', ')"
+
+         if($PSBoundParameters['Name'] -ne " ") {
+            $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
+            $scriptCmd = {& $wrappedCmd @PSBoundParameters | Update-ModuleInfo}
+            $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
+            $steppablePipeline.Begin($PSCmdlet)
+         }
       } catch {
          throw
       }
@@ -77,7 +83,9 @@ function Read-Module {
             $moduleName | Where-Object { $_.EndsWith($ModulePackageExtension) } | Get-ModulePackage
          }
 
-         $steppablePipeline.Process($_)
+         if($steppablePipeline -and $PSBoundParameters['Name'] -ne " ") {
+            $steppablePipeline.Process($_)
+         }
       } catch {
          throw
       }
@@ -87,7 +95,9 @@ function Read-Module {
    {
       # Pop-Location
       try {
-         $steppablePipeline.End()
+         if($steppablePipeline -and $PSBoundParameters['Name'] -ne " ") {
+            $steppablePipeline.End()
+         }
       } catch {
          throw
       }
@@ -130,7 +140,7 @@ function Get-ModulePackage {
                Write-Warning "This file is not a valid PoshCode Package, it has no manifest at $($Manifest.TargetUri)"
                return
             }
-            Write-Verbose "Reading Manifest: $($Manifest.TargetUri)"
+            Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
             $PackageManifest = Import-ManifestStream ($Part.GetStream())
 
             ## Now load the module manifest (which has everything else in it)
@@ -140,7 +150,7 @@ function Get-ModulePackage {
                return
             }
             if($Part = $Package.GetPart( $Manifest.TargetUri )) {
-               Write-Verbose "Reading Manifest: $($Manifest.TargetUri)"
+               Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
                if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
                   ## If we got the module manifest, update the PackageManifest
                   $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
@@ -168,11 +178,23 @@ function Update-ModuleInfo {
        $ModuleInfo
    )
    process {
+      Write-Verbose "> Updating ModuleInfo $($ModuleInfo.GetType().Name)"
+      # On PowerShell 2, Modules that aren't loaded have little information, and we need to Import-Metadata
+      # Modules that aren't loaded have no SessionState. If their path points at a PSD1 file, load that
+      if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleInfoExtension) {
+         $ModuleInfo = $ModuleInfo.Path
+      }
+
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
-         $ModuleManifestPath = Resolve-Path $ModuleInfo
-         $ModuleInfo = Import-Metadata $ModuleManifestPath
-         $ModuleInfo.ModuleManifestPath = $ModuleInfo.Path = $ModuleManifestPath 
-         $ModuleInfo.PSPath = "{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath
+         $ModuleManifestPath = Convert-Path $ModuleInfo
+         try {
+            $ModuleInfo = Import-Metadata $ModuleManifestPath
+            $ModuleInfo.ModuleManifestPath = $ModuleInfo.Path = $ModuleManifestPath 
+            $ModuleInfo.PSPath = "{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath
+         } catch {
+            $ModuleInfo = $null
+            $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Module Manifest", "InvalidResult", $_) )
+         }
       } else {
          $ModuleInfo = Add-SimpleNames $ModuleInfo
       }
@@ -185,11 +207,17 @@ function Update-ModuleInfo {
          # Since we're not using anything else, we won't add the aliases...
          if(Test-Path $PackageInfoPath) {
             Write-Verbose "Loading package info from $PackageInfoPath"
-            $PackageInfo = Import-Metadata $PackageInfoPath
+            try {
+               $PackageInfo = Import-Metadata $PackageInfoPath
+            } catch {
+               $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Package Manifest", "InvalidResult", $_) )
+            }
             if($PackageInfo) {
+               Write-Verbose "Update Dictionary with PackageInfo"
                $PackageInfo.ModuleManifestPath = $ModuleManifestPath
                Update-Dictionary $ModuleInfo $PackageInfo
             } else {
+               Write-Verbose "Add ModuleManifestPath (Package Manifest not found)."
                Update-Dictionary $ModuleInfo @{ModuleManifestPath = $ModuleManifestPath}
             }
          } else {
@@ -205,15 +233,17 @@ function Add-SimpleNames {
       [Parameter(ValueFromPipeline=$true)]
       $ModuleInfo)
    process {
-      foreach($rm in $ModuleInfo.RequiredModules) {
-         if($rm.Name) {
+      Write-Verbose ">> Adding Simple Names"
+
+      foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
+         if($rm.Name -and !$rm.ModuleName) {
             Add-Member -InputObject $rm -MemberType ScriptProperty -Name ModuleName -Value { $this.Name } -ErrorAction SilentlyContinue
-         } elseif($rm.ModuleName) {
+         } elseif($rm.ModuleName -and !$rm.Name) {
             Add-Member -InputObject $rm -MemberType ScriptProperty -Name Name -Value { $this.ModuleName } -ErrorAction SilentlyContinue
          }
-         if($rm.Version) {
+         if($rm.Version -and !$rm.ModuleVersion) {
             Add-Member -InputObject $rm -MemberType ScriptProperty -Name ModuleVersion -Value { $this.Version } -ErrorAction SilentlyContinue
-         } elseif($rm.ModuleVersion) {
+         } elseif($rm.ModuleVersion -and !$rm.Version) {
             Add-Member -InputObject $rm -MemberType ScriptProperty -Name Version -Value { $this.ModuleVersion } -ErrorAction SilentlyContinue
          }
       }
@@ -258,7 +288,7 @@ function Update-Dictionary {
                   if($rmNames -contains $name) {
                      foreach($required in $Authoritative.RequiredModules) {
                         if(($required -is [string]) -and ($required -eq $name)) {
-                           $Authoritative.RequiredModules[($Authoritative.RequiredModules.IndexOf($required))] = $depInfo
+                           $Authoritative.RequiredModules[([Array]::IndexOf($Authoritative.RequiredModules,$required))] = $depInfo
                         } elseif($required.Name -eq $name) {
                            Write-Verbose "Authoritative also Requires $name - adding ModuleInfoUri ($($depInfo.ModuleInfoUri))"
                            if($required -is [System.Collections.IDictionary]) {
@@ -289,7 +319,7 @@ function Update-Dictionary {
             }
          }
       }
-      $Authoritative
+      $Authoritative | Add-SimpleNames
    }
 }
 
@@ -395,19 +425,25 @@ function Import-Metadata {
       $ModuleInfo = $null
       # When we have a file, use Import-LocalizedData (via Import-PSD1)
       if(Test-Path $Path) {
-         Write-Verbose "Importing Module Manifest From Path: $Path"
+         Write-Verbose "Importing Metadata file from `$Path: $Path"
          if(!(Test-Path $Path -PathType Leaf)) {
             $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
          }
          try {
             if($FilePath = Convert-Path $Path -ErrorAction SilentlyContinue) {
                $ModuleInfo = @{}
-               Import-LocalizedData -BindingVariable ModuleInfo -BaseDirectory (Split-Path $FilePath) -FileName (Split-Path $FilePath -Leaf) -SupportedCommand "PSObject", "GUID"
-               $ModuleInfo = $ModuleInfo | Add-SimpleNames
+               Import-LocalizedData -BindingVariable ModuleInfo -BaseDirectory (Split-Path $FilePath) -FileName (Split-Path $FilePath -Leaf) -SupportedCommand "PSObject", "GUID", "Join-Path"
+               $ModuleInfo = Add-SimpleNames $ModuleInfo
             }
          } catch {
-            Write-Warning "Couldn't get ModuleManifest from the file:`n${Manifest}"
-            $PSCmdlet.ThrowTerminatingError( $_ )
+            Write-Warning "Error Importing LocalizedData from the file:`n${FilePath}"
+            $ModuleInfo = $null
+            $ImportLocalizedDataError = $_
+            try {
+               return (ConvertFrom-Metadata (Get-Content $Path -Delimiter ([char]0)))
+            } catch {
+               $PSCmdlet.ThrowTerminatingError( $ImportLocalizedDataError )
+            }
          }
          if(!$ModuleInfo.Count) {
             $Path = Get-Content $Path -Delimiter ([char]0)
@@ -469,10 +505,10 @@ function ConvertFrom-Metadata {
    param($InputObject)
    begin {
       $ValidTokens = "Keyword", "Command", "Variable", "CommandParameter", "GroupStart", "GroupEnd", "Member", "Operator", "String", "Number", "Comment", "NewLine", "StatementSeparator"
-      $ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData"
+      $ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData", "Join-Path"
       $ValidParameters = "-StringData", "-Value"
       $ValidKeywords = "if","else","elseif"
-      $ValidVariables = "PSCulture","PSUICulture","True","False","Null"
+      $ValidVariables = "PSScriptRoot","PSCulture","PSUICulture","True","False","Null"
       $ParseErrors = $Null
    }   
    process {
@@ -487,7 +523,7 @@ function ConvertFrom-Metadata {
          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
       }
       if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
+         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid $(@($InvalidTokens)[0].Type) Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
       }
 
       $InvalidTokens = $(switch($Tokens){
@@ -500,11 +536,19 @@ function ConvertFrom-Metadata {
          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
       }
 
+      # Now, because there's no way to allow additional variables in the data block, but module manifests do anyway...
+      # Manually replace the PSScriptRoot with a string before trying to invoke it as a data block
+      if($scriptroots = $Tokens | Where-Object { $_.Type -eq "Variable" -and $_.Content -eq "PSScriptRoot" }) {
+         for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
+            $InputObject = $InputObject.Remove($scriptroots[$r].Start, $scriptroots[$r].Length).Insert($scriptroots[$r].Start,"'.'")
+         }
+      }
+
       # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
       try {
-         Invoke-Expression "Data -SupportedCommand PSObject, GUID, DateTime, DateTimeOffset, ConvertFrom-StringData { ${InputObject} }"
+         $OFS = ", "
+         Invoke-Expression "Data -SupportedCommand $ValidCommands { ${InputObject} }"
       } catch {
-         Write-Warning "Couldn't get ModuleManifest from the data:`n${Manifest}"
          $PSCmdlet.ThrowTerminatingError( $_ )
       }
    }

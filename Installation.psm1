@@ -73,12 +73,19 @@ function Update-Module {
       $ProxyCredential= [System.Management.Automation.PSCredential]::Empty  
    )
    process {
-      $ModuleInfo = Read-Module $Module -ListAvailable | Add-Member NoteProperty Update -Value "Unknown" -Passthru -Force
-   
-      if(!$Force) {
-         # Unless they -Force, filter out modules without package manifests
-         $ModuleInfo = $ModuleInfo | Where-Object {$_.ModuleInfoUri}
-      }
+      $ModuleInfo = $(
+         foreach($m in Read-Module $Module -ListAvailable) {
+            if($Force -or $m.ModuleInfoUri) {
+               if($m -is [Hashtable]) {
+                  $m.Add("Update","Unknown")
+                  New-Object PSObject -Property $m
+               } else {
+                  $m  | Add-Member NoteProperty Update -Value "Unknown" -Passthru -Force
+               }
+            }
+         }
+      )
+
    
       Write-Verbose "Testing for new versions of $(@($ModuleInfo).Count) modules."
       foreach($M in $ModuleInfo){
@@ -94,7 +101,7 @@ function Update-Module {
          # TODO: This is currently very simplistic, based on the URL alone which
          #       requires the URL to have NO query string, and end in a file name
          #       it would be better to have Invoke-Web figure out the file name...
-         $WebParam.OutFile = Join-Path ([IO.path]::GetTempPath()) (Split-Path $M.ModuleInfoUri -Leaf)
+         $WebParam.OutFile = Join-Path ([IO.path]::GetTempPath()) ([IO.Path]::GetExtension($M.ModuleInfoUri))
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
             $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
@@ -103,6 +110,7 @@ function Update-Module {
          } finally {
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
          }
+
          if($WebException){
             $Source = $WebException[0].InnerException.Response.StatusCode
             if(!$Source) { $Source = $WebException[0].InnerException }
@@ -112,14 +120,14 @@ function Update-Module {
          }
    
          # If we used the built-in Invoke-WebRequest, we don't have the file yet...
-         if($ModuleInfoFile -isnot [System.IO.FileInfo]) { $ModuleInfoFile = Get-ChildItem $WebParam.OutFile }
+         if($WebResponse -isnot [System.IO.FileInfo]) { $WebResponse = Get-ChildItem $WebParam.OutFile }
       
          # Now lets find out what the latest version is:
-         $ModuleInfoFile = Resolve-Path $ModuleInfoFile -ErrorAction Stop
-         $Mi = Import-Metadata $ModuleInfoFile
+         $WebResponse = Resolve-Path $WebResponse -ErrorAction Stop
+         $Mi = Import-Metadata $WebResponse
    
          $M.Update = [Version]$Mi.ModuleVersion
-         Write-Verbose "Latest version of $($M.Name) is $($mi.ModuleVersion)"
+         Write-Verbose "Current version of $($M.ModuleName) is $($M.Update), you have $($M.ModuleVersion)"
    
          # They're going to want to install it where it already is:
          # But we want to use the PSModulePath roots, not the path to the actual folder:
@@ -132,9 +140,9 @@ function Update-Module {
          }
    
          # If we need to update ...
-         if(!$ListAvailable -and $M.Update -gt $M.Version) {
+         if(!$ListAvailable -and ($M.Update -gt $M.ModuleVersion)) {
    
-            if($PSCmdlet.ShouldProcess("Upgrading the module '$($M.Name)' from version $($M.Version) to $($M.Update)", "Update '$($M.Name)' from version $($M.Version) to $($M.Update)?", "Updating $($M.Name)" )) {
+            if($PSCmdlet.ShouldProcess("Upgrading the module '$($M.ModuleName)' from version $($M.ModuleVersion) to $($M.Update)", "Update '$($M.ModuleName)' from version $($M.ModuleVersion) to $($M.Update)?", "Updating $($M.ModuleName)" )) {
                if(!$InstallPath) {
                   $InstallPath = Split-Path (Split-Path $M.ModuleManifestPath)
                }
@@ -144,10 +152,10 @@ function Update-Module {
       
                # If the InfoUri and the PackageUri are the same, then we already downloaded it
                if($M.ModuleInfoUri -eq $Mi.PackageUri) {
-                  $InstallParam.Add("Package", $ModuleInfoFile)
+                  $InstallParam.Add("Package", $WebResponse)
                } else {
                   # Get rid of the temporarily downloaded package info
-                  Remove-Item $ModuleInfoFile
+                  Remove-Item $WebResponse
                   $InstallParam.Add("Package", $Mi.PackageUri)
                }
 
@@ -156,7 +164,11 @@ function Update-Module {
                Install-Module @InstallParam
             }
          } elseif($ListAvailable) {
-            $M | Select-Object Name, Author, Version, Update, PackageUri, ModuleInfoUri, ModuleInfoPath, @{name="PSModulePath"; expression={$InstallPath}}
+            Write-Verbose "NOT UPGRADING. $($M.ModuleName) version is $($M.Update), you have $($M.ModuleVersion)"
+
+            $M = $M | Add-Member -Type NoteProperty -Name PSModulePath -Value $InstallPath -Passthru
+            $M.PSTypeNames.Insert(0, "PoshCode.ModuleInfo.Update")
+            Write-Output $M
          }
       }
    }
@@ -468,15 +480,19 @@ function Install-Module {
 
       # At this point $PackagePath is a local file, but it might be a .psmx, or .zip or .nupkg instead
       Write-Verbose "PackagePath: $PackagePath"
+      Write-Verbose "InstallPath: $InstallPath"
       $Manifest = Read-Module $PackagePath
       # Expand the package (psmx/zip: npkg not supported yet)
       $ModuleFolder = Expand-Package $PackagePath $InstallPath -Force:$Force -Passthru:$Passthru -ErrorAction Stop
+
       if(!(Test-Path (Join-Path $ModuleFolder.FullName $ModuleInfoFile))) {
          Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but may not be a valid module (it is missing the package.psd1 manifest)"
       }
 
       if(!$Manifest) {
+         Write-Verbose "Read-Module $($ModuleFolder.Name) -ListAvailable"
          $Manifest = Read-Module $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
+         Write-Verbose "Module Manifest loaded by Read-Module:`n$($Manifest |out-default)"
       }
 
       # Now verify the RequiredModules are available, and try installing them.
@@ -575,9 +591,8 @@ function Expand-Package {
       }
    }
    process {
-      Write-Verbose "PackagePath $PackagePath"
-      Write-Verbose "InstallPath $InstallPath"
       try {
+         $success = $false
          $PackagePath = Convert-Path $PackagePath
          $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
          $ModuleVersion = if($Package.PackageProperties.Version) {$Package.PackageProperties.Version } else {""}
@@ -609,7 +624,6 @@ function Expand-Package {
 
          if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $ModuleName $ModuleVersion" )) {
             if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName $ModuleVersion", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
-               $success = $false
                if(Test-Path "$InstallPath\$ModuleName") {
                   Remove-Item "$InstallPath\$ModuleName" -Recurse -Force -ErrorAction Stop
                }
@@ -645,7 +659,7 @@ function Expand-Package {
                         $reader.Dispose()
                      }
                   }
-                  if(!$fileSuccess) { throw "Couldn't unpack to $File."}
+                  if(!$fileSuccess) { throw "Couldn't unpack to $File." }
                   if($Passthru) { Get-Item $file }
                }
                $success = $true
