@@ -49,10 +49,10 @@ RequiredAssemblies = 'WindowsBase', 'PresentationFramework'
 # ScriptsToProcess = @()
 
 # Type files (.ps1xml) to be loaded when importing this module
-# TypesToProcess = @()
+TypesToProcess = @('PoshCode.types.ps1xml')
 
 # Format files (.ps1xml) to be loaded when importing this module
-FormatsToProcess = @('PoshCode.Search.ModuleInfo.format.ps1xml')
+FormatsToProcess = @('PoshCode.format.ps1xml')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails

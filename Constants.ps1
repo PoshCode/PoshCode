@@ -18,8 +18,12 @@ $ModuleLicenseType       = "http://schemas.poshcode.org/package/module-license"
 
 # Because of a PowerShell Bug, we need to know where we can find a completely empty folder.
 $EmptyPath = $PSMPSettings = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PowerShell Package Manager"
-while(Get-ChildItem $EmptyPath) {
-   $EmptyPath = New-Item -Force -ItemType Directory -Path (Join-Path $EmptyPath "__EMPTY__") | Convert-Path
+if(Test-Path $EmptyPath) {
+    while(Get-ChildItem $EmptyPath) {
+       $EmptyPath = New-Item -Force -ItemType Directory -Path (Join-Path $EmptyPath "__EMPTY__") | Convert-Path
+    }
+} else {
+   $EmptyPath = New-Item -Force -ItemType Directory -Path $EmptyPath) | Convert-Path
 }
 
 # Our Extensions

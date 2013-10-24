@@ -1,0 +1,83 @@
+<Types>
+    <Type>
+        <Name>System.Management.Automation.PSModuleInfo</Name>
+        <Members>
+            <MemberSet>
+                <Name>MyStandardMembers</Name>
+                <Members>
+                    <PropertySet>
+                        <Name>DefaultDisplayPropertySet</Name>
+                        <ReferencedProperties>
+                            <Name>Path</Name>
+                            <Name>Description</Name>
+                            <Name>Guid</Name>
+                            <Name>Version</Name>
+                            <Name>ModuleBase</Name>
+                            <Name>ModuleType</Name>
+                            <Name>PrivateData</Name>
+                            <Name>AccessMode</Name>
+                            <Name>ExportedAliases</Name>
+                            <Name>ExportedCmdlets</Name>
+                            <Name>ExportedFunctions</Name>
+                            <Name>ExportedVariables</Name>
+                            <Name>NestedModules</Name>
+                        </ReferencedProperties>
+                    </PropertySet>
+                </Members>
+            </MemberSet>
+        </Members>
+    </Type>
+  <Type>
+      <Name>System.Byte[]</Name>
+      <Members>
+          <ScriptProperty>
+           <Name>Hex</Name>
+           <GetScriptBlock>
+            $this | % {write-host $([String]::Format("{0:X}",$_)) -nonew}
+           </GetScriptBlock>
+          </ScriptProperty>
+       </Members>
+   </Type>
+   <Type>
+      <Name>System.Management.Automation.Commands.MemberDefinition</Name>
+      <Members>
+          <ScriptProperty>
+           <Name>HelpLink</Name>
+           <GetScriptBlock>"http://msdn2.microsoft.com/library/$($this.typename)$($this.name).aspx"</GetScriptBlock>
+          </ScriptProperty>
+       </Members>
+   </Type>
+<!--    
+   <Type>
+    <Name>System.String</Name>
+    <Members>
+      <ScriptProperty>
+        <Name>AsBase64</Name>
+        <GetScriptBlock>
+          [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($this))
+        </GetScriptBlock>
+      </ScriptProperty>
+      <ScriptProperty>
+        <Name>FromBase64</Name>
+        <GetScriptBlock>
+          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($this))
+        </GetScriptBlock>
+      </ScriptProperty>
+    </Members>
+  </Type>
+-->
+  <Type>
+      <Name>System.Security.SecureString</Name>
+      <Members>
+          <ScriptMethod>
+           <Name>ToPlainText</Name>
+           <Script>
+             $BSTR = [System.Runtime.InteropServices.marshal]::SecureStringToBSTR($this);
+             $plaintext = [System.Runtime.InteropServices.marshal]::PtrToStringAuto($BSTR);
+             [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR);
+             return $plaintext
+          </Script>
+          </ScriptMethod>
+       </Members>
+   </Type>
+</Types>
