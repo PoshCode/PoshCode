@@ -417,8 +417,12 @@ function Import-Metadata {
    #>
    [CmdletBinding()]
    param(
-      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
-      [string]$Path
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+      [Alias("PSPath")]
+      [string]$Path,
+
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
    )
 
    process {
@@ -452,9 +456,13 @@ function Import-Metadata {
 
       # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
       if(!$ModuleInfo) {
-         ConvertFrom-Metadata $Path
+         $ModuleInfo = ConvertFrom-Metadata $Path
       }
-      Write-Output $ModuleInfo
+      if($AsObject) {
+         $ModuleInfo | % { New-Object PSObject -Property $_ }
+      } else {
+         Write-Output $ModuleInfo
+      }
    }
 }
 

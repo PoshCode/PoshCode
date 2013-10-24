@@ -12,7 +12,9 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
 
          # Search for a specific module.
          [alias('Repo')]
-         [string]$ModuleName
+         [string]$ModuleName,
+
+         $Root = "https://api.github.com/search/code"
       )
 
 
@@ -38,22 +40,23 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
       Add-Type -AssemblyName System.Web.Extensions
 
       # Note: while in preview, the GitHub api requires an "Accept" header as acknowledgement of it's beta status.
-      $pagedata = Invoke-WebRequest https://api.github.com/search/code -Body @{q="$search path:package.psd1"} -Headers @{Accept='application/vnd.github.preview'}
+      $pagedata = Invoke-WebRequest $Root -Body @{q="$search path:package.psd1"} -Headers @{Accept='application/vnd.github.preview'}
       $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
       $json = $ser.DeserializeObject($pagedata)
 
       $json.items | %{
          $obj = New-Object psobject -Property @{
-            'Name'=$_.repository.name
+            'Author'=$_.repository.owner.login
+            'ModuleName'=$_.repository.name
             'Description'=$_.repository.description
-            'SourceRepoUri'=$_.repository.html_url
             # The PackageManifestUri should point at the raw version of the html_url so tools can download it
             'PackageManifestUri'=$_.html_url -replace "(https?://)",'$1raw.' -replace "/blob",""
-            'Owner'=$_.repository.owner.login
-            'Repository'='GitHub'
+
+            'SourceRepoUri'=$_.repository.html_url
+            'Repository' = @{ GitHub = $Root }
          }
          $obj.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
-         $obj.pstypenames.Insert(0,'PoshCode.Search.GitModuleInfo')
+         $obj.pstypenames.Insert(0,'PoshCode.Search.GithubModuleInfo')
          if($ModuleName)
          {
             $obj | Where-Object { $_.Name -eq $ModuleName }
