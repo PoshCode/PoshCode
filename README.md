@@ -47,12 +47,12 @@ The PoshCode _Module Package_ format (.psmx) is based on Microsoft's [System.IO.
 
 The package manifest includes several URIs (which are not allowed in the module manifest): 
 
-* _ModuleInfoUri_ where the package.psd1 will be hosted to check for updates (usually renamed to the module name)
-* _PackageUri_ for the actual module package (mandatory in the version you upload to the ModuleInfoUri)
+* _PackageManifestUri_ where the package.psd1 will be hosted to check for updates (usually renamed to the module name)
+* _DownloadUri_ for the actual module package (mandatory in the version you upload to the PackageManifestUri)
 * _LicenseUri_ to view the software license/eula
 * _ProjectUri_ for the module's homepage
 
-At least at first, there will not be a central hosting repository (the equivalent of NuGet.org).  We are instead focusing on allowing distribution of modules through any web site that can host psmx and psd1 files (e.g. GitHub/BitBucket/etc). One core requirement is to support distributing a module on one repository/website that has dependencies on modules which are hosted on a different repository. This means that PoshCode modules must also have the _ModuleInfoUri_s for their dependencies in the package manifest (You're allowed an array of RequiredModules where each has a Name and ModuleInfoUri). This allows tools (like the PoshCode module) to not only check for updates, but also _download dependencies automatically_.
+At least at first, there will not be a central hosting repository (the equivalent of NuGet.org).  We are instead focusing on allowing distribution of modules through any web site that can host psmx and psd1 files (e.g. GitHub/BitBucket/etc). One core requirement is to support distributing a module on one repository/website that has dependencies on modules which are hosted on a different repository. This means that PoshCode modules must also have the _PackageManifestUri_s for their dependencies in the package manifest (You're allowed an array of RequiredModules where each has a Name and PackageManifestUri). This allows tools (like the PoshCode module) to not only check for updates, but also _download dependencies automatically_.
 
 > It is our intention to provide at least a _module registry_ on PoshCode.org (a listing of modules and where they are hosted). The idea is that module authors/developers can post metadata about their module which will allow people to find it, without needing to upload the module to yet another repository. Specifically, we would collect the author's name, the module name (and GUID), and the URI's for the package feed, license, help info, and website URIs. This will allow users to search the registry to _find_ modules, but will also allow developers to continue hosting those modules wherever they like, without having to update the PoshCode site with each release.
 

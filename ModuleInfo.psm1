@@ -287,8 +287,8 @@ function Update-Dictionary {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
                Write-Verbose "Module Requires: $($rmNames -join ',')"
-               # The only reason to bother with RequiredModules is if they have a ModuleInfoUri
-               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.ModuleInfoUri })) {
+               # The only reason to bother with RequiredModules is if they have a PackageManifestUri
+               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageManifestUri })) {
                   $name = $depInfo.Name
                   Write-Verbose "Additional Requires: $name"
                   # If this Required Module is already listed, then just add the uri
@@ -298,15 +298,15 @@ function Update-Dictionary {
                         if(($required -is [string]) -and ($required -eq $name)) {
                            $Authoritative.RequiredModules[([Array]::IndexOf($Authoritative.RequiredModules,$required))] = $depInfo
                         } elseif($required.Name -eq $name) {
-                           Write-Verbose "Authoritative also Requires $name - adding ModuleInfoUri ($($depInfo.ModuleInfoUri))"
+                           Write-Verbose "Authoritative also Requires $name - adding PackageManifestUri ($($depInfo.PackageManifestUri))"
                            if($required -is [System.Collections.IDictionary]) {
-                              Write-Verbose "Required is a Hashtable, adding ModuleInfoUri: $($depInfo.ModuleInfoUri)"
-                              if(!$required.Contains("ModuleInfoUri")) {
-                                 $required.Add("ModuleInfoUri", $depInfo.ModuleInfoUri)
+                              Write-Verbose "Required is a Hashtable, adding PackageManifestUri: $($depInfo.PackageManifestUri)"
+                              if(!$required.Contains("PackageManifestUri")) {
+                                 $required.Add("PackageManifestUri", $depInfo.PackageManifestUri)
                               }
                            } else {
-                              Add-Member -InputObject $required -Type NoteProperty -Name "ModuleInfoUri" -Value $depInfo.ModuleInfoUri -ErrorAction SilentlyContinue
-                              Write-Verbose "Required is an object, added ModuleInfoUri: $($required | FL * | Out-String | % TrimEnd )"
+                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageManifestUri" -Value $depInfo.PackageManifestUri -ErrorAction SilentlyContinue
+                              Write-Verbose "Required is an object, added PackageManifestUri: $($required | FL * | Out-String | % TrimEnd )"
                            }
                         }
                      }

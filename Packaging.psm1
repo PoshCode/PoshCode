@@ -234,14 +234,14 @@ function Compress-Module {
                if($Module.HelpInfoUri) {
                   $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
                }
-               if($Module.ModuleInfoUri) {
-                  $null = $Package.CreateRelationship( $Module.ModuleInfoUri, "External", $ModuleReleaseType )
+               if($Module.PackageManifestUri) {
+                  $null = $Package.CreateRelationship( $Module.PackageManifestUri, "External", $ModuleReleaseType )
                }
                if($Module.LicenseUri) {
                   $null = $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
                }
-               if($Module.PackageUri) {
-                  $null = $Package.CreateRelationship( $Module.PackageUri, "External", $ModuleReleaseType )
+               if($Module.DownloadUri) {
+                  $null = $Package.CreateRelationship( $Module.DownloadUri, "External", $ModuleReleaseType )
                }
 
             } catch [Exception] {
@@ -260,7 +260,7 @@ function Compress-Module {
             Get-Item $PackagePath
 
             # TODO: once the URLs are mandatory, print the full URL here
-            Write-Host "You should now copy the $ModuleInfoExtension and $ModulePackageExtension files to the locations specified by the ModuleInfoUri and PackageUri"  
+            Write-Host "You should now copy the $ModuleInfoExtension and $ModulePackageExtension files to the locations specified by the PackageManifestUri and DownloadUri"  
          }
       }
    }

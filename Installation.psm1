@@ -25,7 +25,7 @@ function Update-Module {
       .Synopsis
          Checks if you have the latest version of each module
       .Description
-         Test the ModuleInfoUri indicate if there's an upgrade available
+         Test the PackageManifestUri indicate if there's an upgrade available
    #>
    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
    param(
@@ -39,7 +39,7 @@ function Update-Module {
       [Alias("TestOnly")]
       [Switch]$ListAvailable,
    
-      # Force an attempt to update even modules which don't have a ModuleInfoUri
+      # Force an attempt to update even modules which don't have a PackageManifestUri
       [Switch]$Force,
    
       #  Specifies the client certificate that is used for a secure web request. Enter a variable that contains a certificate or a command or expression that gets the certificate.
@@ -75,7 +75,7 @@ function Update-Module {
    process {
       $ModuleInfo = $(
          foreach($m in Read-Module $Module -ListAvailable) {
-            if($Force -or $m.ModuleInfoUri) {
+            if($Force -or $m.PackageManifestUri) {
                if($m -is [Hashtable]) {
                   $m.Add("Update","Unknown")
                   New-Object PSObject -Property $m
@@ -90,18 +90,18 @@ function Update-Module {
       Write-Verbose "Testing for new versions of $(@($ModuleInfo).Count) modules."
       foreach($M in $ModuleInfo){
          Write-Progress -Activity "Updating module $($M.Name)" -Status "Checking for new version (current: $($M.Version))" -id 0
-         if(!$M.ModuleInfoUri) {
+         if(!$M.PackageManifestUri) {
             # TODO: once the search domain is up, we need to do a search here.
-            Write-Warning "Unable to check for update to $($M.Name) because there is no ModuleInfoUri"
+            Write-Warning "Unable to check for update to $($M.Name) because there is no PackageManifestUri"
             continue
          }
    
-         ## Download the ModuleInfoUri and see what version we got...
-         $WebParam = @{Uri = $M.ModuleInfoUri}
+         ## Download the PackageManifestUri and see what version we got...
+         $WebParam = @{Uri = $M.PackageManifestUri}
          # TODO: This is currently very simplistic, based on the URL alone which
          #       requires the URL to have NO query string, and end in a file name
          #       it would be better to have Invoke-Web figure out the file name...
-         $WebParam.OutFile = Join-Path ([IO.path]::GetTempPath()) ([IO.Path]::GetExtension($M.ModuleInfoUri))
+         $WebParam.OutFile = Join-Path ([IO.path]::GetTempPath()) ([IO.Path]::GetExtension($M.PackageManifestUri))
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
             $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
@@ -115,7 +115,7 @@ function Update-Module {
             $Source = $WebException[0].InnerException.Response.StatusCode
             if(!$Source) { $Source = $WebException[0].InnerException }
 
-            Write-Warning "Can't fetch ModuleInfo from $($M.ModuleInfoUri) for $($M.Name): $(@($WebException)[0].Message)"
+            Write-Warning "Can't fetch ModuleInfo from $($M.PackageManifestUri) for $($M.Name): $(@($WebException)[0].Message)"
             continue # Check the rest of the modules...
          }
    
@@ -150,13 +150,13 @@ function Update-Module {
                $InstallParam = @{InstallPath = $InstallPath} + $PsBoundParameters
                $null = "Module", "ListAvailable" | % { $InstallParam.Remove($_) }
       
-               # If the InfoUri and the PackageUri are the same, then we already downloaded it
-               if($M.ModuleInfoUri -eq $Mi.PackageUri) {
+               # If the InfoUri and the DownloadUri are the same, then we already downloaded it
+               if($M.PackageManifestUri -eq $Mi.DownloadUri) {
                   $InstallParam.Add("Package", $WebResponse)
                } else {
                   # Get rid of the temporarily downloaded package info
                   Remove-Item $WebResponse
-                  $InstallParam.Add("Package", $Mi.PackageUri)
+                  $InstallParam.Add("Package", $Mi.DownloadUri)
                }
 
                Write-Verbose "Install Module Upgrade:`n$( $InstallParam | Out-String )"
@@ -299,7 +299,7 @@ function Install-Module {
    param(
       # The package file to be installed
       [Parameter(ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
-      [Alias("PSPath","PackagePath","ModuleInfoUri")]
+      [Alias("PSPath","PackagePath","PackageManifestUri")]
       $Package,
    
       # A custom path to install the module to
@@ -462,13 +462,13 @@ function Install-Module {
       ## Figure out the real package Uri and recurse so we can download it
       # TODO: Check the file contents instead (it's just testing extensions right now)
       if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
-         Write-Verbose "Downloaded file '$PackagePath' is just a manifest, get PackageUri."
+         Write-Verbose "Downloaded file '$PackagePath' is just a manifest, get DownloadUri."
          $MI = Import-Metadata $PackagePath -ErrorAction "SilentlyContinue"
          Remove-Item $PackagePath
 
-         if($Mi.PackageUri) {
-            Write-Verbose "Found PackageUri '$($Mi.PackageUri)' in Module Info file '$PackagePath' -- Installing by Uri"
-            $PsBoundParameters["Package"] = $Mi.PackageUri
+         if($Mi.DownloadUri) {
+            Write-Verbose "Found DownloadUri '$($Mi.DownloadUri)' in Module Info file '$PackagePath' -- Installing by Uri"
+            $PsBoundParameters["Package"] = $Mi.DownloadUri
             Install-Module @PsBoundParameters
             return
          } else {
@@ -530,14 +530,14 @@ function Install-Module {
                continue
             }
 
-            # If they have a ModuleInfoUri, we can try that:
-            if($RequiredModule.ModuleInfoUri) {
-               Write-Warning "Installing required module $($RequiredModule.MOduleName) from $($RequiredModule.ModuleInfoUri)"
-               Install-Module $RequiredModule.ModuleInfoUri $InstallPath
+            # If they have a PackageManifestUri, we can try that:
+            if($RequiredModule.PackageManifestUri) {
+               Write-Warning "Installing required module $($RequiredModule.MOduleName) from $($RequiredModule.PackageManifestUri)"
+               Install-Module $RequiredModule.PackageManifestUri $InstallPath
                continue
             } 
    
-            Write-Warning "The module package does not have a ModuleInfoUri for the required module $($RequiredModule.MOduleName), and there's not a local copy."
+            Write-Warning "The module package does not have a PackageManifestUri for the required module $($RequiredModule.MOduleName), and there's not a local copy."
             $FailedModules += $RequiredModule
             continue
          }
