@@ -23,7 +23,7 @@ if(Test-Path $EmptyPath) {
        $EmptyPath = New-Item -Force -ItemType Directory -Path (Join-Path $EmptyPath "__EMPTY__") | Convert-Path
     }
 } else {
-   $EmptyPath = New-Item -Force -ItemType Directory -Path $EmptyPath) | Convert-Path
+   $EmptyPath = New-Item -Force -ItemType Directory -Path $EmptyPath | Convert-Path
 }
 
 # Our Extensions
