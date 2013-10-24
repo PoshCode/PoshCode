@@ -8,6 +8,7 @@
       UserPath = "{MyDocuments}\WindowsPowerShell\Modules"
    }
    Repositories = @{
-      FileSystem = "\\PoshCode.org\Modules"
+      FileSystem = "\\PoshCode.org\Modules", "{UserProfile}\Projects\modules\PoshCode\Modules"
+      GitHub = "https://api.github.com/search/code"
    }
 }

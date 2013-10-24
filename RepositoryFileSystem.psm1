@@ -6,22 +6,31 @@ function FindModule {
       [string]$SearchTerm,
 
       # Search for modules published by a particular author.
-      [string]$Author = '*',
+      [string]$Author,
 
       # Search for a specific module.
-      [string]$ModuleName = '*',
+      [string]$ModuleName,
 
       $Root = "\\PoshCode.org\Modules"
    )
    process {
-      $Source = (Join-Path $Root (Join-Path $Author "${ModuleName}*.psd1")),
-                (Join-Path $Root (Join-Path $Author "*${ModuleName}*.psd1"))
+      $Source = (Join-Path $Root "${ModuleName}*.psd1"),
+                (Join-Path $Root "*${ModuleName}*.psd1"),
+                (Join-Path $Root "*${SearchTerm}*.psd1")
 
-      foreach($result in Get-ChildItem $Source | 
-                           Import-Metadata $result -AsObject |
-                           Where-Object { !$SearchTerm -or $true } ){
+      $OFS = ", "
+      Write-Verbose "Search: $Source"
+      foreach($result in Get-Item $Source | Sort-Object -Unique |
+                           Import-Metadata |
+                           Where-Object {
+                              (if($SearchTerm) {
+                                 ($_.Values -Split " |\\|/" -like $SearchTerm) -or
+                                 ($_.Values -like $SearchTerm)
+                              }) -or (if($Author) { $_.Author.Contains($Author) })
+                           } | %{ New-Object PSObject -Property $_ }){
+         $result.pstypenames.Insert(0,'PoshCode.ModuleInfo')
          $result.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
-         $result.pstypenames.Insert(0,'PoshCode.Search.FileSystem')      
+         $result.pstypenames.Insert(0,'PoshCode.Search.FileSystem.ModuleInfo')
          Add-Member -Input $result -Passthru -MemberType NoteProperty -Name Repository -Value @{ FileSystem = $Root }
     
       }

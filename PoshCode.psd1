@@ -12,14 +12,14 @@ GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'
 # Author of this module
 Author = 'Joel "Jaykul" Bennett <Jaykul@HuddledMasses.org>'
 
+# Description of the functionality provided by this module
+Description = 'PoshCode Module for PowerShell Module Packaging and Script Sharing'
+
 # Company or vendor of this module
 CompanyName = 'http://HuddledMasses.org'
 
 # Copyright statement for this module
 Copyright = 'Copyright (c) 2013 by Joel Bennett, all rights reserved.'
-
-# Description of the functionality provided by this module
-Description = 'PoshCode Module for PowerShell Module Packaging and Script Sharing'
 
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '2.0'
@@ -58,11 +58,11 @@ FormatsToProcess = @('PoshCode.format.ps1xml')
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
 NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 
                   # Repository Modules
-                  'Repository.psm1', 'RepositoryGitHub.psm1')
+                  'RepositoryGitHub.psm1', 'RepositoryFileSystem.psm1', 'Repository.psm1')
 
 # Functions to export from this module
 FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Import-Metadata','Export-Metadata',
-                    'Get-ConfigData', 'Set-ConfigData',  # 'Test-ExecutionPolicy', 'Get-SpecialFolder',
+                    'Get-ConfigData', 'Set-ConfigData', 'Get-SpecialFolder', # 'Test-ExecutionPolicy', 
                     'Get-PoshCode', 'Send-PoshCode','Find-Module'
 
 

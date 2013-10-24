@@ -219,15 +219,18 @@ function Get-ConfigData {
 
     foreach($Setting in "InstallPaths","Repositories") {
       foreach($Key in $($Results.($Setting).Keys)) {
-        $StringData = $Results.($Setting).$Key
-        $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
-        for($i = $Paths.Count - 1; $i -ge 0; $i--) {
-          if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
-            $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
-            break
+        $Results.($Setting).$Key = $(
+          foreach($StringData in @($Results.($Setting).$Key)) {
+            $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+            for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+              if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+                $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+                break
+              }
+            }
+            $StringData
           }
-        }
-        $Results.($Setting).$Key = $StringData
+        )
       }
     }
     return $Results

@@ -45,7 +45,7 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
       $json = $ser.DeserializeObject($pagedata)
 
       $json.items | %{
-         $obj = New-Object psobject -Property @{
+         $result = New-Object psobject -Property @{
             'Author'=$_.repository.owner.login
             'ModuleName'=$_.repository.name
             'Description'=$_.repository.description
@@ -55,8 +55,9 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
             'SourceRepoUri'=$_.repository.html_url
             'Repository' = @{ GitHub = $Root }
          }
-         $obj.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
-         $obj.pstypenames.Insert(0,'PoshCode.Search.GithubModuleInfo')
+         $result.pstypenames.Insert(0,'PoshCode.ModuleInfo')
+         $result.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')         
+         $result.pstypenames.Insert(0,'PoshCode.Search.Github.ModuleInfo')
          if($ModuleName)
          {
             $obj | Where-Object { $_.Name -eq $ModuleName }
