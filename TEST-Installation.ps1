@@ -36,7 +36,7 @@ test "Expand Package" {
 
 test "Expand Zip" {
    arrange {
-      $ModulePackage = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP.zip"
+      $ModulePackage = Join-Path (Convert-Path "~\Documents\WindowsPowerShell\Modules") "WASP.zip"
       $ModulePath = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP\"
       if(!(Test-Path $ModulePackage)) {
          $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.zip" -OutFile $ModulePackage

@@ -51,7 +51,7 @@ function Read-Module {
          if ($PSBoundParameters.TryGetValue('Name', [ref]$moduleName))
          {
             $PSBoundParameters['Name'] = @($moduleName | Where-Object { $_ -and !$_.EndsWith($ModulePackageExtension) })
-            $moduleName | Where-Object { $_ -and $_.EndsWith($ModulePackageExtension) } | Get-ModulePackage
+            $moduleName | Where-Object { $_ -and $_.EndsWith($ModulePackageExtension) } | Get-ModulePackage 
 
             # If they passed (just) the name to a psmx, we need to set a fake name that couldn't possibly be a real module name
             if(($moduleName.Count -gt 0) -and ($PSBoundParameters['Name'].Count -eq 0)) {
@@ -141,7 +141,7 @@ function Get-ModulePackage {
                return
             }
             Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-            $PackageManifest = Import-ManifestStream ($Part.GetStream())
+            $PackageManifest = Import-ManifestStream ($Part.GetStream()) -AsObject
 
             ## Now load the module manifest (which has everything else in it)
             $Manifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
@@ -151,7 +151,7 @@ function Get-ModulePackage {
             }
             if($Part = $Package.GetPart( $Manifest.TargetUri )) {
                Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
-               if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
+               if($ModuleManifest = Import-ManifestStream ($Part.GetStream()) -AsObject) {
                   ## If we got the module manifest, update the PackageManifest
                   $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
                }
@@ -188,7 +188,7 @@ function Update-ModuleInfo {
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
          $ModuleManifestPath = Convert-Path $ModuleInfo
          try {
-            $ModuleInfo = Import-Metadata $ModuleManifestPath
+            $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
             $ModuleInfo.ModuleManifestPath = $ModuleInfo.Path = $ModuleManifestPath 
             $ModuleInfo.PSPath = "{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath
          } catch {
@@ -235,16 +235,23 @@ function Add-SimpleNames {
    process {
       Write-Verbose ">> Adding Simple Names"
 
-      foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
-         if($rm.Name -and !$rm.ModuleName) {
-            Add-Member -InputObject $rm -MemberType ScriptProperty -Name ModuleName -Value { $this.Name } -ErrorAction SilentlyContinue
-         } elseif($rm.ModuleName -and !$rm.Name) {
-            Add-Member -InputObject $rm -MemberType ScriptProperty -Name Name -Value { $this.ModuleName } -ErrorAction SilentlyContinue
+      if($ModuleInfo -is [Hashtable]) {
+         foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
+            if($rm.ModuleName -and !$rm.Name) {
+               $rm.Name = $rm.ModuleName
+            }
+            if($rm.ModuleVersion -and !$rm.Version) {
+               $rm.Version = $rm.ModuleVersion
+            }
          }
-         if($rm.Version -and !$rm.ModuleVersion) {
-            Add-Member -InputObject $rm -MemberType ScriptProperty -Name ModuleVersion -Value { $this.Version } -ErrorAction SilentlyContinue
-         } elseif($rm.ModuleVersion -and !$rm.Version) {
-            Add-Member -InputObject $rm -MemberType ScriptProperty -Name Version -Value { $this.ModuleVersion } -ErrorAction SilentlyContinue
+      } else {
+         foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
+            if($rm.ModuleName -and !$rm.Name) {
+               Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
+            }
+            if($rm.ModuleVersion -and !$rm.Version) {
+               Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
+            }
          }
       }
       $ModuleInfo
@@ -275,6 +282,7 @@ function Update-Dictionary {
          # So far we only have special handling for RequiredModules:
          Write-Verbose "Updating $($prop.Name)"
          switch($prop.Name) {
+
             "RequiredModules" {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
@@ -330,7 +338,10 @@ function Import-ManifestStream {
    #  Import a manifest from an IO Stream
    param(
       [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
-      [System.IO.Stream]$stream
+      [System.IO.Stream]$stream,
+
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
    )   
    try {
       $reader = New-Object System.IO.StreamReader $stream
@@ -348,7 +359,7 @@ function Import-ManifestStream {
          $stream.Dispose()
       }
    }
-   Import-Metadata $ManifestContent
+   Import-Metadata $ManifestContent -AsObject:$AsObject
 }
 
 
@@ -444,7 +455,7 @@ function Import-Metadata {
             $ModuleInfo = $null
             $ImportLocalizedDataError = $_
             try {
-               return (ConvertFrom-Metadata (Get-Content $Path -Delimiter ([char]0)))
+               return (ConvertFrom-Metadata (Get-Content $Path -Delimiter ([char]0))) | Add-SimpleNames
             } catch {
                $PSCmdlet.ThrowTerminatingError( $ImportLocalizedDataError )
             }
@@ -456,10 +467,22 @@ function Import-Metadata {
 
       # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
       if(!$ModuleInfo) {
-         $ModuleInfo = ConvertFrom-Metadata $Path
+         $ModuleInfo = ConvertFrom-Metadata $Path | Add-SimpleNames
       }
       if($AsObject) {
-         $ModuleInfo | % { New-Object PSObject -Property $_ }
+         $ModuleInfo | % { 
+            $_.RequiredModules = $_.RequiredModules | % { 
+               New-Object PSObject -Property $_ } | % {
+                  $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                  $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                  $_
+               }
+
+            New-Object PSObject -Property $_ } | % {
+            $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+            $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+            $_
+         }
       } else {
          Write-Output $ModuleInfo
       }

@@ -127,7 +127,7 @@ function Update-Module {
          $Mi = Import-Metadata $WebResponse
    
          $M.Update = [Version]$Mi.ModuleVersion
-         Write-Verbose "Current version of $($M.ModuleName) is $($M.Update), you have $($M.ModuleVersion)"
+         Write-Verbose "Current version of $($M.Name) is $($M.Update), you have $($M.Version)"
    
          # They're going to want to install it where it already is:
          # But we want to use the PSModulePath roots, not the path to the actual folder:
@@ -142,7 +142,7 @@ function Update-Module {
          # If we need to update ...
          if(!$ListAvailable -and ($M.Update -gt $M.ModuleVersion)) {
    
-            if($PSCmdlet.ShouldProcess("Upgrading the module '$($M.ModuleName)' from version $($M.ModuleVersion) to $($M.Update)", "Update '$($M.ModuleName)' from version $($M.ModuleVersion) to $($M.Update)?", "Updating $($M.ModuleName)" )) {
+            if($PSCmdlet.ShouldProcess("Upgrading the module '$($M.Name)' from version $($M.Version) to $($M.Update)", "Update '$($M.Name)' from version $($M.Version) to $($M.Update)?", "Updating $($M.Name)" )) {
                if(!$InstallPath) {
                   $InstallPath = Split-Path (Split-Path $M.ModuleManifestPath)
                }
