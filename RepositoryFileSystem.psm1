@@ -19,14 +19,20 @@ function FindModule {
                 (Join-Path $Root "*${SearchTerm}*.psd1")
 
       $OFS = ", "
-      Write-Verbose "Search: $Source"
+      Write-Verbose "Filter: $Source"
       foreach($result in Get-Item $Source | Sort-Object -Unique |
                            Import-Metadata |
                            Where-Object {
-                              (if($SearchTerm) {
+                              Write-Verbose ($_|Out-String)
+                              Write-Verbose (($_.Values -Split " |\\|/") -join ", ")
+                              $("$SearchTerm$Author"-eq"") -or
+
+                              $(if($SearchTerm) {
                                  ($_.Values -Split " |\\|/" -like $SearchTerm) -or
                                  ($_.Values -like $SearchTerm)
-                              }) -or (if($Author) { $_.Author.Contains($Author) })
+                              }) -or 
+
+                              $(if($Author) { $_.Author.Contains($Author) })
                            } | %{ New-Object PSObject -Property $_ }){
          $result.pstypenames.Insert(0,'PoshCode.ModuleInfo')
          $result.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
