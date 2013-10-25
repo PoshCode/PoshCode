@@ -20,22 +20,26 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
 
       if($Author -and $ModuleName) # SAM,AM
       {
-         $search = "$SearchTerm @$Author/$ModuleName"
+         $search = "$SearchTerm @$Author/$ModuleName "
       }
       elseif($Author) # A,AS
       {
-         $search = "$SearchTerm @$Author"
+         $search = "$SearchTerm @$Author "
       }
       elseif($ModuleName) #M,MS
       {
-         $search = "$SearchTerm $ModuleName"
+         $search = "$SearchTerm $ModuleName "
       }
-      else # S
+      elseif($SearchTerm) # S
       {
-         $search = $SearchTerm
+         $search = "$SearchTerm "
+      }
+      else 
+      {
+         $search = ""
       }
     
-      Write-Verbose "q= $search path:package.psd1"
+      Write-Verbose "q=${search}path:package.psd1"
       
       Add-Type -AssemblyName System.Web.Extensions
 
@@ -60,14 +64,13 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
          $result.pstypenames.Insert(0,'PoshCode.Search.Github.ModuleInfo')
          if($ModuleName)
          {
-            $obj | Where-Object { $_.Name -eq $ModuleName }
+            $result | Where-Object { $_.Name -eq $ModuleName }
          }
          else
          {
-            $obj
+            $result
          }
       }
-
    }
 
    Export-ModuleMember -Function FindModule

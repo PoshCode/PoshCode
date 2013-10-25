@@ -14,31 +14,60 @@ function FindModule {
       $Root = "\\PoshCode.org\Modules"
    )
    process {
-      $Source = (Join-Path $Root "${ModuleName}*.psd1"),
-                (Join-Path $Root "*${ModuleName}*.psd1"),
-                (Join-Path $Root "*${SearchTerm}*.psd1")
+      $(
+         if((Test-Path $Root -Type Leaf) -or (Test-Path (Join-Path $PSScriptRoot $Root) -Type Leaf)) {
+            if(!(Test-Path $Root -Type Leaf)) { $Root = Join-Path $PSScriptRoot $Root }
 
-      $OFS = ", "
-      Write-Verbose "Filter: $Source"
-      foreach($result in Get-Item $Source | Sort-Object -Unique |
-                           Import-Metadata |
-                           Where-Object {
-                              Write-Verbose ($_|Out-String)
-                              Write-Verbose (($_.Values -Split " |\\|/") -join ", ")
-                              $("$SearchTerm$Author"-eq"") -or
+            Write-Verbose "File Repository $Root"
+            $Repository = Import-Metadata $Root
 
-                              $(if($SearchTerm) {
-                                 ($_.Values -Split " |\\|/" -like $SearchTerm) -or
-                                 ($_.Values -like $SearchTerm)
-                              }) -or 
+            if($ModuleName) {
+               $Repository.$ModuleName
+            } else {
+               $Repository.Values | 
+                  Where-Object {
+                     # Write-Verbose "File Repository Item Values: $($_.Values -split " |\\|/" -join ', ')"
+                     $("$SearchTerm$Author"-eq"") -or
 
-                              $(if($Author) { $_.Author.Contains($Author) })
-                           } | %{ New-Object PSObject -Property $_ }){
-         $result.pstypenames.Insert(0,'PoshCode.ModuleInfo')
-         $result.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
-         $result.pstypenames.Insert(0,'PoshCode.Search.FileSystem.ModuleInfo')
-         Add-Member -Input $result -Passthru -MemberType NoteProperty -Name Repository -Value @{ FileSystem = $Root }
-    
-      }
+                     $(if($SearchTerm) {
+                        ($_.Values -Split " |\\|/" -like $SearchTerm) -or
+                        ($_.Values -like $SearchTerm)
+                     }) -or 
+
+                     $(if($Author) { $_.Author.Contains($Author) })
+                  }        
+            }
+         } else {
+            Write-Verbose "Folder Repository $Root"
+                
+            if(!$ModuleName) {
+               $Source = Join-Path $Root "*.psd1"
+            } else {
+               $Source = (Join-Path $Root "${ModuleName}*.psd1"),
+                         (Join-Path $Root "*${ModuleName}*.psd1")
+            }
+
+            $OFS = ", "
+            Get-Item $Source | 
+               Sort-Object -Unique |
+               Import-Metadata |
+               Where-Object {
+                  # Write-Verbose "Folder Repository Item Values: $($_.Values -split " |\\|/" -join ', ')"
+                  $("$SearchTerm$Author"-eq"") -or
+
+                  $(if($SearchTerm) {
+                     ($_.Values -Split " |\\|/" -like $SearchTerm) -or
+                     ($_.Values -like $SearchTerm)
+                  }) -or 
+
+                  $(if($Author) { $_.Author.Contains($Author) })
+               }
+         }
+      ) | %{ New-Object PSObject -Property $_ } | % {
+            $_.pstypenames.Insert(0,'PoshCode.ModuleInfo')
+            $_.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
+            $_.pstypenames.Insert(0,'PoshCode.Search.FileSystem.ModuleInfo')
+            Add-Member -Input $_ -Passthru -MemberType NoteProperty -Name Repository -Value @{ FileSystem = $Root }
+         }
    }
 }

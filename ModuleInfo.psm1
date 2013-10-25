@@ -451,7 +451,7 @@ function Import-Metadata {
                $ModuleInfo = Add-SimpleNames $ModuleInfo
             }
          } catch {
-            Write-Warning "Error Importing LocalizedData from the file:`n${FilePath}"
+            # Write-Warning "Error Importing LocalizedData from the file:`n${FilePath}`n$_"
             $ModuleInfo = $null
             $ImportLocalizedDataError = $_
             try {

@@ -34,16 +34,22 @@
     foreach($Repository in $ConfiguredRepositories.Keys) {
 
       Write-Verbose "Get-Command FindModule -Module 'Repository${Repository}'"
-        $FindCommands | Where-Object { $_.ModuleName -like "*${Repository}" } | % {
+         $FindCommands | Where-Object { $_.ModuleName -like "*${Repository}" } | % {
 
-        Write-Verbose "Repository${Repository}\$_"
-        foreach($root in @($ConfiguredRepositories.$Repository)) {
+         Write-Verbose "Repository${Repository}\$_"
+         foreach($root in @($ConfiguredRepositories.$Repository)) {
 
-          Write-Progress "Searching Module Repositories" "Searching ${Repository} ${Root}"
-          &$_ @PSBoundParameters -Root $root | Add-Member NoteProperty ModuleType SearchResult -Passthru
-        }
+            Write-Progress "Searching Module Repositories" "Searching ${Repository} ${Root}"
+            try {
+               &$_ @PSBoundParameters -Root $root | Add-Member NoteProperty ModuleType SearchResult -Passthru
+            }
+            catch 
+            {
+               Write-Warning "Error Searching ${Repository} $($_)"
+            }
+         }
       }
-    }
+   }
 }
 
 Export-ModuleMember -Function 'Find-Module'
