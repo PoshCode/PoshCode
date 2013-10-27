@@ -2,7 +2,7 @@
 
 Import-Module PSAINT # http://poshcode.org/Modules/PSAINT.psd1
 
-Import-Module "$PSScriptRoot\Installation.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\Installation.psm1" -ErrorAction Stop
 
 test "Expand Package" {
    arrange {

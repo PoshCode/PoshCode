@@ -9,7 +9,7 @@
    }
    Repositories = @{
       # The file-based repository needs to be a url or something we can update
-      FileSystem = "PoshCodeRepository.psd1", "\\PoshCode.org\Modules"
+      FileSystem = "PoshCodeRegistry", "\\PoshCode.org\Modules"
       # GitHub = "https://api.github.com/search/code"
    }
 }

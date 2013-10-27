@@ -2,7 +2,7 @@
 
 Import-Module PSAINT # http://poshcode.org/Modules/PSAINT.psd1
 
-Import-Module "$PSScriptRoot\ModuleInfo.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\ModuleInfo.psm1" -ErrorAction Stop
 
 test "Read-Module Adds Simple Names" {
    arrange {

@@ -1,7 +1,7 @@
 [CmdletBinding()]param()
 
 Import-Module PSAINT # http://poshcode.org/Modules/PSAINT.psd1
-Import-Module "$PSScriptRoot\Configuration.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\Configuration.psm1" -Force -ErrorAction Stop
 
 #     test "" {
 #        arrange {

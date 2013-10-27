@@ -15,16 +15,19 @@ function FindModule {
    )
    process {
       $(
-         if((Test-Path $Root -Type Leaf) -or (Test-Path (Join-Path $PSScriptRoot $Root) -Type Leaf)) {
-            if(!(Test-Path $Root -Type Leaf)) { $Root = Join-Path $PSScriptRoot $Root }
+         $RepositoryRoot = $Root
+         if((Test-Path $RepositoryRoot -Type Leaf) -or (Test-Path (Join-Path $PSScriptRoot $RepositoryRoot) -Type Leaf) -or (Test-Path (Join-Path $PSScriptRoot "$RepositoryRoot.psd1") -Type Leaf)) {
+            if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = Join-Path $PSScriptRoot $RepositoryRoot }
+            if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = "$RepositoryRoot.psd1" }
 
-            Write-Verbose "File Repository $Root"
-            $Repository = Import-Metadata $Root
+            Write-Verbose "File Repository $RepositoryRoot"
+            # TODO: Check $Repository.LastUpdated and fetch from web
+            $Repository = Import-Metadata $RepositoryRoot
 
             if($ModuleName) {
-               $Repository.$ModuleName
+               $Repository.Modules.$ModuleName
             } else {
-               $Repository.Values | 
+               $Repository.Modules.Values | 
                   Where-Object {
                      # Write-Verbose "File Repository Item Values: $($_.Values -split " |\\|/" -join ', ')"
                      $("$SearchTerm$Author"-eq"") -or
@@ -38,13 +41,13 @@ function FindModule {
                   }        
             }
          } else {
-            Write-Verbose "Folder Repository $Root"
+            Write-Verbose "Folder Repository $RepositoryRoot"
                 
             if(!$ModuleName) {
-               $Source = Join-Path $Root "*.psd1"
+               $Source = Join-Path $RepositoryRoot "*.psd1"
             } else {
-               $Source = (Join-Path $Root "${ModuleName}*.psd1"),
-                         (Join-Path $Root "*${ModuleName}*.psd1")
+               $Source = (Join-Path $RepositoryRoot "${ModuleName}*.psd1"),
+                         (Join-Path $RepositoryRoot "*${ModuleName}*.psd1")
             }
 
             $OFS = ", "

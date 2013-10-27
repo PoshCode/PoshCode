@@ -56,9 +56,7 @@ FormatsToProcess = @('PoshCode.format.ps1xml')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
-NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 
-                  # Repository Modules
-                  'RepositoryGitHub.psm1', 'RepositoryFileSystem.psm1', 'Repository.psm1')
+NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 'Repository.psm1')
 
 # Functions to export from this module
 FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Import-Metadata','Export-Metadata',
