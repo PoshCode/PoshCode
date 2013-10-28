@@ -314,6 +314,21 @@ function Expand-ZipFile {
             throw "There were no items in the Archive: $($ZipFile.FullName)"
          }
       }
+
+      # Finally, double-check the file name (it's likely to be Name-v.x.x)
+      $BaseName = [IO.Path]::GetFileNameWithoutExtension($Destination)
+      Write-Verbose "Test: $Destination\$BaseName.psd1"
+      if(!(Test-Path (Join-Path $Destination "${BaseName}.psd1"))) {
+         $BaseName, $null = $BaseName -Split '-'
+         Write-Verbose "Test: $Destination\$BaseName.psd1"
+         if(Test-Path (Join-Path $Destination "${BaseName}.psd1")) {
+            Write-Verbose "Rename-Item $Destination $BaseName"
+            $Destination = Rename-Item $Destination $BaseName
+         } else {
+            Write-Warning "Module manifest not found in $Destination"
+         }
+      }
+
       Write-Verbose "Return '$Destination' from Expand-ZipFile"
       # Output the new folder
       Get-Item $Destination
@@ -530,7 +545,7 @@ function Install-Module {
       }
 
       if(!(Test-Path (Join-Path $ModuleFolder.FullName $ModuleInfoFile))) {
-         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but may not be a valid module (it is missing the package.psd1 manifest)"
+         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the package.psd1 manifest)"
       }
 
       if(!$Manifest) {

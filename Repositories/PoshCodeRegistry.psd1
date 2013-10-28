@@ -8,7 +8,7 @@
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
       PackageManifestUri = 'http://poshcode.org/Modules/PSAINT.psd1'
-      LicenseUri = 'license.txt'
+      LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
       ModuleInfoUri = 'http://huddledmasses.org/arrange-act-assert-intuitive-testing/'
       RequiredModules = @(@{
         Name = 'Reflection'
@@ -81,5 +81,25 @@
       ModuleInfoUri="https://github.com/jrich523/NimblePowerShell"
       LicenseUri="http://opensource.org/licenses/ms-pl"
     }
+    "PSReadLine" = @{
+      Name = 'PSReadLine'
+      Description = 'Great command line editing in the PowerShell console host'
+      Author = 'Jason Shirk'
+
+      DownloadUri = 'https://github.com/lzybkr/PSReadLine/archive/master.zip'
+      ZipFolder = '*\PSReadLine'
+      LicenseUri = 'https://raw.github.com/lzybkr/PSReadLine/master/License.txt'
+      ModuleInfoUri = 'https://github.com/lzybkr/PSReadLine'
+    }
+    "Pester" = @{
+      Name = 'Pester'
+      Description = 'A BDD style testing tool for Powershell'
+      Author = 'Pester Team'
+      # Note the problem with this module is that I can't write a ZipFolder (the module is in the root)
+      # And since there's no Pester.psd1, the module ends up in Pester-master
+      DownloadUri = 'https://github.com/pester/Pester/archive/master.zip'
+      LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
+      ModuleInfoUri = 'https://github.com/Pester/Pester'
+   }
   }
 }
