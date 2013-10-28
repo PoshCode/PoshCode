@@ -182,21 +182,26 @@ function Expand-ZipFile {
    #   Expand a zip file, ensuring it's contents go to a single folder ...
    [CmdletBinding(SupportsShouldProcess=$true)]
    param(
-     # The path of the zip file that needs to be extracted
-     [Parameter(Position=0, Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
-     [Alias("PSPath")]
-     $FilePath,
+      # The path of the zip file that needs to be extracted
+      [Parameter(Position=0, Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+      [Alias("PSPath")]
+      $FilePath,
    
-     # The base path where we want the output folder to end up
-     [Parameter(Position=1, Mandatory=$true)] 
-     $OutputPath,
-   
-     # Make sure the resulting folder is always named the same as the archive
-     [Switch]$Force
+      # The base path where we want the output folder to end up
+      [Parameter(Position=1, Mandatory=$true)] 
+      $OutputPath,
+
+      # When the PackagePath refers to a .zip archive instead of a module packages, the ZipFolder is a subfolder in the zip which contains the module. Only files within this folder will be unpacked.
+      [Parameter(ValueFromPipelineByPropertyName=$true)]
+      [AllowNull()][AllowEmptyString()]
+      [String]$ZipFolder,
+
+      # Make sure the resulting folder is always named the same as the archive
+      [Switch]$Force
    )
    process {
       $ZipFile = Get-Item $FilePath -ErrorAction Stop
-      $OutputFolderName = $ZipFile.BaseName
+      $OutputFolderName = [IO.Path]::GetFileNameWithoutExtension($ZipFile.FullName)
       
       # Figure out where we'd prefer to end up:
       if(Test-Path $OutputPath -Type Container) {
@@ -227,8 +232,19 @@ function Expand-ZipFile {
          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.Management.Automation.HaltCommandException "Can't overwrite $Destination folder: User Refused"), "ShouldContinue:False", "OperationStopped", $_) )
       }
       
+      # If they're looking for a specific zpifolder, then we put everything in a temporary subfolder so we can delete it later
+      if($ZipFolder){
+         $Destination = Join-Path $Destination __PC_temp_Install__
+         $Destination = (New-Item $Destination -Type Directory -Force).FullName
+      }
+      Write-Verbose "Unzipping: $($ZipFile.FullName)"
+      Write-Verbose "Destination: $Destination"
+
+      try { 
+         Add-Type -Assembly System.IO.Compression.FileSystem -ErrorAction SilentlyContinue 
+      } catch { <# We don't need to know if it fails, we'll test for the type: #> }
       if("System.IO.Compression.ZipFile" -as [Type]) {
-         # If we have .Net 4, this is better (no GUI)
+         # If we have .Net 4.5, this is better (no GUI)
          try {
             $Archive = [System.IO.Compression.ZipFile]::Open( $ZipFile.FullName, "Read" )
             [System.IO.Compression.ZipFileExtensions]::ExtractToDirectory( $Archive, $Destination )
@@ -241,7 +257,18 @@ function Expand-ZipFile {
          $zipPackage = $shellApplication.NameSpace($ZipFile.FullName)
          $shellApplication.NameSpace($Destination).CopyHere($zipPackage.Items())
       }
-      
+
+      if($ZipFolder) {
+         $ModuleZipFolder = Convert-Path (Join-Path $Destination $ZipFolder)
+         $DestinationRoot = Split-Path $Destination
+         Write-Verbose "Move items from ZipFolder: '$ModuleZipFolder' to '$DestinationRoot'"
+         if(Test-Path $ModuleZipFolder) {
+            Move-Item $ModuleZipFolder -Destination $DestinationRoot -ErrorAction Stop
+            Remove-Item $Destination -Recurse
+         }
+         $Destination = $DestinationRoot
+      }
+
       # Now, a few corrective options:
       # If there are no items, bail.
       $RootItems = @(Get-ChildItem $Destination)
@@ -252,15 +279,15 @@ function Expand-ZipFile {
       
       # If there's nothing there but another folder, move it up one.
       while($RootItemCount -eq 1 -and $RootItems[0].PSIsContainer) {
-         Write-Verbose "Extracted One Folder ($RootItems) - Moving"
          if($Force -or ($RootItems[0].Name -eq (Split-Path $Destination -Leaf))) { 
+            Write-Verbose "Extracted one folder '$($RootItems[0].Name)' -Force:$Force moving items to '$Destination'"
             # Keep the archive named folder
-            Move-Item (join-path $RootItems[0].FullName *) $destination
+            Move-Item (join-path $RootItems[0].FullName *) $Destination
             # Remove the child folder
             Remove-Item $RootItems[0].FullName
          } else {
-         
-            $NewDestination = (Join-Path (Split-Path $Destination) $RootItems[0].Name)
+            $NewDestination = Join-Path (Split-Path $Destination) $RootItems[0].Name
+            Write-Verbose "Extracted One Folder '$RootItems' - moving items to '$NewDestination'"         
             if(Test-Path $NewDestination) {
                if(Get-ChildItem $NewDestination) {
                   if($Force -or $PSCmdlet.ShouldContinue("The OutputPath exists and is not empty. Do you want to replace the contents of '$NewDestination'?", "Deleting contents of '$NewDestination'")) {
@@ -270,13 +297,14 @@ function Expand-ZipFile {
                   }
                }
                # move the contents to the new location
+               Write-Verbose "Move-Item '$(join-path $RootItems[0].FullName *)' '$NewDestination'"
                Move-Item (join-path $RootItems[0].FullName *) $NewDestination
-               Remove-Item $RootItems[0].FullName
             } else {
                # move the whole folder to the new location
-               Move-Item $RootItems[0].FullName (Split-Path $NewDestination -Leaf)
+               Write-Verbose "Move the folder '$($RootItems[0].Name)' to '$(Split-Path $NewDestination)'"
+               Move-Item $RootItems[0].FullName (Split-Path $NewDestination)
             }
-            Remove-Item $Destination
+            Remove-Item $Destination -Recurse
             $Destination = $NewDestination
          }
       
@@ -286,6 +314,7 @@ function Expand-ZipFile {
             throw "There were no items in the Archive: $($ZipFile.FullName)"
          }
       }
+      Write-Verbose "Return '$Destination' from Expand-ZipFile"
       # Output the new folder
       Get-Item $Destination
    }
@@ -299,21 +328,25 @@ function Install-Module {
    param(
       # The package file to be installed
       [Parameter(ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
-      [Alias("PSPath","PackagePath","PackageManifestUri")]
+      [Alias("PSPath","PackagePath","PackageManifestUri","DownloadUri")]
       $Package,
    
       # A custom path to install the module to
       [Parameter(ParameterSetName="InstallPath", Mandatory=$true, Position=1)]
       [Alias("PSModulePath")]
       $InstallPath,
+
+      # When installing modules from .zip archives instead of module packages, the ZipFolder is a subfolder in the zip which contains the module. Only files within this folder will be unpacked.
+      [Parameter(ValueFromPipelineByPropertyName=$true)]
+      [String]$ZipFolder,
    
       # If set, the module is installed to the Common module path (as specified in Packaging.ini)
       [Parameter(ParameterSetName="CommonPath", Mandatory=$true)]
-      [Switch]$Common,
+      [Switch]$CommonPath,
    
       # If set, the module is installed to the User module path (as specified in Packaging.ini). This is the default.
       [Parameter(ParameterSetName="UserPath")]
-      [Switch]$User,
+      [Switch]$UserPath,
    
       # If set, overwrite existing modules without prompting
       [Switch]$Force,
@@ -370,11 +403,11 @@ function Install-Module {
       if($PSCmdlet.ParameterSetName -ne "InstallPath") {
          $Config = Get-ConfigData
          switch($PSCmdlet.ParameterSetName){
-            "UserPath"   { $InstallPath = $Config.InstallPaths.UserPath }
-            "CommonPath" { $InstallPath = $Config.InstallPaths.CommonPath }
+            "InstallPath" {}
+            default { $InstallPath = $Config.InstallPaths.($PSCmdlet.ParameterSetName) }
             # "SystemPath" { $InstallPath = $Config.InstallPaths.SystemPath }
          }
-         $null = $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName + "Path"))
+         $null = $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName))
          $null = $PsBoundParameters.Add("InstallPath", $InstallPath)
       }
 
@@ -384,7 +417,6 @@ function Install-Module {
             $InstallPath = Split-Path $InstallPath
          }
       } else {
-
          $InstallPath = "$InstallPath".TrimEnd("\")
    
          # Warn them if they're installing in an irregular location
@@ -432,7 +464,7 @@ function Install-Module {
          $WebParam = @{} + $PsBoundParameters
          $WebParam.Add("Uri",$Package)
          $WebParam.Add("OutFile",$OutFile)
-         $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru" | % { $WebParam.Remove($_) }
+         $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru", "ZipFolder" | % { $WebParam.Remove($_) }
    
 
          try { # A 404 is a terminating error, but I still want to handle it my way.
@@ -483,7 +515,19 @@ function Install-Module {
       Write-Verbose "InstallPath: $InstallPath"
       $Manifest = Read-Module $PackagePath
       # Expand the package (psmx/zip: npkg not supported yet)
-      $ModuleFolder = Expand-Package $PackagePath $InstallPath -Force:$Force -Passthru:$Passthru -ErrorAction Stop
+      $ModuleFolder = Expand-Package $PackagePath $InstallPath -Passthru -Force:$Force -ZipFolder:$ZipFolder -ErrorAction Stop
+
+      # On ocassions when we downloaded the package to the Install Path, we want to rename it if 
+      # If the installed module ended up having a totally different name than the source package
+      if(((Split-Path $PackagePath) -eq $InstallPath) -and ([IO.Path]::GetFileName($PackagePath) -notlike "$(Split-Path $ModuleFolder -Leaf)*")) {
+         if($PackageExt = [IO.Path]::GetExtension($PackagePath)) {
+            $NewPackagePath = (Convert-Path $ModuleFolder).TrimEnd('\') + $PackageExt
+            Write-Verbose "Rename downloaded $PackagePath to $NewPackagePath"
+            if((Split-Path $NewPackagePath) -eq $InstallPath) {
+               Move-Item $PackagePath $NewPackagePath -ErrorAction SilentlyContinue
+            }
+         }
+      }
 
       if(!(Test-Path (Join-Path $ModuleFolder.FullName $ModuleInfoFile))) {
          Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but may not be a valid module (it is missing the package.psd1 manifest)"
@@ -555,7 +599,6 @@ function Install-Module {
          Write-Verbose "No Import. Read-Module: $($ModuleFolder.Name) -ListAvailable"
          Read-Module $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
       }
-      Write-Verbose "Done. Done!"
    }
 }
 
@@ -577,6 +620,11 @@ function Expand-Package {
       # The base path where we want the module folder to end up
       [Parameter(Position=1)] 
       $InstallPath = $(Split-Path $PackagePath),
+      
+      # When the PackagePath refers to a .zip archive instead of a module packages, the ZipFolder is a subfolder in the zip which contains the module. Only files within this folder will be unpacked.
+      [Parameter(ValueFromPipelineByPropertyName=$true)]
+      [AllowNull()][AllowEmptyString()]
+      [String]$ZipFolder,
 
       # If set, overwrite existing modules without prompting
       [Switch]$Force,
@@ -615,10 +663,8 @@ function Expand-Package {
             $Package.Dispose()
             $Package = $null
 
-            $Output = Expand-ZipFile -FilePath $PackagePath -OutputPath $InstallPath -Force:$Force
-            if($Passthru) {
-               Get-ChildItem $Output -Recurse
-            }
+            $Output = Expand-ZipFile -FilePath $PackagePath -OutputPath $InstallPath -ZipFolder:$ZipFolder -Force:$Force
+            if($Passthru) { $Output }
             return
          }
 
