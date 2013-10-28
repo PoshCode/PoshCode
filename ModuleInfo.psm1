@@ -186,11 +186,12 @@ function Update-ModuleInfo {
       }
 
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
-         $ModuleManifestPath = Convert-Path $ModuleInfo
+         $ModuleManifestPath = Resolve-Path $ModuleInfo
          try {
             $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
-            $ModuleInfo.ModuleManifestPath = $ModuleInfo.Path = $ModuleManifestPath 
-            $ModuleInfo.PSPath = "{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath
+            $ModuleInfo = $ModuleInfo | Add-Member NoteProperty Path $ModuleManifestPath -Passthru -Force
+            $ModuleInfo = $ModuleInfo | Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru -Force
+            $ModuleInfo = $ModuleInfo | Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath) -Passthru -Force
          } catch {
             $ModuleInfo = $null
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Module Manifest", "InvalidResult", $_) )
