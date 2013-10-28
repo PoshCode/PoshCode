@@ -182,15 +182,26 @@ function Update-ModuleInfo {
       # On PowerShell 2, Modules that aren't loaded have little information, and we need to Import-Metadata
       # Modules that aren't loaded have no SessionState. If their path points at a PSD1 file, load that
       if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleInfoExtension) {
+         $ExistingModuleInfo = $ModuleInfo
          $ModuleInfo = $ModuleInfo.Path
       }
 
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
          $ModuleManifestPath = Resolve-Path $ModuleInfo
          try {
-            $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
+            if(!$ExistingModuleInfo) {
+               $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
+            } else {
+               $ModuleInfo = Import-Metadata $ModuleManifestPath
+               Write-Verbose "Update-ModuleInfo merging manually-loaded metadata to existing ModuleInfo:`n$($ExistingModuleInfo | Format-List | Out-String)"
+               $ModuleInfo = Update-Dictionary $ExistingModuleInfo $ModuleInfo
+               Write-Verbose "Result of merge:`n$($ModuleInfo | Format-List | Out-String)"
+            }
             $ModuleInfo = $ModuleInfo | Add-Member NoteProperty Path $ModuleManifestPath -Passthru -Force
             $ModuleInfo = $ModuleInfo | Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru -Force
+            if(!$ModuleInfo.ModuleBase) {
+               $ModuleInfo = $ModuleInfo | Add-Member NoteProperty ModuleBase (Split-Path $ModuleManifestPath) -Passthru -Force
+            }
             $ModuleInfo = $ModuleInfo | Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath) -Passthru -Force
          } catch {
             $ModuleInfo = $null
@@ -199,6 +210,7 @@ function Update-ModuleInfo {
       } else {
          $ModuleInfo = Add-SimpleNames $ModuleInfo
       }
+
       if($ModuleInfo) {
          $PackageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) "Package.psd1"
          $ModuleBase = Split-Path $ModuleInfo.Path
@@ -323,7 +335,9 @@ function Update-Dictionary {
                      $Authoritative.Add($prop.Name, $prop.Value)
                   }
                } else {
-                  Add-Member -in $Authoritative -type NoteProperty -Name $prop.Name -Value $prop.Value -ErrorAction SilentlyContinue
+                  if(!$Authoritative.($prop.Name) -or ($Authoritative.($prop.Name).Count -eq 0)) {
+                     Add-Member -in $Authoritative -type NoteProperty -Name $prop.Name -Value $prop.Value -Force -ErrorAction SilentlyContinue
+                  }
                }            
             }
          }
@@ -661,4 +675,4 @@ function ConvertTo-Metadata {
    }
 }
 
-Export-ModuleMember -Function Read-Module, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata
+Export-ModuleMember -Function Read-Module, Update-ModuleInfo, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata

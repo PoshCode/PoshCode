@@ -8,7 +8,7 @@
 ## Packaging.psm1 defines the core Compress-Module command for creating Module packages:
 ## Install-Module and Expand-ZipFile and Expand-Package
 ## It depends on the Installation module for the Copy-Stream function
-## It depends on the ModuleInfo module for the Read-Module command
+## It depends on the ModuleInfo module for the Update-ModuleInfo command
 
 # FULL # BEGIN FULL: Don't include this in the installer script
 Write-Verbose "Importing Constants $PSScriptRoot\Constants.ps1"
@@ -51,9 +51,17 @@ function Compress-Module {
          $ModuleName = $Module
          ## Workaround PowerShell Bug https://connect.microsoft.com/PowerShell/feedback/details/802030
          Push-Location $Script:EmptyPath
-         $Module = Read-Module $ModuleName -ListAvailable | Select-Object -First 1
+         if($PSVersionTable.PSVersion -lt "3.0") {
+            $Module = Import-Module $ModuleName -PassThru  | Update-ModuleInfo
+         } else {
+            $Module = Get-Module $ModuleName -ListAvailable | Select-Object -First 1
+            Write-Verbose "$($Module  | % FileList | Out-String)"
+            $Module = $Module | Update-ModuleInfo
+         }
+
          Pop-Location
       }
+      Write-Verbose "$($Module  | % FileList | Out-String)"
       Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    
 
       # If the Module.Path isn't a PSD1, then there is none, so we can't package this module
@@ -82,7 +90,7 @@ function Compress-Module {
 
       Write-Verbose "Creating Module in $OutputPath"
       Write-Verbose "Package File Path: $PackagePath"
-      Write-Verbose "Package Metadata File Path: $PackageInfoPath"
+      Write-Verbose "Package Manifest : $PackageInfoPath"
 
       if($PSCmdlet.ShouldProcess("Package the module '$($Module.ModuleBase)' to '$PackagePath'", "Package '$($Module.ModuleBase)' to '$PackagePath'?", "Packaging $($Module.Name)" )) {
          if($Force -Or !(Test-Path $PackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$PackagePath' already exists, do you want to replace it?", "Packaging $($Module.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
