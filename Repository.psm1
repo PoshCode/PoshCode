@@ -61,15 +61,16 @@
       }
       $null = $PSBoundParameters.Remove("Repository")
       
-      Write-Verbose ($ConfiguredRepositories | Out-String)
+      Write-Verbose ($ConfiguredRepositories | Format-Table -HideTableHeaders | Out-String)
+
+      $FindCommands = $(
+         foreach($RepoName in $ConfiguredRepositories.Keys) {
+            Import-Module "${PSScriptRoot}\Repositories\${RepoName}" -Passthru | % { $_.ExportedCommands['FindModule'] } 
+         }
+      )
 
 
-      foreach($RepoName in $ConfiguredRepositories.Keys) {
-         Import-Module "${PSScriptRoot}\Repositories\${RepoName}"
-      }
-
-      ## Get all the "FindModule" cmdlets from nested modules
-      $FindCommands = $MyInvocation.MyCommand.Module.NestedModules | % { $_.ExportedCommands['FindModule'] } 
+      Write-Verbose ($FindCommands | Format-Table -HideTableHeaders | Out-String)
 
       foreach($RepoName in $ConfiguredRepositories.Keys) {
 
