@@ -609,6 +609,7 @@ function ConvertTo-Metadata {
    begin { $t = "  " }
 
    process {
+      $VerbosePreference = "Continue"
       if($InputObject -is [Int16] -or 
          $InputObject -is [Int32] -or 
          $InputObject -is [Int64] -or 
@@ -635,9 +636,10 @@ function ConvertTo-Metadata {
          "'$InputObject'" 
       }
       elseif($InputObject -is [System.Collections.IDictionary]) {
-         # Write-Verbose "Dictionary"
+         Write-Verbose "Dictionary:`n $($InputObject|ft|out-string -width 110)"
          "@{{`n$t{0}`n}}" -f ($(
-         ForEach($key in $InputObject.Keys) {
+         ForEach($key in @($InputObject.Keys)) {
+            Write-Verbose "Key: $key"
             if("$key" -match '^(\w+|-?\d+\.?\d*)$') {
                "$key = " + (ConvertTo-Metadata $InputObject.($key))
             }
@@ -647,8 +649,8 @@ function ConvertTo-Metadata {
          }) -split "`n" -join "`n$t")
       } 
       elseif($InputObject -is [System.Collections.IEnumerable]) {
-         # Write-Verbose "Enumarable"
-         "@($($(ForEach($item in $InputObject.GetEnumerator()) { ConvertTo-Metadata $item }) -join ','))"
+         Write-Verbose "Enumarable"
+         "@($($(ForEach($item in @($InputObject)) { ConvertTo-Metadata $item }) -join ','))"
       }
       elseif($InputObject -is [Guid]) {
          # Write-Verbose "GUID:"

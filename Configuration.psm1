@@ -214,25 +214,43 @@ function Get-ConfigData {
   end {
     $Results = Import-LocalStorage $PSScriptRoot UserSettings.psd1
 
-    # Our ConfigData has InstallPaths and Repositories
-    # Some repositories can have file paths too...
-
-    foreach($Setting in "InstallPaths","Repositories") {
-      foreach($Key in $($Results.($Setting).Keys)) {
-        $Results.($Setting).$Key = $(
-          foreach($StringData in @($Results.($Setting).$Key)) {
-            $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
-            for($i = $Paths.Count - 1; $i -ge 0; $i--) {
-              if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
-                $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
-                break
-              }
+    # Our ConfigData has InstallPaths which may use tokens:
+    foreach($Key in $($Results.InstallPaths.Keys)) {
+      $Results.InstallPaths.$Key = $(
+        foreach($StringData in @($Results.InstallPaths.$Key)) {
+          $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+          for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+            if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+              $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+              break
             }
-            $StringData
           }
-        )
-      }
+          $StringData
+        }
+      )
     }
+
+    # Our ConfigData has Repositories which may use tokens in their roots
+    # The Repositories has to be an array:
+    $Results.Repositories = @(
+      foreach($Repo in $Results.Repositories) {
+        foreach($Key in @($Repo.Keys)) {
+          $Repo.$Key = $(
+            foreach($StringData in @($Repo.$Key)) {
+              $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+              for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+                if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+                  $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+                  break
+                }
+              }
+              $StringData
+            }
+          )
+        }
+        $Repo
+      }
+    )
     return $Results
   }
 }
@@ -256,25 +274,44 @@ function Set-ConfigData {
     # We'll explicitly save just those:
     $SaveData = @{ InstallPaths = @{}; Repositories = @{} }
 
-    # Some repositories can have file paths too...
-    foreach($Setting in "InstallPaths","Repositories") {
-      foreach($Key in $ConfigData.($Setting).Keys) {
-        $SaveData.($Setting).$Key = $ConfigData.($Setting).$Key
-        foreach($kvPath in $table) {
-          if($ConfigData.($Setting).$Key -like ($kvPath.Value +"*")) {
-            $SaveData.($Setting).$Key = $ConfigData.($Setting).$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
-            break
-          }
+    # Our ConfigData has InstallPaths which may use tokens:
+    foreach($Key in $($ConfigData.InstallPaths.Keys)) {
+      $SaveData.InstallPaths.$Key = $ConfigData.InstallPaths.$Key
+      foreach($kvPath in $table) {
+        if($ConfigData.InstallPaths.$Key -like ($kvPath.Value +"*")) {
+          $SaveData.InstallPaths.$Key = $ConfigData.InstallPaths.$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+          break
         }
       }
     }
 
+    # Our ConfigData has Repositories which may use tokens in their roots
+    # The Repositories has to be an array:
+    $SaveData.Repositories = @(
+      foreach($Repo in $ConfigData.Repositories) {
+        foreach($Key in @($Repo.Keys)) {
+          foreach($kvPath in $table) {
+            if($Repo.$Key -like ($kvPath.Value +"*")) {
+              $Repo.$Key = $Repo.$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+              break
+            }
+          }
+        }
+        $Repo
+      }
+    )
+
+
     $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
                     "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n" +
-                    "# Note that the defaults here are the ones recommended by Microsoft:`n" +
-                    "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350`n"
+                    "# Note that the default InstallPaths here are the ones recommended by Microsoft:`n" +
+                    "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350`n" +
+                    "#`n" +
+                    "# Repositories: must be an array of hashtables with Type and Root`n" +
+                    "#   Optionally, Repositories may have a name (useful for filtering Find-Module)`n" +
+                    "#   and may include settings/parameters for the Repository's FindModule command`n"
 
-    Export-LocalStorage $PSScriptRoot UserSettings.psd1 $ConfigData -CommentHeader $ConfigString
+    Export-LocalStorage -Module $PSScriptRoot -Name UserSettings.psd1 -InputObject $ConfigData -CommentHeader $ConfigString
   }
 }
 
@@ -456,7 +493,7 @@ function Export-LocalStorage {
       [string[]]$CommentHeader,
 
       # The object to persist to disk
-      [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=1)]
+      [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=10)]
       $InputObject
    )
    begin {
@@ -496,16 +533,20 @@ function Export-LocalStorage {
 
       if($PSBoundParameters.ContainsKey("InputObject")) {
          Write-Verbose "Clean Export"
+         Write-Verbose ""
          Export-Metadata -Path $Path -InputObject $InputObject -CommentHeader $CommentHeader
+         $Output = $null
       } else {
          $Output = @()
       }
    }
    process {
+    if($Output) {
       $Output += $InputObject
+    }
    }
    end {
-      if($PSBoundParameters.ContainsKey("InputObject")) {
+      if($Output) {
          Write-Verbose "Tail Export"
          # Avoid arrays when they're not needed:
          if($Output.Count -eq 1) { $Output = $Output[0] }

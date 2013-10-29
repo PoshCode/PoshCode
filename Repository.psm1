@@ -34,62 +34,71 @@
       [string]$Author,
 
       # Search for a specific module.
-      [alias('Repo','Name','MN')]
+      [alias('Name','MN')]
       [Parameter(ValueFromPipelineByPropertyName=$true)]
       [string]$ModuleName,
 
       # The path of a configured repository (allows wildcards), or a hashtable of @{RepositoryType=@("RepositoryRootUri")}
       [Parameter(ValueFromPipelineByPropertyName=$true)]
-      $Repository
+      $Repository,
+
+      [int]
+      $Limit = 0
    )
-    
+   begin {
+      $Count = 0
+   }
    process {
-      if($Repository -is [hashtable]) {
+      if(($Repository -is [hashtable]) -or ($Repository -as [hashtable[]])) {
          $ConfiguredRepositories = $Repository
       } else {
-         # Filter Repositories
-         $ConfiguredRepositories = (Get-ConfigData).Repositories
-         if($Repository) {
-            $ks = $ConfiguredRepositories.Keys |%{ $_ }
-            foreach($k in $ks) {
-               $ConfiguredRepositories.$k = $ConfiguredRepositories.$k | Where-Object { foreach($r in @($Repository)){ $_ -like "$r" } }
-               if(!$ConfiguredRepositories.$k) {
-                  $null = $ConfiguredRepositories.Remove($k)
+         $ConfiguredRepositories = @((Get-ConfigData).Repositories)
+         if(!$Repository) {
+         } else {
+            # Filter Repositories
+            # $ConfiguredRepositories = @((Get-ConfigData).Repositories)
+            $ConfiguredRepositories = $(
+               $Matching = $ConfiguredRepositories | Where-Object { foreach($r in @($Repository)){ $_.Type -like "$r" } }
+               if(!$Matching) {
+                  Write-Verbose "No matching Type"
+                  $Matching = $ConfiguredRepositories | Where-Object { foreach($r in @($Repository)){ $_.Name -like "$r" } }
                }
-            }
+               if(!$Matching) {
+                  Write-Verbose "No matching Name"
+                  $Matching = $ConfiguredRepositories | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }
+               }
+               $Matching
+            )
          }
       }
       $null = $PSBoundParameters.Remove("Repository")
+      $null = $PSBoundParameters.Remove("Limit")
       
-      Write-Verbose ($ConfiguredRepositories | Format-Table -HideTableHeaders | Out-String)
+      # Write-Verbose ($ConfiguredRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
+      foreach($Repo in $ConfiguredRepositories) {
+         $Command = Import-Module "${PSScriptRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
 
-      $FindCommands = $(
-         foreach($RepoName in $ConfiguredRepositories.Keys) {
-            Import-Module "${PSScriptRoot}\Repositories\${RepoName}" -Passthru | % { $_.ExportedCommands['FindModule'] } 
+         Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
+
+         foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
+            $PSBoundParameters.$k = $Repo.$k
          }
-      )
 
-
-      Write-Verbose ($FindCommands | Format-Table -HideTableHeaders | Out-String)
-
-      foreach($RepoName in $ConfiguredRepositories.Keys) {
-
-         Write-Verbose "Get-Command FindModule -Module '${RepoName}'"
-            $FindCommands | Where-Object { $_.ModuleName -eq ${RepoName} } | % {
-
-            Write-Verbose "${RepoName}\$_"
-            foreach($root in @($ConfiguredRepositories.${RepoName})) {
-
-               Write-Progress "Searching Module Repositories" "Searching ${Repository} ${Root}"
-               try {
-                  &$_ @PSBoundParameters -Root $root | Add-Member NoteProperty ModuleType SearchResult -Passthru
-               }
-               catch 
-               {
-                  Write-Warning "Error Searching ${RepoName} $($_)"
-               }
+         # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
+         try {
+            if($Limit -gt 0) {
+               &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru | 
+                  ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } 
+                  }
+            } else {
+               &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru
             }
          }
+         catch 
+         {
+            Write-Warning "Error Searching $($Repo.Type) $($Repo.Root)"
+         }
+         if($Limit -gt 0 -and $Count -ge $Limit) { return }
       }
    }
 }
