@@ -8,10 +8,11 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
          [string]$SearchTerm,
 
          # Search for modules published by a particular author.
+         [Parameter(Mandatory=$true)]
          [string]$Author,
 
          # Search for a specific module.
-         [alias('Repo')]
+         [Parameter(Mandatory=$true)]
          [string]$ModuleName,
 
          $Root = "https://api.github.com/search/code"

@@ -16,6 +16,7 @@
     Type = 'FileSystem'
     Root = 'PoshCodeRegistry'
     Name = 'Registry'
+    SearchByDefault = $true
   },@{
     Type = 'FileSystem'
     Root = '\\PoshCode.org\Modules'

@@ -11,7 +11,8 @@ function FindModule {
       # Search for a specific module.
       [string]$ModuleName,
 
-      $Root = "\\PoshCode.org\Modules"
+      [Parameter(Mandatory=$true)]
+      $Root
    )
    process {
       $(

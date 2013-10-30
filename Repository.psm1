@@ -1,4 +1,6 @@
-﻿function Find-Module {
+﻿$CommonParameters = "ErrorAction", "WarningAction", "Verbose", "Debug", "ErrorVariable", "WarningVariable", "OutVariable", "OutBuffer", "PipelineVariable"
+
+function Find-Module {
    <#
       .Synopsis
          Find PoshCode packages online
@@ -46,7 +48,7 @@
       $Limit = 0
    )
    begin {
-      $Count = 0
+      $Count = 0      
    }
    process {
       if(($Repository -is [hashtable]) -or ($Repository -as [hashtable[]])) {
@@ -54,6 +56,7 @@
       } else {
          $ConfiguredRepositories = @((Get-ConfigData).Repositories)
          if(!$Repository) {
+            $ConfiguredRepositories = $ConfiguredRepositories | Where-Object { $_.SearchByDefault }
          } else {
             # Filter Repositories
             # $ConfiguredRepositories = @((Get-ConfigData).Repositories)
@@ -84,21 +87,30 @@
             $PSBoundParameters.$k = $Repo.$k
          }
 
-         # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
-         try {
-            if($Limit -gt 0) {
-               &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru | 
-                  ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } 
-                  }
-            } else {
-               &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru
+         $Mandatory = $Command.Parameters.Values | 
+            Where-Object { $_.Attributes.Mandatory -and ($PSBoundParameters.Keys -NotContains $_.Name)} |
+            ForEach-Object { $_.Name }
+
+
+         if($Mandatory) {
+            Write-Warning "Not searching $($Repo.Type), missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
+         } else {
+            # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
+            try {
+               if($Limit -gt 0) {
+                  &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru | 
+                     ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } 
+                     }
+               } else {
+                  &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru
+               }
             }
+            catch 
+            {
+               Write-Warning "Error Searching $($Repo.Type) $($Repo.Root)"
+            }
+            if($Limit -gt 0 -and $Count -ge $Limit) { return }
          }
-         catch 
-         {
-            Write-Warning "Error Searching $($Repo.Type) $($Repo.Root)"
-         }
-         if($Limit -gt 0 -and $Count -ge $Limit) { return }
       }
    }
 }
