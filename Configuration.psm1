@@ -1,9 +1,14 @@
+# We're not using Requires because it just gets in the way on PSv2
+#!Requires -Modules ModuleInfo, LocalStorage
+
+
 ########################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ########################################################################
 ## Configuration.psm1 defines the Get/Set functionality for ConfigData
 ## It also includes Get-SpecialFolder for resolving special folder paths
+$Script:SpecialFolderNames = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
 
 function Get-SpecialFolder {
   #.Synopsis
@@ -14,11 +19,11 @@ function Get-SpecialFolder {
     #  From the list: AdminTools, ApplicationData, CDBurning, CommonAdminTools, CommonApplicationData, CommonDesktopDirectory, CommonDocuments, CommonMusic, CommonOemLinks, CommonPictures, CommonProgramFiles, CommonProgramFilesX86, CommonPrograms, CommonStartMenu, CommonStartup, CommonTemplates, CommonVideos, Cookies, Desktop, DesktopDirectory, Favorites, Fonts, History, InternetCache, LocalApplicationData, LocalizedResources, MyComputer, MyDocuments, MyMusic, MyPictures, MyVideos, NetworkShortcuts, Personal, PrinterShortcuts, ProgramFiles, ProgramFilesX86, Programs, PSHome, Recent, Resources, SendTo, StartMenu, Startup, System, SystemX86, Templates, UserProfile, Windows
     [ValidateScript({
       $Name = $_
-      $Names = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
-      if($Names -like $Name) {
+      $Names = 
+      if($Script:SpecialFolderNames -like $Name) {
         return $true
       } else {
-        throw "Cannot convert Path, with value: `"$Name`", to type `"System.Environment+SpecialFolder`": Error: `"The identifier name $Name cannot be processed due to the inability to differentiate between the following enumerator names: $($Names -join ', ')"
+        throw "Cannot convert Path, with value: `"$Name`", to type `"System.Environment+SpecialFolder`": Error: `"The identifier name $Name is noe one of $($Names -join ', ')"
       }
     })]
     [String]$Path = "*",
@@ -27,10 +32,7 @@ function Get-SpecialFolder {
     [Switch]$Value
   )
 
-  $Names = @( [System.Environment+SpecialFolder].GetFields("Public,Static") |
-              ForEach-Object { $_.Name }) + @("PSHome") |
-                Where-Object { $_ -like $Path } | 
-                Sort-Object
+  $Names = $Script:SpecialFolderNames -like $Path
   if(!$Value) {
     $return = @{}
   }
@@ -70,6 +72,8 @@ function Select-ModulePath {
       $default = -1
       $index = -1
       $common = -1
+      #  Suppress error when running in remote sessions by making sure $PROFILE is defined
+      if(!$PROFILE) { $PROFILE = Join-Path (Get-SpecialFolder MyDocuments) "WindowsPowerShell\Profile.ps1" }
       switch -Wildcard ($Env:PSModulePath -split ";" | ? {$_}) {
          "${PSHome}*" {
             ##### We do not support installing to the System location. #####
@@ -198,10 +202,7 @@ function Test-ExecutionPolicy {
   } 
 }
 
-# FULL # BEGIN FULL: These cmdlets are only useful in the full version of the module
-# The config file
-$Script:ConfigFile = Join-Path $PSScriptRoot ([IO.Path]::GetFileName( [IO.Path]::ChangeExtension($PSScriptRoot, ".ini") ))
-
+# FULL # BEGIN FULL: These cmdlets are only necessary in the full version of the module
 function Get-ConfigData {
   #.Synopsis
   #   Gets the modulename.ini settings as a hashtable
@@ -209,36 +210,48 @@ function Get-ConfigData {
   #   Parses the non-comment lines in the config file as a simple hashtable, 
   #   parsing it as string data, and replacing {SpecialFolder} paths
   [CmdletBinding(DefaultParameterSetname="FromFile")]
-  param(
-    # A path to a file with FolderPath ini strings in it
-    [Parameter(ValueFromPipelineByPropertyName=$true, Position=0, ParameterSetName="FromFile")]
-    [Alias("PSPath")]
-    [string]$ConfigFile = $Script:ConfigFile,
+  param()
+  end {
+    $Results = Import-LocalStorage $PSScriptRoot UserSettings.psd1
 
-    # A key = value string (optionally, with special folder tokens in it like {MyDocuments} and {ProgramFiles})
-    [Parameter(ValueFromPipeline=$true, Mandatory=$true, ParameterSetName="FromData")]
-    [string]$StringData
-  )
-  begin {
-    $Names = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
-
-    if($PSCmdlet.ParameterSetName -eq "FromFile") {
-      $StringData = Get-Content $ConfigFile -Delim ([char]0) -ErrorAction Stop
-      $StringData = $StringData -replace '(?m)^[#;].*[\r\n]+'
-    } else {
-
+    # Our ConfigData has InstallPaths which may use tokens:
+    foreach($Key in $($Results.InstallPaths.Keys)) {
+      $Results.InstallPaths.$Key = $(
+        foreach($StringData in @($Results.InstallPaths.$Key)) {
+          $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+          for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+            if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+              $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+              break
+            }
+          }
+          $StringData
+        }
+      )
     }
-  }
 
-  process {
-    $Paths = [Regex]::Matches($StringData, "{(?:$($Names -Join "|"))}")
-    for($i = $Paths.Count - 1; $i -ge 0; $i--) {
-      if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
-        $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+    # Our ConfigData has Repositories which may use tokens in their roots
+    # The Repositories has to be an array:
+    $Results.Repositories = @(
+      foreach($Repo in $Results.Repositories) {
+        foreach($Key in @($Repo.Keys)) {
+          $Repo.$Key = $(
+            foreach($StringData in @($Repo.$Key)) {
+              $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+              for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+                if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+                  $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+                  break
+                }
+              }
+              $StringData
+            }
+          )
+        }
+        $Repo
       }
-    }
-
-    ConvertFrom-StringData ($StringData -replace "\\","\\")
+    )
+    return $Results
   }
 }
 
@@ -247,40 +260,59 @@ function Set-ConfigData {
   #   Updates the config file with the specified hashtable
   [CmdletBinding()]
   param(
-    # A path to a file with FolderPath ini strings in it, or 
-    # A string with path names in it like {MyDocuments} and {ProgramFiles}
-    [Parameter(ValueFromPipeline=$true, Position=0)]
-    [string]$Path = $Script:ConfigFile,
-
     # The config hashtable to save
+    [Parameter(ValueFromPipeline=$true, Position=0)]
     [Hashtable]$ConfigData
   )
+  end {
+    # When serializing the ConfigData we want to tokenize the path
+    # So that it will be user-agnostic
+    $table = Get-SpecialFolder
+    $table = $table.GetEnumerator() | Sort-Object Value -Descending
 
-  # When serializing the ConfigData, we want to tokenize the path
-  # So that it will be user-agnostic
-  $table = Get-SpecialFolder
-  $table = $table.GetEnumerator() | Sort-Object Value -Descending
+    # Our ConfigData has InstallPaths and Repositories
+    # We'll explicitly save just those:
+    $SaveData = @{ InstallPaths = @{}; Repositories = @{} }
 
-  foreach($setting in @($ConfigData.Keys)) {
-    foreach($kvPath in $table) {
-      if($ConfigData.$setting -like ($kvPath.Value +"*")) {
-        $ConfigData.$setting = $ConfigData.$setting -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+    # Our ConfigData has InstallPaths which may use tokens:
+    foreach($Key in $($ConfigData.InstallPaths.Keys)) {
+      $SaveData.InstallPaths.$Key = $ConfigData.InstallPaths.$Key
+      foreach($kvPath in $table) {
+        if($ConfigData.InstallPaths.$Key -like ($kvPath.Value +"*")) {
+          $SaveData.InstallPaths.$Key = $ConfigData.InstallPaths.$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+          break
+        }
       }
     }
+
+    # Our ConfigData has Repositories which may use tokens in their roots
+    # The Repositories has to be an array:
+    $SaveData.Repositories = @(
+      foreach($Repo in $ConfigData.Repositories) {
+        foreach($Key in @($Repo.Keys)) {
+          foreach($kvPath in $table) {
+            if($Repo.$Key -like ($kvPath.Value +"*")) {
+              $Repo.$Key = $Repo.$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+              break
+            }
+          }
+        }
+        $Repo
+      }
+    )
+
+
+    $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
+                    "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n" +
+                    "# Note that the default InstallPaths here are the ones recommended by Microsoft:`n" +
+                    "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350`n" +
+                    "#`n" +
+                    "# Repositories: must be an array of hashtables with Type and Root`n" +
+                    "#   Optionally, Repositories may have a name (useful for filtering Find-Module)`n" +
+                    "#   and may include settings/parameters for the Repository's FindModule command`n"
+
+    Export-LocalStorage -Module $PSScriptRoot -Name UserSettings.psd1 -InputObject $ConfigData -CommentHeader $ConfigString
   }
-
-  $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
-                  "# For a list of valid {SpecialFolder} tokens, run Get-SpecialFolder`n" +
-                  "# Note that the defaults here are the ones recommended by Microsoft:`n" +
-                  "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350%28v=vs.85%29.aspx`n"
-
-  $ConfigString += $(
-    foreach($k in $ConfigData.Keys) {
-      "{0} = {1}" -f $k, $ConfigData.$k
-    }
-  ) -join "`n"
-
-  Set-Content $Path $ConfigString  
 }
 
 function Test-ConfigData {
@@ -292,7 +324,7 @@ function Test-ConfigData {
     $ConfigData = $(Get-ConfigData)
   )
 
-  foreach($path in @($ConfigData.Keys)) {
+  foreach($path in @($ConfigData.InstallPaths.Keys)) {
     $name = $path -replace 'Path$'
     $folder = $ConfigData.$path
     do {
@@ -377,6 +409,236 @@ function Test-ConfigData {
     Set-ConfigData -ConfigData $ConfigData
   }
 }
-# FULL # END FULL
 
-Export-ModuleMember -Function Get-SpecialFolder, Get-ConfigData, Set-ConfigData, Test-ConfigData, Select-ModulePath, Test-ExecutionPolicy
+# These are special functions just for saving in the AppData folder...
+function Get-LocalStoragePath {
+   #.Synopsis
+   #   Gets the LocalApplicationData path for the specified company\module 
+   #.Description
+   #   Appends Company\Module to the LocalApplicationData, and ensures that the folder exists.
+   param(
+      # The name of the module you want to access storage for (defaults to SplunkStanzaName)
+      [Parameter(Position=0)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Module Name '$_' at $invalid"
+         }
+      })]         
+      [string]$Module = $SplunkStanzaName,
+
+      # The name of a "company" to use in the storage path (defaults to "PowerShell Package Manager")
+      [Parameter(Position=1)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Company Name '$_' at $invalid"
+         }
+      })]         
+      [string]$Company = "PowerShell Package Manager"      
+
+   )
+   end {
+      if(!($path = $SplunkCheckpointPath)) {
+         $path = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) $Company
+      } 
+      $path  = Join-Path $path $Module
+
+      if(!(Test-Path $path -PathType Container)) {
+         $null = New-Item $path -Type Directory -Force
+      }
+      Write-Output $path
+   }
+}
+
+function Export-LocalStorage {
+   #.Synopsis
+   #   Saves the object to local storage with the specified name
+   #.Description
+   #   Persists objects to disk using Get-LocalStoragePath and Export-Metadata
+   param(
+      # A unique valid module name to use when persisting the object to disk
+      [Parameter(Mandatory=$true, Position=0)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Module Name '$_' at $invalid"
+         }
+      })]      
+      [string]$Module,
+
+      # A unique object name to use when persisting the object to disk
+      [Parameter(Mandatory=$true, Position=1)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Object Name '$_' at $invalid"
+         }
+      })]      
+      [string]$Name,
+
+      # The scope to store the data in. Defaults to storing in the ModulePath
+      [ValidateSet("Module", "User")]
+      $Scope,
+
+      # comments to place on the top of the file (to explain it's settings)
+      [string[]]$CommentHeader,
+
+      # The object to persist to disk
+      [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=10)]
+      $InputObject
+   )
+   begin {
+      $invalid = $Module.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+
+      if(($Scope -ne "User") -and $invalid -and (Test-Path $Module))
+      {
+         $ModulePath = Resolve-Path $Module
+      } 
+      elseif($Scope -eq "Module") 
+      {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath = Read-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+      }
+
+      # Scope -eq "User"
+      if(!$ModulePath -or !(Test-Path $ModulePath)) {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath = Get-LocalStoragePath $Module
+         if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
+            $Null = New-Item -ItemType Directory $ModulePath
+         }
+      }
+
+      if(!(Test-Path $ModulePath)) {
+         Write-Error "The folder for storage doesn't exist: $ModulePath"
+      }
+
+      $ModulePath = Resolve-Path $ModulePath -ErrorAction Stop
+
+      # Make sure it has a PSD1 extension
+      if($Name -notmatch '.*\.psd1$') {
+        $Name = "${Name}.psd1"
+      }
+
+      $Path = Join-Path $ModulePath $Name
+
+      if($PSBoundParameters.ContainsKey("InputObject")) {
+         Write-Verbose "Clean Export"
+         Write-Verbose ""
+         Export-Metadata -Path $Path -InputObject $InputObject -CommentHeader $CommentHeader
+         $Output = $null
+      } else {
+         $Output = @()
+      }
+   }
+   process {
+    if($Output) {
+      $Output += $InputObject
+    }
+   }
+   end {
+      if($Output) {
+         Write-Verbose "Tail Export"
+         # Avoid arrays when they're not needed:
+         if($Output.Count -eq 1) { $Output = $Output[0] }
+         Export-Metadata -Path $Path -InputObject $Output -CommentHeader $CommentHeader
+      }
+   }
+}
+
+function Import-LocalStorage {
+   #.Synopsis
+   #   Loads an object with the specified name from local storage 
+   #.Description
+   #   Retrieves objects from disk using Get-LocalStoragePath and Import-CliXml
+   param(
+      # A unique valid module name to use when persisting the object to disk
+      [Parameter(Mandatory=$true, Position=0)]
+      [string]$Module,
+
+      # A unique object name to use when persisting the object to disk
+      [Parameter(Position=1)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Object Name '$_' at $invalid"
+         }
+      })]      
+      [string]$Name = '*',
+
+      # The scope to store the data in. Defaults to storing in the ModulePath
+      [ValidateSet("Module", "User")]
+      $Scope,
+
+      # A default value (used in case there's an error importing):
+      [Parameter()]
+      [Object]$DefaultValue
+   )
+   end {
+      $invalid = $Module.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+      if(($Scope -ne "User") -and $invalid -and (Test-Path $Module)) 
+      {
+         $ModulePath = Resolve-Path $Module
+      } 
+      elseif($Scope -eq "Module") 
+      {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath = Read-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+      }
+
+      # Scope -eq "User"
+      if(!$ModulePath -or !(Test-Path $ModulePath)) {
+         $Module = Split-Path $Module -Leaf
+         $ModulePath = Get-LocalStoragePath $Module
+         if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
+            $Null = New-Item -ItemType Directory $ModulePath
+         }
+      }
+
+      if(!(Test-Path $ModulePath)) {
+         Write-Error "The folder for storage doesn't exist: $ModulePath"
+      }
+
+      # Make sure it has a PSD1 extension
+      if($Name -notmatch '.*\.psd1$') {
+        $Name = "${Name}.psd1"
+      }
+
+      $Path = Join-Path $ModulePath $Name
+
+      try {
+         $Path = Resolve-Path $Path -ErrorAction Stop
+         if(@($Path).Count -gt 1) {
+            $Output = @{}
+            foreach($Name in $Path) {
+               $Key = Split-Path $Name -Leaf
+               $Output.$Key = Import-Metadatae -Path $Name
+            }
+         } else {
+            Import-Metadata -Path $Path
+         }
+      } catch {
+         if($PSBoundParameters.ContainsKey("DefaultValue")) {
+            Write-Output $DefaultValue
+         } else {
+            throw
+         }
+      }
+   }
+}
+                              
+Export-ModuleMember -Function Import-LocalStorage, Export-LocalStorage, Get-LocalStoragePath,
+                              Get-SpecialFolder, Select-ModulePath, Test-ExecutionPolicy, 
+                              Get-ConfigData, Set-ConfigData, Test-ConfigData
+# FULL # END FULL

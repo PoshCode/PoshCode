@@ -207,7 +207,7 @@ function New-Module {
 
          if($Force -Or $Upgrade -or !(Test-Path "${ModuleName}.psd1") -or $PSCmdlet.ShouldContinue("The specified '${ModuleName}.psd1' already exists in '$ModulePath'. Do you want to update it?", "Creating new '${ModuleName}.psd1'")) {
             if($Upgrade -and (Test-Path "${ModuleName}.psd1")) {
-               $ModuleInfo = Get-ModuleManifest (Join-Path $ModulePath "${ModuleName}.psd1" )
+               $ModuleInfo = Import-Metadata (Join-Path $ModulePath "${ModuleName}.psd1" )
             } else {
                # If there's no upgrade, then we want to use all the parameter (default) values, not just the PSBoundParameters:
                $ModuleInfo = @{
@@ -264,16 +264,16 @@ function New-Module {
                "   ModuleVersion  = `"${ModuleVersion}`"" +
                '   ' +
                '   # The address for a website about this module (or your website, as author)' +
-               '   HomePageUri   = ""' +
+               '   ModuleInfoUri   = ""' +
                '   ' +
                '   # A relative path to a license file, or the url to a license, like http://opensource.org/licenses/MIT' +
                '   LicenseUri    = ""' +
                '   ' +
                '   # The web address where this psd1 file will be uploaded' +
-               '   ModuleInfoUri = ""' +
+               '   PackageManifestUri = ""' +
                '   ' +
                '   # The web address where the psmx package file will be uploaded' +
-               '   PackageUri    = ""' +
+               '   DownloadUri    = ""' +
                '   ' +
                '   # This version number is here so users can check for the latest version' +
                '   # It should be incremented with each package, and should match the one in your module psd1.' +

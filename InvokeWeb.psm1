@@ -5,7 +5,7 @@
 ###############################################################################
 ## InvokeWeb.psm1 defines a subset of the Invoke-WebRequest functionality
 ## On PowerShell 3 and up we'll just use the built-in Invoke-WebRequest
-if(!(Get-Command Invoke-WebRequest)) {
+if(!(Get-Command Invoke-WebReques[t])) {
   function Invoke-WebRequest {
     <#
       .Synopsis
@@ -232,7 +232,8 @@ if(!(Get-Command Invoke-WebRequest)) {
       }
       if(Test-Path variable:response) {
         $response.Close(); 
-        $response.Dispose(); 
+        # HttpWebResponse doesn't have Dispose (in .net 2?)
+        # $response.Dispose(); 
       }
     }
   }

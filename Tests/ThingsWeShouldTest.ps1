@@ -18,8 +18,8 @@ Test "Install a module with no dependencies from a url" { assert { throw "Test N
 Test "Install an upgrade module from a url (should overwrite module files but not delete ini files)" { assert { throw "Test Not Written" }} -Category "Download"
 Test "Install an downgrade module from a url (should delete all files first)" { assert { throw "Test Not Written" }} -Category "Download"
 Test "Install a module with dependencies from a url with dependency package is available in the install folder" { assert { throw "Test Not Written" }} -Category "Download"
-Test "Install a module with dependencies from a url with dependency ModuleInfoUri set correctly (should download to same place and install)" { assert { throw "Test Not Written" }} -Category "Download"
-Test "Install a module with dependencies from a url with dependencies that have unreachable ModuleInfoUri (should fail cleanly!)" { assert { throw "Test Not Written" }} -Category "Download"
+Test "Install a module with dependencies from a url with dependency PackageManifestUri set correctly (should download to same place and install)" { assert { throw "Test Not Written" }} -Category "Download"
+Test "Install a module with dependencies from a url with dependencies that have unreachable PackageManifestUri (should fail cleanly!)" { assert { throw "Test Not Written" }} -Category "Download"
 
 # Get Module Info
 Test "Validate the error message when getting module info from a module with no .psd1" { assert { throw "Test Not Written" } -Category "ModuleInfo"
