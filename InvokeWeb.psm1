@@ -6,6 +6,16 @@
 ## InvokeWeb.psm1 defines a subset of the Invoke-WebRequest functionality
 ## On PowerShell 3 and up we'll just use the built-in Invoke-WebRequest
 if(!(Get-Command Invoke-WebReques[t])) {
+
+# FULL # BEGIN FULL: Don't include this in the installer script
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
+
+. $PoshCodeModuleRoot\Constants.ps1
+# FULL # END FULL
+
   function Invoke-WebRequest {
     <#
       .Synopsis

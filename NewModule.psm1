@@ -4,7 +4,12 @@
 ## NewModule.psm1 defines the New-Module command for generating ModuleManifests
 
 # FULL # BEGIN FULL: Don't include this in the installer script
-. $PSScriptRoot\Constants.ps1
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
+
+. $PoshCodeModuleRoot\Constants.ps1
 # FULL # END FULL
 
 function New-Module {

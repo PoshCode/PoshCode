@@ -16,8 +16,9 @@ $ModuleContentType       = "http://schemas.poshcode.org/package/module-file"
 $ModuleReleaseType       = "http://schemas.poshcode.org/package/module-release"
 $ModuleLicenseType       = "http://schemas.poshcode.org/package/module-license"
 
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
 if(!$PoshCodeModuleRoot) {
-   $PoshCodeModuleRoot   = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+  $PoshCodeModuleRoot = Split-Path $(if($MyInvocation.MyCommand.Path) { $MyInvocation.MyCommand.Path } else { $MyInvocation.MyCommand }) -Parent
 }
 
 # Because of a PowerShell Bug, we need to know where we can find a completely empty folder.

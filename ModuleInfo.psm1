@@ -8,7 +8,14 @@
 ## Read-Module and Install-Module 
 ## It depends on the Configuration module and the Invoke-WebRequest cmdlet
 
+
 # FULL # BEGIN FULL: Don't include this in the installer script
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  Write-Warning "TESTING: No PoshCodeModuleRoot"
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
+
 . $PoshCodeModuleRoot\Constants.ps1
 # FULL # END FULL
 
