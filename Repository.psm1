@@ -79,7 +79,7 @@ function Find-Module {
       
       # Write-Verbose ($ConfiguredRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
       foreach($Repo in $ConfiguredRepositories) {
-         $Command = Import-Module "${PSScriptRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
+         $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
 
          Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
 

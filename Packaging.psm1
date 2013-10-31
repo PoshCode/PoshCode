@@ -9,10 +9,12 @@
 ## Install-Module and Expand-ZipFile and Expand-Package
 ## It depends on the Installation module for the Copy-Stream function
 ## It depends on the ModuleInfo module for the Update-ModuleInfo command
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+
 
 # FULL # BEGIN FULL: Don't include this in the installer script
-Write-Verbose "Importing Constants $PSScriptRoot\Constants.ps1"
-. $PSScriptRoot\Constants.ps1
+Write-Verbose "Importing Constants $PoshCodeModuleRoot\Constants.ps1"
+. $PoshCodeModuleRoot\Constants.ps1
 # FULL # END FULL
 
 function Compress-Module {

@@ -9,7 +9,7 @@
 ## It depends on the Configuration module and the Invoke-WebRequest cmdlet
 
 # FULL # BEGIN FULL: Don't include this in the installer script
-. $PSScriptRoot\Constants.ps1
+. $PoshCodeModuleRoot\Constants.ps1
 # FULL # END FULL
 
 # Public Function
@@ -554,7 +554,7 @@ function ConvertFrom-Metadata {
       $ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData", "Join-Path"
       $ValidParameters = "-StringData", "-Value"
       $ValidKeywords = "if","else","elseif"
-      $ValidVariables = "PSScriptRoot","PSCulture","PSUICulture","True","False","Null"
+      $ValidVariables = "PoshCodeModuleRoot","PSCulture","PSUICulture","True","False","Null"
       $ParseErrors = $Null
    }   
    process {
@@ -583,8 +583,8 @@ function ConvertFrom-Metadata {
       }
 
       # Now, because there's no way to allow additional variables in the data block, but module manifests do anyway...
-      # Manually replace the PSScriptRoot with a string before trying to invoke it as a data block
-      if($scriptroots = $Tokens | Where-Object { $_.Type -eq "Variable" -and $_.Content -eq "PSScriptRoot" }) {
+      # Manually replace the PoshCodeModuleRoot with a string before trying to invoke it as a data block
+      if($scriptroots = $Tokens | Where-Object { $_.Type -eq "Variable" -and $_.Content -eq "PoshCodeModuleRoot" }) {
          for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
             $InputObject = $InputObject.Remove($scriptroots[$r].Start, $scriptroots[$r].Length).Insert($scriptroots[$r].Start,"'.'")
          }

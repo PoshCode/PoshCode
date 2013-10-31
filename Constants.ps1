@@ -16,6 +16,10 @@ $ModuleContentType       = "http://schemas.poshcode.org/package/module-file"
 $ModuleReleaseType       = "http://schemas.poshcode.org/package/module-release"
 $ModuleLicenseType       = "http://schemas.poshcode.org/package/module-license"
 
+if(!$PoshCodeModuleRoot) {
+   $PoshCodeModuleRoot   = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+}
+
 # Because of a PowerShell Bug, we need to know where we can find a completely empty folder.
 $EmptyPath = $PSMPSettings = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PowerShell Package Manager"
 if(Test-Path $EmptyPath) {

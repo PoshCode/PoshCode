@@ -11,13 +11,13 @@
 ## It depends on the ModuleInfo module
 
 # FULL # BEGIN FULL: Don't include this in the installer script
-. $PSScriptRoot\Constants.ps1
+. $PoshCodeModuleRoot\Constants.ps1
 
 if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
-  Import-Module $PSScriptRoot\InvokeWeb
+  Import-Module $PoshCodeModuleRoot\InvokeWeb
 }
 # if(!(Get-Command Import-Metadat[a] -ErrorAction SilentlyContinue)){
-#   Import-Module $PSScriptRoot\ModuleInfo
+#   Import-Module $PoshCodeModuleRoot\ModuleInfo
 # }
 
 function Update-Module {
@@ -530,7 +530,7 @@ function Install-Module {
       Write-Verbose "InstallPath: $InstallPath"
       $Manifest = Read-Module $PackagePath
       # Expand the package (psmx/zip: npkg not supported yet)
-      $ModuleFolder = Expand-Package $PackagePath $InstallPath -Passthru -Force:$Force -ZipFolder:$ZipFolder -ErrorAction Stop
+      $ModuleFolder = Expand-Package $PackagePath $InstallPath -Force:$Force -ZipFolder:$ZipFolder -ErrorAction Stop
 
       # On ocassions when we downloaded the package to the Install Path, we want to rename it if 
       # If the installed module ended up having a totally different name than the source package

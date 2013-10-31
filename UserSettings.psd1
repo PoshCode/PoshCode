@@ -9,8 +9,8 @@
 
 @{
   InstallPaths = @{
-    CommonPath = 'C:\Program Files\WindowsPowerShell\Modules'
-    UserPath = 'C:\Users\Joel\Documents\WindowsPowerShell\Modules'
+    CommonPath = '{ProgramFiles}\WindowsPowerShell\Modules'
+    UserPath = '{Personal}\WindowsPowerShell\Modules'
   }
   Repositories = @(@{
     Type = 'FileSystem'

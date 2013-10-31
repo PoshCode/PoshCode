@@ -200,9 +200,9 @@ if(!(Get-Command Invoke-WebReques[t])) {
             if(!$quiet) {
               $total += $count
               if($goal -gt 0) {
-                Write-Progress "Downloading $Uri" "Saving $total of $goal" -id 0 -percentComplete (($total/$goal)*100)
+                Write-Progress -Activity "Downloading $Uri" -Status "Saving $total of $goal" -id 0 -percentComplete (($total/$goal)*100)
               } else {
-                Write-Progress "Downloading $Uri" "Saving $total bytes..." -id 0
+                Write-Progress -Activity "Downloading $Uri" -Status "Saving $total bytes..." -id 0
               }
             }
           } while ($count -gt 0)
@@ -221,7 +221,7 @@ if(!(Get-Command Invoke-WebReques[t])) {
           }
         }
         
-        Write-Progress "Finished Downloading $Uri" "Saved $total bytes..." -id 0 -Completed
+        Write-Progress -Activity "Finished Downloading $Uri" -Status "Saved $total bytes..." -id 0 -Completed
 
         # I have a fundamental disagreement with Microsoft about what the output should be
         if($OutFile) {

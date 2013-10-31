@@ -364,7 +364,7 @@ filter ConvertTo-Module {
 }
 
 
-$PSScriptRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+$PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
 
 Set-Alias Search-PoshCode Get-PoshCode
 Set-Alias New-PoshCode Send-PoshCode

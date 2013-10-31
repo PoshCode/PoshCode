@@ -116,7 +116,7 @@ param(
 end {{
   $EAP, $ErrorActionPreference = $ErrorActionPreference, "Stop"
 
-  Write-Progress "Validating PoshCode Module" -Id 0
+  Write-Progress -Activity "Installing Module" -Status "Validating PoshCode Module" -Id 0
   if($PSBoundParameters.ContainsKey("Package")) {{
     $TargetModulePackage = $PSBoundParameters["Package"]
   }}
@@ -125,7 +125,7 @@ end {{
     $PoshCodeModule = Import-Module PoshCode -Passthru -ErrorAction Stop
     Update-Module PoshCode -Confirm
   }} else {{
-    Write-Progress "Installing PoshCode Module" -Id 0
+    Write-Progress -Activity "Installing Module" -Status "Installing PoshCode Module" -Id 0
 
     ## Figure out where to install PoshCode initially 
     if(!$PSBoundParameters.ContainsKey("InstallPath")) {{
@@ -151,11 +151,9 @@ end {{
 
     # Since we just installed the PoshCode module, we will update the config data with the path they picked
     $ConfigData = Get-ConfigData
-    if($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("UserProfile")) + "*")) {{
+    if($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("Personal")) + "*")) {{
       $ConfigData.InstallPaths["UserPath"] = $InstallPath
-    }} elseif($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("CommonDocuments")) + "*")) {{
-      $ConfigData.InstallPaths["CommonPath"] = $InstallPath
-    }} elseif($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("CommonProgramFiles")) + "*")) {{
+    }} elseif($InstallPath -match ([Regex]::Escape([Environment]::GetFolderPath("ProgramFiles")) + "*")) {{
       $ConfigData.InstallPaths["CommonPath"] = $InstallPath
     }} else {{
       $ConfigData.InstallPaths["Default"] = $InstallPath
@@ -167,10 +165,10 @@ end {{
   }}
 
   if($TargetModulePackage) {{
-    Write-Progress "Installing Package $TargetModulePackage" -Id 0
+    Write-Progress -Activity "Installing Module" -Status "Installing Package $TargetModulePackage" -Id 0
     $PSBoundParameters["Package"] = $TargetModulePackage
     Install-Module @PSBoundParameters -ErrorAction Stop
-    Write-Progress "Package Installed Successfully" -Id 0
+    Write-Progress -Activity "Installing Module" -Status "Package Installed Successfully" -Id 0
   }}
   
 }}

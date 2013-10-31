@@ -17,8 +17,8 @@ function FindModule {
    process {
       $(
          $RepositoryRoot = $Root
-         if((Test-Path $RepositoryRoot -Type Leaf) -or (Test-Path (Join-Path $PSScriptRoot $RepositoryRoot) -Type Leaf) -or (Test-Path (Join-Path $PSScriptRoot "$RepositoryRoot.psd1") -Type Leaf)) {
-            if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = Join-Path $PSScriptRoot $RepositoryRoot }
+         if((Test-Path $RepositoryRoot -Type Leaf) -or (Test-Path (Join-Path $PoshCodeModuleRoot $RepositoryRoot) -Type Leaf) -or (Test-Path (Join-Path $PoshCodeModuleRoot "$RepositoryRoot.psd1") -Type Leaf)) {
+            if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = Join-Path $PoshCodeModuleRoot $RepositoryRoot }
             if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = "$RepositoryRoot.psd1" }
 
             Write-Verbose "File Repository $RepositoryRoot"
