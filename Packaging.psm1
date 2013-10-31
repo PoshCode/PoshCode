@@ -9,11 +9,14 @@
 ## Install-Module and Expand-ZipFile and Expand-Package
 ## It depends on the Installation module for the Copy-Stream function
 ## It depends on the ModuleInfo module for the Update-ModuleInfo command
-$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
 
 
 # FULL # BEGIN FULL: Don't include this in the installer script
-Write-Verbose "Importing Constants $PoshCodeModuleRoot\Constants.ps1"
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
+
 . $PoshCodeModuleRoot\Constants.ps1
 # FULL # END FULL
 
@@ -63,7 +66,7 @@ function Compress-Module {
 
          Pop-Location
       }
-      Write-Verbose "$($Module  | % FileList | Out-String)"
+      Write-Verbose "$($Module  | % { $_.FileList } | Out-String)"
       Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    
 
       # If the Module.Path isn't a PSD1, then there is none, so we can't package this module
@@ -197,11 +200,9 @@ function Compress-Module {
                   } finally {
                      if($writer) {
                         $writer.Close()
-                        $writer.Dispose()
                      }
                      if($reader) {
                         $reader.Close()
-                        $reader.Dispose()
                      }
                   }
 
@@ -260,7 +261,6 @@ function Compress-Module {
                if($Package) { 
                   Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Writing Package" -Id 0            
                   $Package.Close()
-                  $Package.Dispose() 
                }
             }
 

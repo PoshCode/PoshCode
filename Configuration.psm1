@@ -1,6 +1,15 @@
 # We're not using Requires because it just gets in the way on PSv2
 #!Requires -Modules ModuleInfo, LocalStorage
 
+# FULL # BEGIN FULL: Don't include this in the installer script
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
+
+. $PoshCodeModuleRoot\Constants.ps1
+# FULL # END FULL
+
 
 ########################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.

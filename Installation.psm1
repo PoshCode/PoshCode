@@ -11,6 +11,10 @@
 ## It depends on the ModuleInfo module
 
 # FULL # BEGIN FULL: Don't include this in the installer script
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
 . $PoshCodeModuleRoot\Constants.ps1
 
 if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
