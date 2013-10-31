@@ -5,7 +5,7 @@
 ###############################################################################
 ## InvokeWeb.psm1 defines a subset of the Invoke-WebRequest functionality
 ## On PowerShell 3 and up we'll just use the built-in Invoke-WebRequest
-if(!(Get-Command Invoke-WebRequest)) {
+if(!(Get-Command Invoke-WebReques[t])) {
   function Invoke-WebRequest {
     <#
       .Synopsis
@@ -200,9 +200,9 @@ if(!(Get-Command Invoke-WebRequest)) {
             if(!$quiet) {
               $total += $count
               if($goal -gt 0) {
-                Write-Progress "Downloading $Uri" "Saving $total of $goal" -id 0 -percentComplete (($total/$goal)*100)
+                Write-Progress -Activity "Downloading $Uri" -Status "Saving $total of $goal" -id 0 -percentComplete (($total/$goal)*100)
               } else {
-                Write-Progress "Downloading $Uri" "Saving $total bytes..." -id 0
+                Write-Progress -Activity "Downloading $Uri" -Status "Saving $total bytes..." -id 0
               }
             }
           } while ($count -gt 0)
@@ -221,7 +221,7 @@ if(!(Get-Command Invoke-WebRequest)) {
           }
         }
         
-        Write-Progress "Finished Downloading $Uri" "Saved $total bytes..." -id 0 -Completed
+        Write-Progress -Activity "Finished Downloading $Uri" -Status "Saved $total bytes..." -id 0 -Completed
 
         # I have a fundamental disagreement with Microsoft about what the output should be
         if($OutFile) {
@@ -232,7 +232,8 @@ if(!(Get-Command Invoke-WebRequest)) {
       }
       if(Test-Path variable:response) {
         $response.Close(); 
-        $response.Dispose(); 
+        # HttpWebResponse doesn't have Dispose (in .net 2?)
+        # $response.Dispose(); 
       }
     }
   }

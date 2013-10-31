@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-16"?>
+<Types>
+    <Type>
+        <Name>System.Management.Automation.PSModuleInfo</Name>
+        <Members>
+          <MemberSet>
+              <Name>StandardMembers</Name>
+              <Members>
+                  <PropertySet>
+                      <Name>DefaultDisplayPropertySet</Name>
+                      <ReferencedProperties>
+                          <Name>Path</Name>
+                          <Name>Description</Name>
+                          <Name>Guid</Name>
+                          <Name>Version</Name>
+                          <Name>ModuleBase</Name>
+                          <Name>ModuleType</Name>
+                          <Name>PrivateData</Name>
+                          <Name>AccessMode</Name>
+                          <Name>ExportedAliases</Name>
+                          <Name>ExportedCmdlets</Name>
+                          <Name>ExportedFunctions</Name>
+                          <Name>ExportedVariables</Name>
+                          <Name>NestedModules</Name>
+                      </ReferencedProperties>
+                  </PropertySet>
+              </Members>
+          </MemberSet>
+        </Members>
+    </Type>
+</Types>

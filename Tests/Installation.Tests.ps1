@@ -2,12 +2,12 @@
 
 Import-Module PSAINT # http://poshcode.org/Modules/PSAINT.psd1
 
-Import-Module "$PSScriptRoot\Installation.psm1" -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\Installation.psm1" -ErrorAction Stop
 
 test "Expand Package" {
    arrange {
-      $ModulePackage = "C:\Users\Joel\Documents\WindowsPowerShell\Modules\WASP.psmx"
-      $ModulePath = "C:\Users\Joel\Documents\WindowsPowerShell\Modules\WASP\"
+      $ModulePackage = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP.psmx"
+      $ModulePath = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP\"
       if(!(Test-Path $ModulePackage)) {
          $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.psmx" -OutFile $ModulePackage
       }
@@ -36,8 +36,8 @@ test "Expand Package" {
 
 test "Expand Zip" {
    arrange {
-      $ModulePackage = "C:\Users\Joel\Documents\WindowsPowerShell\Modules\WASP.zip"
-      $ModulePath = "C:\Users\Joel\Documents\WindowsPowerShell\Modules\WASP\"
+      $ModulePackage = Join-Path (Convert-Path "~\Documents\WindowsPowerShell\Modules") "WASP.zip"
+      $ModulePath = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP\"
       if(!(Test-Path $ModulePackage)) {
          $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.zip" -OutFile $ModulePackage
       }
