@@ -10,6 +10,7 @@
 
 # FULL # BEGIN FULL: Don't include this in the installer script
 . $PSScriptRoot\Constants.ps1
+# FULL # END FULL
 
 # Public Function
 # This is a wrapper for Get-Module which uses Update-ModuleInfo to load the package manifest
@@ -107,7 +108,6 @@ function Read-Module {
       .ForwardHelpCategory Cmdlet
    #>
 }
-# FULL # END FULL
 
 # Private Function Called by Read-Module when you explicitly pass it a psmx file
 # Basically the same as Read-Module, but for working with Package (psmx) files 
@@ -609,7 +609,6 @@ function ConvertTo-Metadata {
    begin { $t = "  " }
 
    process {
-      $VerbosePreference = "Continue"
       if($InputObject -is [Int16] -or 
          $InputObject -is [Int32] -or 
          $InputObject -is [Int64] -or 
