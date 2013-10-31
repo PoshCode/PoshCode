@@ -536,7 +536,7 @@ function Install-Module {
       # If the installed module ended up having a totally different name than the source package
       if(((Split-Path $PackagePath) -eq $InstallPath) -and ([IO.Path]::GetFileName($PackagePath) -notlike "$(Split-Path $ModuleFolder -Leaf)*")) {
          if($PackageExt = [IO.Path]::GetExtension($PackagePath)) {
-            $NewPackagePath = (Convert-Path $ModuleFolder).TrimEnd('\') + $PackageExt
+            $NewPackagePath = "$((Convert-Path $ModuleFolder).TrimEnd('\'))$PackageExt"
             Write-Verbose "Rename downloaded $PackagePath to $NewPackagePath"
             if((Split-Path $NewPackagePath) -eq $InstallPath) {
                Move-Item $PackagePath $NewPackagePath -ErrorAction SilentlyContinue

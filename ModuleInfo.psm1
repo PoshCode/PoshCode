@@ -141,7 +141,7 @@ function Get-ModulePackage {
                return
             }
             Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-            $PackageManifest = Import-ManifestStream ($Part.GetStream()) -AsObject
+            $PackageManifest = Import-ManifestStream ($Part.GetStream())
 
             ## Now load the module manifest (which has everything else in it)
             $Manifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
@@ -151,12 +151,12 @@ function Get-ModulePackage {
             }
             if($Part = $Package.GetPart( $Manifest.TargetUri )) {
                Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
-               if($ModuleManifest = Import-ManifestStream ($Part.GetStream()) -AsObject) {
+               if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
                   ## If we got the module manifest, update the PackageManifest
                   $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
                }
             }
-            Write-Output $PackageManifest
+            New-Object PSObject -Property $PackageManifest
          } catch [Exception] {
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
          } finally {
@@ -187,7 +187,7 @@ function Update-ModuleInfo {
       }
 
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
-         $ModuleManifestPath = Resolve-Path $ModuleInfo
+         $ModuleManifestPath = Convert-Path $ModuleInfo
          try {
             if(!$ExistingModuleInfo) {
                $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject

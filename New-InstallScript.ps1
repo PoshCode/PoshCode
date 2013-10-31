@@ -145,7 +145,9 @@ end {{
     # Ditch the temporary module and import the real one
     Remove-Module PoshCodeTemp
     $PoshCodeModule = Import-Module PoshCode -Passthru -ErrorAction Stop
-    Write-Warning "PoshCode Module Installed"
+    if($TargetModulePackage) {{
+      Write-Warning "PoshCode Module Installed"
+    }}
 
     # Since we just installed the PoshCode module, we will update the config data with the path they picked
     $ConfigData = Get-ConfigData
@@ -159,6 +161,9 @@ end {{
       $ConfigData.InstallPaths["Default"] = $InstallPath
     }}
     Set-ConfigData -ConfigData $ConfigData
+
+    &$PoshCodeModule {{ Test-ExecutionPolicy }}
+
   }}
 
   if($TargetModulePackage) {{
@@ -168,7 +173,6 @@ end {{
     Write-Progress "Package Installed Successfully" -Id 0
   }}
   
-  &$PoshCodeModule {{ Test-ExecutionPolicy }}
 }}
 
 begin {{
