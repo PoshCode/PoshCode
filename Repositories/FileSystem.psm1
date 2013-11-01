@@ -1,3 +1,9 @@
+# FULL # BEGIN FULL: Don't include this in the installer script
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+}
+# FULL # END FULL
 
 function FindModule {
    [CmdletBinding()]
