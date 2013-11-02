@@ -21,7 +21,7 @@ param(
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
 
 if(!$Version) {
-  $Version = (Import-LocalizedData -BaseDirectory $PSScriptRoot -FileName PoshCode.psd1).ModuleVersion
+  $Version = (Import-Metadata "${PSScriptRoot}\PoshCode.psd1").ModuleVersion
 }
 
 if($Version -le "0.0") { throw "Can't calculate a version!" }
