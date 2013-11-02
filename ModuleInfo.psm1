@@ -385,7 +385,7 @@ function Import-ManifestStream {
 }
 
 
-# These functions are just simple helpers for use in data sections (see about_data_sections) and .psd1 files (see Import-LocalizedData)
+# These functions are just simple helpers for use in data sections (see about_data_sections) and .psd1 files (see ConvertFrom-Metadata)
 function PSObject {
    <#
       .Synopsis
@@ -460,38 +460,22 @@ function Import-Metadata {
 
    process {
       $ModuleInfo = $null
-      # When we have a file, use Import-LocalizedData (via Import-PSD1)
       if(Test-Path $Path) {
          Write-Verbose "Importing Metadata file from `$Path: $Path"
          if(!(Test-Path $Path -PathType Leaf)) {
             $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
          }
          try {
-            if($FilePath = Convert-Path $Path -ErrorAction SilentlyContinue) {
-               $ModuleInfo = @{}
-               Import-LocalizedData -BindingVariable ModuleInfo -BaseDirectory (Split-Path $FilePath) -FileName (Split-Path $FilePath -Leaf) -SupportedCommand "PSObject", "GUID", "Join-Path"
-               $ModuleInfo = Add-SimpleNames $ModuleInfo
-            }
+            $ModuleInfo = ConvertFrom-Metadata $Path | Add-SimpleNames
          } catch {
-            # Write-Warning "Error Importing LocalizedData from the file:`n${FilePath}`n$_"
-            $ModuleInfo = $null
-            $ImportLocalizedDataError = $_
-            try {
-               return (ConvertFrom-Metadata (Get-Content $Path -Delimiter ([char]0))) | Add-SimpleNames
-            } catch {
-               $PSCmdlet.ThrowTerminatingError( $ImportLocalizedDataError )
-            }
+            $PSCmdlet.ThrowTerminatingError( $_ )
          }
          if(!$ModuleInfo.Count) {
             $Path = Get-Content $Path -Delimiter ([char]0)
          }
       }
 
-      # Otherwise, use the Tokenizer and Invoke-Expression with a "Data" section
-      if(!$ModuleInfo) {
-         $ModuleInfo = ConvertFrom-Metadata $Path | Add-SimpleNames
-      }
-      if($AsObject) {
+      if($ModuleInfo -and $AsObject) {
          $ModuleInfo | % { 
             $_.RequiredModules = $_.RequiredModules | % { 
                New-Object PSObject -Property $_ } | % {
@@ -553,56 +537,91 @@ function Export-Metadata {
 
 # At this time there's not a lot of value in exporting the ConvertFrom/ConvertTo functions
 # Private Functions (which could be exported)
-function ConvertFrom-Metadata {
-   [CmdletBinding()]
-   param($InputObject)
-   begin {
-      $ValidTokens = "Keyword", "Command", "Variable", "CommandParameter", "GroupStart", "GroupEnd", "Member", "Operator", "String", "Number", "Comment", "NewLine", "StatementSeparator"
-      $ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData", "Join-Path"
-      $ValidParameters = "-StringData", "-Value"
-      $ValidKeywords = "if","else","elseif"
-      $ValidVariables = "PoshCodeModuleRoot","PSCulture","PSUICulture","True","False","Null"
-      $ParseErrors = $Null
-   }   
-   process {
-      # You can't stuff signatures into a data block
-      $InputObject = $InputObject -replace "# SIG # Begin(?s:.*)# SIG # End signature block"
-      Write-Verbose "Converting Metadata From Content: $($InputObject.Length) bytes"
 
-      # Safety checks just to make sure they can't escape the data block
-      # If there are unbalanced curly braces, it will fail to tokenize
-      $Tokens = [System.Management.Automation.PSParser]::Tokenize(${InputObject},[ref]$ParseErrors)
+function ConvertFrom-Metadata {
+   [CmdletBinding()]param(
+      [Parameter(ValueFromPipelineByPropertyName="True", Position=0)]
+      [Alias("PSPath")]
+      $InputObject,
+      $ScriptRoot = '$PSScriptRoot'
+   )
+   begin {
+      [string[]]$ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData", "Join-Path"
+      [string[]]$ValidVariables = "PSScriptRoot", "ScriptRoot", "PoshCodeModuleRoot","PSCulture","PSUICulture","True","False","Null"
+   }
+   process {
+      if( Test-Path $InputObject -ErrorAction SilentlyContinue) {
+         $ScriptRoot = Split-Path $InputObject
+         $InputObject = (Get-Content $InputObject -Delim "`n") -join "`n"
+      }
+      $EAP, $ErrorActionPreference = $EAP, "Stop"
+
+      $InputObject = $InputObject -replace "# SIG # Begin signature block(?s:.*)"
+      $Tokens = $Null; $ParseErrors = $Null
+
+
+      if("System.Management.Automation.Language.Parser" -as [Type]) { 
+         $AST = [System.Management.Automation.Language.Parser]::ParseInput($InputObject, [ref]$Tokens, [ref]$ParseErrors)
+      } else {
+         $Tokens = [System.Management.Automation.PSParser]::Tokenize(${InputObject},[ref]$ParseErrors)
+      }
+
       if($ParseErrors -ne $null) {
          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
       }
-      if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid $(@($InvalidTokens)[0].Type) Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
-      }
 
-      $InvalidTokens = $(switch($Tokens){
-         {$_.Type -eq "Keyword"} { if($ValidKeywords -notcontains $_.Content) { $_ } }
-         {$_.Type -eq "CommandParameter"} { if(!($ValidParameters -match $_.Content)) { $_ } }
-         {$_.Type -eq "Command"} { if($ValidCommands -notcontains $_.Content) { $_ } }
-         {$_.Type -eq "Variable"} { if($ValidVariables -notcontains $_.Content) { $_ } }
-      })
-      if($InvalidTokens) {
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
-      }
 
-      # Now, because there's no way to allow additional variables in the data block, but module manifests do anyway...
-      # Manually replace the PoshCodeModuleRoot with a string before trying to invoke it as a data block
-      if($scriptroots = $Tokens | Where-Object { $_.Type -eq "Variable" -and $_.Content -eq "PoshCodeModuleRoot" }) {
-         for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
-            $InputObject = $InputObject.Remove($scriptroots[$r].Start, $scriptroots[$r].Length).Insert($scriptroots[$r].Start,"'.'")
+      # Now, because there's no way to allow PSScriptRoot in the data block, but module manifests do anyway...
+      # Manually replace the PSScriptRoot with ScriptRoot before trying to invoke it as a data block
+      if("System.Management.Automation.Language.Parser" -as [Type]) { 
+         if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Kind) -and ($_.Name -eq "PSScriptRoot") } | ForEach-Object { $_.Extent } )) {
+            for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
+               $InputObject = $InputObject.Remove($scriptroots[$r].StartOffset, ($scriptroots[$r].EndOffset - $scriptroots[$r].StartOffset)).Insert($scriptroots[$r].StartOffset,'$ScriptRoot')
+            }
+            $AST = [System.Management.Automation.Language.Parser]::ParseInput($InputObject, [ref]$Tokens, [ref]$ParseErrors)
          }
+
+         $Script = $AST.GetScriptBlock()
+         $Script.CheckRestrictedLanguage( $ValidCommands, $ValidVariables, $true )
+      } else {
+         if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Type) -and ($_.Content -eq "PSScriptRoot") })) {
+            for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
+               $InputObject = $InputObject.Remove($scriptroots[$r].Start, $scriptroots[$r].Length).Insert($scriptroots[$r].Start,'$ScriptRoot')
+            }
+         }         
+
+
+         # PowerShell 2.0 doesn't have a CheckRestrictedLanguage, so we'll check here:
+         $ValidTokens = "Keyword", "Command", "Variable", "CommandParameter", "GroupStart", "GroupEnd", "Member", "Operator", "String", "Number", "Comment", "NewLine", "StatementSeparator"
+         if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid $(@($InvalidTokens)[0].Type) Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
+         }
+
+         $ValidParameters = "-StringData", "-Value"
+         $ValidKeywords = "if","else","elseif"
+         $InvalidTokens = $(switch($Tokens){
+            {$_.Type -eq "Keyword"} { if($ValidKeywords -notcontains $_.Content) { $_ } }
+            {$_.Type -eq "CommandParameter"} { if(!($ValidParameters -match $_.Content)) { $_ } }
+            {$_.Type -eq "Command"} { if($ValidCommands -notcontains $_.Content) { $_ } }
+            {$_.Type -eq "Variable"} { if($ValidVariables -notcontains $_.Content) { $_ } }
+         })
+         if($InvalidTokens) {
+            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
+         }
+
+         $Script = [ScriptBlock]::Create($InputObject)
+
       }
 
-      # Even with this much protection, Invoke-Expression makes me nervous, which is why I try to avoid it.
+
+      $Mode, $ExecutionContext.SessionState.LanguageMode = $ExecutionContext.SessionState.LanguageMode, "RestrictedLanguage"
+
       try {
-         $OFS = ", "
-         Invoke-Expression "Data -SupportedCommand $ValidCommands { ${InputObject} }"
-      } catch {
-         $PSCmdlet.ThrowTerminatingError( $_ )
+         $Script.InvokeReturnAsIs(@())
+      }
+      finally {    
+         $ErrorActionPreference = $EAP
+         $ExecutionContext.SessionState.LanguageMode = $Mode
       }
    }
 }

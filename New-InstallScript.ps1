@@ -21,7 +21,7 @@ param(
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
 
 if(!$Version) {
-  $Version = (Import-LocalizedData -BaseDirectory $PSScriptRoot -FileName PoshCode.psd1).ModuleVersion
+  $Version = (Import-Metadata "${PSScriptRoot}\PoshCode.psd1").ModuleVersion
 }
 
 if($Version -le "0.0") { throw "Can't calculate a version!" }
@@ -206,7 +206,7 @@ if($Package) {
 
   Write-Host
   # Update-ModuleInfo PoshCode -Version $Version
-  $Files = Compress-Module PoshCode $OutputPath
+  $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
   $Files += $Files | Where-Object { $_.Name.EndsWith(".psmx") } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.psmx) -Passthru
   @(Get-Item $InstallScript) + @($Files) | Out-Default
 
