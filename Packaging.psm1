@@ -33,7 +33,7 @@ function Compress-Module {
    param(
       # The name of the module to package
       [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
-      [ValidateNotNullOrEmpty()] 
+      [ValidateNotNullOrEmpty()]
       $Module,
       
       # The folder where packages should be placed (defaults to the current FileSystem working directory)
@@ -51,15 +51,20 @@ function Compress-Module {
       $ConfirmAllOverwrite = $false;
    }
    process {
+      Write-Verbose "Compress-Module $Module to $OutputPath"
       if($Module -isnot [System.Management.Automation.PSModuleInfo]) {
          # Hypothetically, could it be faster to select -first, now that pipelines are interruptable?
-         $ModuleName = $Module
+         [String]$ModuleName = $Module
          ## Workaround PowerShell Bug https://connect.microsoft.com/PowerShell/feedback/details/802030
          Push-Location $Script:EmptyPath
          if($PSVersionTable.PSVersion -lt "3.0") {
             $Module = Import-Module $ModuleName -PassThru  | Update-ModuleInfo
          } else {
-            $Module = Get-Module $ModuleName -ListAvailable | Select-Object -First 1
+            if(Get-Module $ModuleName) {
+               $Module = Get-Module $ModuleName
+            } else {   
+               $Module = Get-Module $ModuleName -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+            }
             Write-Verbose "$($Module  | % FileList | Out-String)"
             $Module = $Module | Update-ModuleInfo
          }
