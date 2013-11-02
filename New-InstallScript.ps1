@@ -40,11 +40,11 @@ if($Increment) {
 }
 
 # Note: in the install script we strip the export command, as well as the signature if it's there, and anything delimited by BEGIN FULL / END FULL 
-$Constants = (Get-Content $PSScriptRoot\Constants.ps1 -Raw) -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" 
-$ModuleInfo = (Get-Content $PSScriptRoot\ModuleInfo.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
-$Configuration = (Get-Content $PSScriptRoot\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
-$InvokeWeb = (Get-Content $PSScriptRoot\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
-$Installation = (Get-Content $PSScriptRoot\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>' -replace "# SIG # Begin signature block(?s:.*)# SIG # End signature block" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
+$Constants = (Get-Content $PSScriptRoot\Constants.ps1 -Raw)  -replace "# SIG # Begin signature block(?s:\s.*)" 
+$ModuleInfo = (Get-Content $PSScriptRoot\ModuleInfo.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
+$Configuration = (Get-Content $PSScriptRoot\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
+$InvokeWeb = (Get-Content $PSScriptRoot\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
+$Installation = (Get-Content $PSScriptRoot\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
 $InstallScript = Join-Path $OutputPath Install.ps1
 
 Set-Content $InstallScript ((@'
