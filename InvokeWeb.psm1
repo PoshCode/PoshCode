@@ -141,53 +141,38 @@ if(!$PoshCodeModuleRoot) {
 
         # Magics to figure out a file location based on the response
         if($OutFile) {
-          # If the path is just a file name, then interpret it as .\FileName
-          if(!(Split-Path $OutFile) -and (![IO.Path]::IsPathRooted($OutFile))) {
-            $OutFile = Join-Path (Get-Location -PSProvider FileSystem) $OutFile
-          }
-          # If the path is just a folder, guess the FileName from the response
-          elseif(Test-Path -PathType "Container" $OutFile)
-          {
-            [string]$OutFilePath = ([regex]'(?i)filename=(.*)$').Match( $response.Headers["Content-Disposition"] ).Groups[1].Value
-            $OutFilePath = $OutFilePath.trim("\/""'")
-             
-            $sep,$ofs = $ofs,""
-            $OutFilePath = [Regex]::Replace($OutFilePath, "[$([Regex]::Escape(""$([System.IO.Path]::GetInvalidPathChars())$([IO.Path]::AltDirectorySeparatorChar)$([IO.Path]::DirectorySeparatorChar)""))]", "_")
-            $sep,$ofs = $ofs,$sep
-            
-            if(!$OutFilePath) {
-              $OutFilePath = $response.ResponseUri.Segments[-1]
-              $OutFilePath = $OutFilePath.trim("\./")
-              if(!$OutFilePath) { 
-                $OutFilePath = Read-Host "Please provide a file name"
-              }
-              $OutFilePath = $OutFilePath.trim("\./")
-            }
-            if(!([IO.FileInfo]$OutFilePath).Extension) {
-              $OutFilePath = $OutFilePath + "." + $response.ContentType.Split(";")[0].Split("/")[-1].Split("+")[-1]
-            }          
-            Write-Verbose "Determined a filename: $OutFilePath"
-            $OutFile = Join-Path $OutFile $OutFilePath
-            Write-Verbose "Calculated the full path: $OutFile"
-          }
+          $EAP,$ErrorActionPreference = $ErrorActionPreference, "Stop"          
+          # When you need to convert a path that might not exist yet ...
+          $OutFile = New-Item -Path $OutFile -Type File -Force | Convert-Path
+          $ErrorActionPreference = $EAP
         }
 
         if(!$OutFile) {
-          $encoding = [System.Text.Encoding]::GetEncoding( $response.CharacterSet )
-          [string]$output = ""
+          $Headers = @{}
+          foreach($h in $response.Headers){ $Headers.$h = $response.GetResponseHeader($h) }
+          $Result = @{
+            BaseResponse = $response
+            Headers = $Headers
+            RawContentStream = New-Object System.IO.MemoryStream $response.ContentLength
+            RawContentLength = $response.ContentLength
+            Content = $null
+            StatusCode = [int]$response.StatusCode
+            StatusDescription = $response.StatusDescription
+          }
+          if($response.CharacterSet) {
+            $encoding = [System.Text.Encoding]::GetEncoding( $response.CharacterSet )
+            $Result.Content = ""
+          } else {
+            $encoding = $null
+            $Result.Content = New-Object 'byte[]' $response.ContentLength
+          }
         }
    
         try {
-          if($ResponseHandler) {
-            . $ResponseHandler $response
-          }
-        } catch {
-          $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-        }
-
-        try {
           [int]$goal = $response.ContentLength
           $reader = $response.GetResponseStream()
+          $ms = 
+
           if($OutFile) {
             try {
               $writer = new-object System.IO.FileStream $OutFile, "Create"
@@ -196,16 +181,18 @@ if(!$PoshCodeModuleRoot) {
               return
             }
           }        
-          [byte[]]$buffer = new-object byte[] 4096
+          [byte[]]$buffer = new-object byte[] 1mb
           [int]$total = [int]$count = 0
           do
           {
             $count = $reader.Read($buffer, 0, $buffer.Length);
+            $Result.RawContentStream.Write($buffer, 0, $count)
             if($OutFile) {
-              $writer.Write($buffer, 0, $count);
-            } else {
-              $output += $encoding.GetString($buffer,0,$count)
-            } 
+              $writer.Write($buffer, 0, $count)
+            } elseif($encoding) {
+              $Result.Content += $encoding.GetString($buffer,0,$count)
+            }
+
             # This is unecessary, but nice to have
             if(!$quiet) {
               $total += $count
@@ -216,6 +203,7 @@ if(!$PoshCodeModuleRoot) {
               }
             }
           } while ($count -gt 0)
+
         } catch [Exception] {
           $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
           Write-Error "Could not download package from $Url"
@@ -230,14 +218,21 @@ if(!$PoshCodeModuleRoot) {
             $Writer.Dispose()
           }
         }
+
+        if(!$encoding) {
+          [Array]::Copy( $Result.RawContentStream.GetBuffer(), $Result.Content, $response.ContentLength )
+        }
         
         Write-Progress -Activity "Finished Downloading $Uri" -Status "Saved $total bytes..." -id 0 -Completed
 
         # I have a fundamental disagreement with Microsoft about what the output should be
         if($OutFile) {
           Get-Item $OutFile
-        } elseif(Get-Variable output -Scope Local) {
-          $output
+        } elseif(Test-Path variable:local:Result) {
+          $Result = New-Object PSObject -Property $Result
+          $Result.PSTypeNames.Insert(0, "Microsoft.PowerShell.Commands.WebResponseObject")
+          $Result.PSTypeNames.Insert(0, "Microsoft.PowerShell.Commands.BasicHtmlWebResponseObject")
+          return $Result
         }
       }
       if(Test-Path variable:response) {

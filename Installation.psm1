@@ -102,10 +102,6 @@ function Update-Module {
    
          ## Download the PackageManifestUri and see what version we got...
          $WebParam = @{Uri = $M.PackageManifestUri}
-         # TODO: This is currently very simplistic, based on the URL alone which
-         #       requires the URL to have NO query string, and end in a file name
-         #       it would be better to have Invoke-Web figure out the file name...
-         $WebParam.OutFile = Join-Path ([IO.path]::GetTempPath()) ([IO.Path]::GetExtension($M.PackageManifestUri))
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
             $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
@@ -123,12 +119,9 @@ function Update-Module {
             continue # Check the rest of the modules...
          }
    
-         # If we used the built-in Invoke-WebRequest, we don't have the file yet...
-         if($WebResponse -isnot [System.IO.FileInfo]) { $WebResponse = Get-ChildItem $WebParam.OutFile }
-      
+         # Get the metadata straight from the WebResponse:
          # Now lets find out what the latest version is:
-         $WebResponse = Resolve-Path $WebResponse -ErrorAction Stop
-         $Mi = Import-Metadata $WebResponse
+         $Mi = Import-Metadata $WebResponse.Content
    
          $M.Update = [Version]$Mi.ModuleVersion
          Write-Verbose "Current version of $($M.Name) is $($M.Update), you have $($M.Version)"
@@ -154,14 +147,7 @@ function Update-Module {
                $InstallParam = @{InstallPath = $InstallPath} + $PsBoundParameters
                $null = "Module", "ListAvailable" | % { $InstallParam.Remove($_) }
       
-               # If the InfoUri and the DownloadUri are the same, then we already downloaded it
-               if($M.PackageManifestUri -eq $Mi.DownloadUri) {
-                  $InstallParam.Add("Package", $WebResponse)
-               } else {
-                  # Get rid of the temporarily downloaded package info
-                  Remove-Item $WebResponse
-                  $InstallParam.Add("Package", $Mi.DownloadUri)
-               }
+               $InstallParam.Add("Package", $Mi.DownloadUri)
 
                Write-Verbose "Install Module Upgrade:`n$( $InstallParam | Out-String )"
       
@@ -467,28 +453,12 @@ function Install-Module {
       # There are a few possibilities here: they might be installing from a web module, in which case we need to download first
       # If we need to download, that's a seperate pre-install step:
       if("$Package" -match "^https?://" ) {
-         # Make sure the InstallPath has a file name:
-         # TODO: This is currently very simplistic, based on the URL alone which
-         #       requires the URL to have NO query string, and end in a file name
-         #       it would be better to have Invoke-Web figure out the file name...
-         if(Test-Path $InstallPath -PathType Container) {
-            # You can't use Split-Path on urls in PS2
-            $OutFile = Join-Path $InstallPath ([IO.Path]::GetFileName($Package))
-         } else {
-            $OutFile = $InstallPath
-         }
-         
-         Write-Verbose "Fetch '$Package' to '$OutFile'"
-   
          $WebParam = @{} + $PsBoundParameters
          $WebParam.Add("Uri",$Package)
-         $WebParam.Add("OutFile",$OutFile)
-         $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru", "ZipFolder" | % { $WebParam.Remove($_) }
-   
-
+         $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru", "ZipFolder", "ErrorAction", "ErrorVariable" | % { $WebParam.Remove($_) }
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
-            $Package = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
+            $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
          } catch [System.Net.WebException] {
             if(!$WebException) { $WebException = @($_.Exception) }
          } finally {
@@ -501,13 +471,32 @@ function Install-Module {
             $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord @($WebException)[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source) )
          }
 
-         # If we used the built-in Invoke-WebRequest, we don't have the file yet...
-         if($Package -isnot [System.IO.FileInfo]) { $Package = Get-ChildItem $OutFile }
+         $FileName = ([regex]'(?i)filename=(.*)$').Match( $WebResponse.Headers["Content-Disposition"] ).Groups[1].Value
+         if(!$FileName) {
+            $FileName = [IO.Path]::GetFileName( $WebResponse.BaseResponse.ResponseUri.AbsolutePath )
+         }
+
+         $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $ModuleInfoExtension })
+
+         if(!$FileName) {
+            $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetRandomFileName(), $ext )
+         } 
+         elseif(![IO.path]::HasExtension($FileName) -or !($ModuleInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
+            $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
+         }
+
+         $FileName = Join-Path $InstallPath $FileName
+
+         if( $WebResponse.Content -is [Byte[]] ) {
+            Set-Content $FileName $WebResponse.Content -Encoding Byte
+         } else {
+            Set-Content $FileName $WebResponse.Content
+         }         
       }
 
       # At this point, the Package must be a file 
       # TODO: consider supporting install from a (UNC Path) folder for corporate environments
-      $PackagePath = Resolve-Path $Package -ErrorAction Stop
+      $PackagePath = Resolve-Path $WebResponse -ErrorAction Stop
 
       ## If we just got back a module manifest (text file vs. zip/psmx)
       ## Figure out the real package Uri and recurse so we can download it
