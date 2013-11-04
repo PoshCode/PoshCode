@@ -214,7 +214,7 @@ function Compress-Module {
 
                   # Add a Package Relationship to the Document Part
                   switch -regex ($File) {
-                     ([regex]::Escape($Module.Path)) {
+                     ([regex]::Escape($MetadataName)) {
                         $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleMetadataType)
                         Write-Verbose "    Added Relationship: $ModuleMetadataType"
                         break
@@ -306,4 +306,3 @@ function Set-PackageProperties {
 
   }
 }
-
