@@ -45,9 +45,20 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
       Add-Type -AssemblyName System.Web.Extensions
 
       # Note: while in preview, the GitHub api requires an "Accept" header as acknowledgement of it's beta status.
-      $pagedata = Invoke-WebRequest $Root -Body @{q="$search path:package.psd1"} -Headers @{Accept='application/vnd.github.preview'}
+      $wr = Invoke-WebRequest $Root -Body @{q="$search path:package.psd1"} -Headers @{Accept='application/vnd.github.preview'}
+      # Read the data using the right character set, because Invoke-WebRequest doesn't
+      try {
+         $null = $wr.RawContentStream.Seek(0,"Begin")
+         $reader = New-Object System.IO.StreamReader $wr.RawContentStream, $wr.BaseResponse.CharacterSet
+         $content = $reader.ReadToEnd()
+      } catch {
+         $content= $wr.Content
+      } finally {
+         if($reader) { $reader.Close() }
+      }
+
       $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
-      $json = $ser.DeserializeObject($pagedata.Content)
+      $json = $ser.DeserializeObject($Content)
 
       $json.items | %{
          $result = New-Object psobject -Property @{

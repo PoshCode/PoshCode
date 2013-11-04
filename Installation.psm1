@@ -118,10 +118,21 @@ function Update-Module {
             Write-Warning "Can't fetch ModuleInfo from $($M.PackageManifestUri) for $($M.Name): $(@($WebException)[0].Message)"
             continue # Check the rest of the modules...
          }
+
+         try {
+            $null = $WebResponse.RawContentStream.Seek(0,"Begin")
+            $reader = New-Object System.IO.StreamReader $WebResponse.RawContentStream, $WebResponse.BaseResponse.CharacterSet
+            $content = $reader.ReadToEnd()
+         } catch {
+            $content= $WebResponse.Content
+         } finally {
+            if($reader) { $reader.Close() }
+         }
+
    
          # Get the metadata straight from the WebResponse:
          # Now lets find out what the latest version is:
-         $Mi = Import-Metadata $WebResponse.Content
+         $Mi = Import-Metadata $content
    
          $M.Update = [Version]$Mi.ModuleVersion
          Write-Verbose "Current version of $($M.Name) is $($M.Update), you have $($M.Version)"
@@ -485,18 +496,18 @@ function Install-Module {
             $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
          }
 
-         $FileName = Join-Path $InstallPath $FileName
+         $Package = Join-Path $InstallPath $FileName
 
          if( $WebResponse.Content -is [Byte[]] ) {
-            Set-Content $FileName $WebResponse.Content -Encoding Byte
+            Set-Content $Package $WebResponse.Content -Encoding Byte
          } else {
-            Set-Content $FileName $WebResponse.Content
+            Set-Content $Package $WebResponse.Content
          }         
       }
 
       # At this point, the Package must be a file 
       # TODO: consider supporting install from a (UNC Path) folder for corporate environments
-      $PackagePath = Resolve-Path $WebResponse -ErrorAction Stop
+      $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
       ## If we just got back a module manifest (text file vs. zip/psmx)
       ## Figure out the real package Uri and recurse so we can download it

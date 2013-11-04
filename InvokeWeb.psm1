@@ -175,7 +175,7 @@ if(!$PoshCodeModuleRoot) {
 
           if($OutFile) {
             try {
-              $writer = new-object System.IO.FileStream $OutFile, "Create"
+              $writer = New-Object System.IO.FileStream $OutFile, "Create"
             } catch { # Catch just in case, lots of things could go wrong ...
               Write-Error $_.Exception -Category WriteError
               return
@@ -186,11 +186,13 @@ if(!$PoshCodeModuleRoot) {
           do
           {
             $count = $reader.Read($buffer, 0, $buffer.Length);
-            $Result.RawContentStream.Write($buffer, 0, $count)
             if($OutFile) {
               $writer.Write($buffer, 0, $count)
-            } elseif($encoding) {
-              $Result.Content += $encoding.GetString($buffer,0,$count)
+            } else {
+              $Result.RawContentStream.Write($buffer, 0, $count)
+              if($encoding) {
+                $Result.Content += $encoding.GetString($buffer,0,$count)
+              }
             }
 
             # This is unecessary, but nice to have
@@ -219,7 +221,7 @@ if(!$PoshCodeModuleRoot) {
           }
         }
 
-        if(!$encoding) {
+        if(!$Outfile -and !$encoding) {
           [Array]::Copy( $Result.RawContentStream.GetBuffer(), $Result.Content, $response.ContentLength )
         }
         
