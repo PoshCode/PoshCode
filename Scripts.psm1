@@ -272,7 +272,7 @@ function Get-PoshCode {
      if($Language -eq 'all') { $Language = "" }
      switch($PSCmdlet.ParameterSetName) {
         "Search" {
-           $results = @(([xml](Invoke-WebRequest "$($url)api$($PoshCode.ApiVersion)/$($query)&lang=$($Language)")).rss.channel.GetElementsByTagName("item"))
+           $results = @(([xml](Invoke-WebRequest "$($url)api$($PoshCode.ApiVersion)/$($query)&lang=$($Language)").Content).rss.channel.GetElementsByTagName("item"))
            if($results.Count -eq 0 ) {
               Write-Host "Zero Results for '$query'" -Fore Red -Back Black
            } 
@@ -367,4 +367,3 @@ Set-Alias Search-PoshCode Get-PoshCode
 Set-Alias New-PoshCode Send-PoshCode
 
 Export-ModuleMember Get-PoshCode, Send-PoshCode -alias Search-PoshCode, New-PoshCode
-

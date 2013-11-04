@@ -465,14 +465,12 @@ function Import-Metadata {
          if(!(Test-Path $Path -PathType Leaf)) {
             $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
          }
-         try {
-            $ModuleInfo = ConvertFrom-Metadata $Path | Add-SimpleNames
-         } catch {
-            $PSCmdlet.ThrowTerminatingError( $_ )
-         }
-         if(!$ModuleInfo.Count) {
-            $Path = Get-Content $Path -Delimiter ([char]0)
-         }
+      }
+
+      try {
+         $ModuleInfo = ConvertFrom-Metadata $Path | Add-SimpleNames
+      } catch {
+         $PSCmdlet.ThrowTerminatingError( $_ )
       }
 
       if($ModuleInfo -and $AsObject) {
@@ -550,69 +548,44 @@ function ConvertFrom-Metadata {
       [string[]]$ValidVariables = "PSScriptRoot", "ScriptRoot", "PoshCodeModuleRoot","PSCulture","PSUICulture","True","False","Null"
    }
    process {
-      if( Test-Path $InputObject -ErrorAction SilentlyContinue) {
-         $ScriptRoot = Split-Path $InputObject
-         $InputObject = (Get-Content $InputObject -Delim "`n") -join "`n"
-      }
       $EAP, $ErrorActionPreference = $EAP, "Stop"
-
-      $InputObject = $InputObject -replace "# SIG # Begin signature block(?s:.*)"
       $Tokens = $Null; $ParseErrors = $Null
 
+      if($PSVersionTable.PSVersion -lt "3.0") {
+         if(!(Test-Path $InputObject -ErrorAction SilentlyContinue)) {
+            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(),"psd1")
+            Set-Content -Path $Path $InputObject
+            $InputObject = $Path
+         }
+         $Result = $null
+         Import-LocalizedData -BindingVariable Result -BaseDirectory (Split-Path $InputObject) -FileName (Split-Path $InputObject -Leaf) -SupportedCommand $ValidCommands
+         return $Result
+      }
 
-      if("System.Management.Automation.Language.Parser" -as [Type]) { 
-         $AST = [System.Management.Automation.Language.Parser]::ParseInput($InputObject, [ref]$Tokens, [ref]$ParseErrors)
+      if(Test-Path $InputObject -ErrorAction SilentlyContinue) {
+         $AST = [System.Management.Automation.Language.Parser]::ParseFile( (Convert-Path $InputObject), [ref]$Tokens, [ref]$ParseErrors)
+         $ScriptRoot = Split-Path $InputObject
       } else {
-         $Tokens = [System.Management.Automation.PSParser]::Tokenize(${InputObject},[ref]$ParseErrors)
+         $ScriptRoot = $PoshCodeModuleRoot
+         $OFS = "`n"
+         $InputObject = "$InputObject" -replace "# SIG # Begin signature block(?s:.*)"
+         $AST = [System.Management.Automation.Language.Parser]::ParseInput($InputObject, [ref]$Tokens, [ref]$ParseErrors)
       }
 
       if($ParseErrors -ne $null) {
          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
       }
 
-
-      # Now, because there's no way to allow PSScriptRoot in the data block, but module manifests do anyway...
-      # Manually replace the PSScriptRoot with ScriptRoot before trying to invoke it as a data block
-      if("System.Management.Automation.Language.Parser" -as [Type]) { 
-         if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Kind) -and ($_.Name -eq "PSScriptRoot") } | ForEach-Object { $_.Extent } )) {
-            for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
-               $InputObject = $InputObject.Remove($scriptroots[$r].StartOffset, ($scriptroots[$r].EndOffset - $scriptroots[$r].StartOffset)).Insert($scriptroots[$r].StartOffset,'$ScriptRoot')
-            }
-            $AST = [System.Management.Automation.Language.Parser]::ParseInput($InputObject, [ref]$Tokens, [ref]$ParseErrors)
+      if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Kind) -and ($_.Name -eq "PSScriptRoot") } | ForEach-Object { $_.Extent } )) {
+         $ScriptContent = $Ast.ToString()
+         for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
+            $ScriptContent = $ScriptContent.Remove($scriptroots[$r].StartOffset, ($scriptroots[$r].EndOffset - $scriptroots[$r].StartOffset)).Insert($scriptroots[$r].StartOffset,'$ScriptRoot')
          }
-
-         $Script = $AST.GetScriptBlock()
-         $Script.CheckRestrictedLanguage( $ValidCommands, $ValidVariables, $true )
-      } else {
-         if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Type) -and ($_.Content -eq "PSScriptRoot") })) {
-            for($r = $scriptroots.count - 1; $r -ge 0; $r--) {
-               $InputObject = $InputObject.Remove($scriptroots[$r].Start, $scriptroots[$r].Length).Insert($scriptroots[$r].Start,'$ScriptRoot')
-            }
-         }         
-
-
-         # PowerShell 2.0 doesn't have a CheckRestrictedLanguage, so we'll check here:
-         $ValidTokens = "Keyword", "Command", "Variable", "CommandParameter", "GroupStart", "GroupEnd", "Member", "Operator", "String", "Number", "Comment", "NewLine", "StatementSeparator"
-         if($InvalidTokens = $Tokens | Where-Object { $ValidTokens -notcontains $_.Type }){
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid $(@($InvalidTokens)[0].Type) Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
-         }
-
-         $ValidParameters = "-StringData", "-Value"
-         $ValidKeywords = "if","else","elseif"
-         $InvalidTokens = $(switch($Tokens){
-            {$_.Type -eq "Keyword"} { if($ValidKeywords -notcontains $_.Content) { $_ } }
-            {$_.Type -eq "CommandParameter"} { if(!($ValidParameters -match $_.Content)) { $_ } }
-            {$_.Type -eq "Command"} { if($ValidCommands -notcontains $_.Content) { $_ } }
-            {$_.Type -eq "Variable"} { if($ValidVariables -notcontains $_.Content) { $_ } }
-         })
-         if($InvalidTokens) {
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Invalid Tokens found when parsing package manifest. $(@($InvalidTokens)[0].Content +' on Line '+ @($InvalidTokens)[0].StartLine +', character '+@($InvalidTokens)[0].StartColumn)", "Parse Error", "InvalidData", $InvalidTokens) )
-         }
-
-         $Script = [ScriptBlock]::Create($InputObject)
-
+         $AST = [System.Management.Automation.Language.Parser]::ParseInput($ScriptContent, [ref]$Tokens, [ref]$ParseErrors)
       }
 
+      $Script = $AST.GetScriptBlock()
+      $Script.CheckRestrictedLanguage( $ValidCommands, $ValidVariables, $true )
 
       $Mode, $ExecutionContext.SessionState.LanguageMode = $ExecutionContext.SessionState.LanguageMode, "RestrictedLanguage"
 
