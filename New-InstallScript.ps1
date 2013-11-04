@@ -202,12 +202,12 @@ begin {{
 
 Sign $InstallScript -WA 0 -EA 0
 if($Package) {
-  Sign -Module PoshCode -WA 0 -EA 0
+   (Get-Module PoshCode).FileList | Get-Item | Where { ".psd1",".psm1",".ps1",".ps1xml",".dll" -contains $_.Extension } | Sign
 
-  Write-Host
-  # Update-ModuleInfo PoshCode -Version $Version
-  $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
-  $Files += $Files | Where-Object { $_.Name.EndsWith(".psmx") } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.psmx) -Passthru
-  @(Get-Item $InstallScript) + @($Files) | Out-Default
+   Write-Host
+   # Update-ModuleInfo PoshCode -Version $Version
+   $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
+   $Files += $Files | Where-Object { $_.Name.EndsWith(".psmx") } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.psmx) -Passthru
+   @(Get-Item $InstallScript) + @($Files) | Out-Default
 
 }
