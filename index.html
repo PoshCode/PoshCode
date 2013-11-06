@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="Poshcode : PowerShell Module for Module Packaging, Sharing, Finding, Installing" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Poshcode</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/PoshCode/poshcode">View on GitHub</a>
+
+          <h1 id="project_title">Poshcode</h1>
+          <h2 id="project_tagline">PowerShell Module for Module Packaging, Sharing, Finding, Installing</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/PoshCode/poshcode/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/PoshCode/poshcode/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p>PoshCode's purpose is to make it easier to distribute modules and scripts over the internet or within local and corporate networks.  <strong>With this new project we are focusing on making it easy to distribute modules without explaining module installation to your users.</strong>  Additionally, we're supporting the automatic installation of dependencies, so that you can distribute modules which have a dependency on other modules without having to worry about how your users will find and install them.</p>
+
+<p>The module has two main commands for users, and a third for module developers:</p>
+
+<ol>
+<li>Find-Module (searches various module registries and repositories)</li>
+<li>Install-Module (installs modules from local packages or .zip files, or from URLs or UNC paths)</li>
+<li>Compress-Module (create a redistributable module package from a module on your system)</li>
+</ol><h3>
+<a name="to-install-the-poshcode-module-run-one-of-these-two-command-lines" class="anchor" href="#to-install-the-poshcode-module-run-one-of-these-two-command-lines"><span class="octicon octicon-link"></span></a>To install the PoshCode module, run one of these two command lines:</h3>
+
+<div class="highlight highlight-posh"><pre>    <span class="c"># Install by downloading and executing the installer:</span>
+    <span class="n">iwr</span> <span class="s1">'http://PoshCode.org/I'</span> <span class="n">-OutF</span> <span class="n">PC</span><span class="p">.</span><span class="n">ps1</span><span class="err">;</span> <span class="p">.\</span><span class="n">PC</span><span class="err">;</span> <span class="n">rm</span> <span class="p">.\</span><span class="n">PC</span><span class="p">.</span><span class="n">ps1</span>
+
+    <span class="c"># Install from WebDAV share:</span>
+    <span class="p">\\</span><span class="n">PoshCode</span><span class="p">.</span><span class="n">org</span><span class="p">\</span><span class="n">Modules</span><span class="p">\</span><span class="n">Install</span>
+</pre></div>
+
+<p>The rest of the documentation is on the wiki, broken into several sections:</p>
+
+<ol>
+<li><a href="https://github.com/PoshCode/poshcode/wiki/Installing-Modules">Installing Modules</a></li>
+<li><a href="https://github.com/PoshCode/poshcode/wiki/Creating-Module-Packages">Creating Module Packages</a></li>
+<li><a href="https://github.com/PoshCode/poshcode/wiki/Distributing-Module-Packages">Distributing Module Packages</a></li>
+<li><a href="https://github.com/PoshCode/poshcode/wiki/Creating-Module-Packages">Additional Features of PoshCode</a></li>
+</ol>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Poshcode maintained by <a href="https://github.com/PoshCode">PoshCode</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
