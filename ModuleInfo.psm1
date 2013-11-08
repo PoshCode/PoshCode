@@ -613,7 +613,8 @@ function ConvertTo-Metadata {
          $InputObject -is [Int64] -or 
          $InputObject -is [Double] -or 
          $InputObject -is [Decimal] -or 
-         $InputObject -is [Byte]) { 
+         $InputObject -is [Byte] -or
+         $InputObject -is [Version] ) { 
          # Write-Verbose "Numbers"
          "$InputObject" 
       }

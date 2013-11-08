@@ -306,3 +306,106 @@ function Set-PackageProperties {
 
   }
 }
+
+
+function New-PackageManifest {
+   <#
+      .Synopsis
+         Creates a package manifest (package.psd1) for a module that already has a module manifest.
+      .Description
+         Creates a package manifest with the mandatory and optional properties
+   #>   
+   [CmdletBinding()]
+   param(
+      # The name of the module to create a new package.psd1 file for.
+      [Parameter(Mandatory=$true)]
+      [String]$Name,
+
+      # The url where the module package will be uploaded
+      [Parameter(Mandatory=$true)]
+      [String]$DownloadUri,
+      
+      # The url where the module's package manifest will be uploaded (defaults to the download URI modified to ModuleName.psd1)
+      [String]$PackageManifestUri = $( $DownloadUri -replace ([Regex]::Escape([IO.Path]::GetFileName($DownloadUri))), "${Name}.psd1" ),
+
+      # The relative uri for a license file, or a url to a license file
+      [String]$LicenseUri,
+
+      # The Required modules is a hashtable of ModuleName=PackageManifestUri
+      [Hashtable]$RequiredModules,
+
+      # Choose one category from the list:
+      [ValidateSet("Active Directory", "Applications", "App-V", "Backup and System Restore", "Databases", "Desktop Management", "Exchange", "Group Policy", "Hardware", "Interoperability and Migration", "Local Account Management", "Logs and monitoring", "Lync", "Messaging & Communication", "Microsoft Dynamics", "Multimedia", "Networking", "Office", "Office 365", "Operating System", "Other Directory Services", "Printing", "Remote Desktop Services", "Scripting Techniques", "Security", "Servers", "SharePoint", "Storage", "System Center", "UE-V", "Using the Internet", "Windows Azure", "Windows Update")]
+      [String]$Category,
+
+      # An array of keyword tags for search
+      [String[]]$Keywords,
+
+      # a URL or relative path to your personal avatar in gif/jpg/png form
+      [String]$AuthorAvatarUri,
+
+      # your company name, if you have one
+      [String]$CompanyName,
+
+      # the address for your your company website
+      [String]$CompanyUri,
+
+      # a URL or relative path to your corporate logo in gif/jpg/png form
+      [String]$CompanyIconUri,
+
+      # a URL or relative path to a web page about this module
+      [String]$ModuleInfoUri,
+
+      # a URL or relative path to an icon for the module in gif/jpg/png form
+      [String]$ModuleIconUri,
+
+      # a web URL for a bug tracker or support forum, or a mailto: address for the author/support team.
+      [String]$SupportUri
+   )
+   end {
+      $Manifest = Read-Module $Name -ListAvailable 
+
+      if(!$Manifest) {
+         throw "Couldn't find module $Name"
+      }
+
+      if($PackageManifestUri) {
+         $PSBoundParameters.PackageManifestUri = $PackageManifestUri
+      }
+
+      $PSBoundParameters.Version = $Manifest.Version
+      $PSBoundParameters.Author  = $Manifest.Author
+
+      
+
+      if($Manifest.RequiredModules.Count -gt 0) {
+         $Modules = @()
+         # TODO: loop through $RequiredModules and make @{ Name="Name"; PackageManifestUri = "$PackageManifestUri" }
+         if($Manifest.RequiredModules -is [Array]) {
+            foreach($moduleInfo in $Manifest.RequiredModules) {
+               $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
+               if($RequiredModules.ContainsKey($Name)) {
+                  $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
+               } else {
+                  Write-Host "Please enter the PackageManifestURI:"
+                  $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+               }
+            }
+         } else {
+            $moduleInfo = $Manifest.RequiredModules
+            $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
+            if($RequiredModules -and $RequiredModules.ContainsKey($Name)) {
+               $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
+            } else {
+               Write-Host "Please enter the PackageManifestURI:"
+               $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+            }
+         }
+         $PSBoundParameters["RequiredModules"] = $Modules
+      } elseif($PSBoundParameters.RequiredModules.Count -eq 0) {
+         $PSBoundParameters.Remove("RequiredModules")
+      }
+
+      $PSBoundParameters | Export-Metadata -Path (Join-Path $Manifest.ModuleBase "package.psd1")
+   }
+}
