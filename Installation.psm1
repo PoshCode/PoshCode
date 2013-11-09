@@ -427,7 +427,6 @@ function Install-Module {
          $null = $PsBoundParameters.Add("InstallPath", $InstallPath)
       }
 
-
       if(Test-Path $InstallPath) {
          if(Test-Path $InstallPath -PathType Leaf) {
             $InstallPath = Split-Path $InstallPath
@@ -506,14 +505,13 @@ function Install-Module {
       }
 
       # At this point, the Package must be a file 
-      # TODO: consider supporting install from a (UNC Path) folder for corporate environments
       $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
       ## If we just got back a module manifest (text file vs. zip/psmx)
       ## Figure out the real package Uri and recurse so we can download it
       # TODO: Check the file contents instead (it's just testing extensions right now)
       if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
-         Write-Verbose "Downloaded file '$PackagePath' is just a manifest, get DownloadUri."
+         Write-Verbose "The file '$PackagePath' is just a manifest, get DownloadUri."
          $MI = Import-Metadata $PackagePath -ErrorAction "SilentlyContinue"
          Remove-Item $PackagePath
 
@@ -574,10 +572,10 @@ function Install-Module {
                   }
                   continue
                } else {
-                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version). Trying upgrade:"
+                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version)."
                }
             } else {
-               Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module. Trying install:"
+               Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module."
             }
 
             # Check for a local copy, maybe we get lucky:
@@ -600,7 +598,7 @@ function Install-Module {
                continue
             } 
    
-            Write-Warning "The module package does not have a PackageManifestUri for the required module $($RequiredModule.MOduleName), and there's not a local copy."
+            Write-Warning "The module package does not have a PackageManifestUri for the required module $($RequiredModule.ModuleName), and there's not a local copy."
             $FailedModules += $RequiredModule
             continue
          }

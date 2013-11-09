@@ -376,8 +376,6 @@ function New-PackageManifest {
       $PSBoundParameters.Version = $Manifest.Version
       $PSBoundParameters.Author  = $Manifest.Author
 
-      
-
       if($Manifest.RequiredModules.Count -gt 0) {
          $Modules = @()
          # TODO: loop through $RequiredModules and make @{ Name="Name"; PackageManifestUri = "$PackageManifestUri" }

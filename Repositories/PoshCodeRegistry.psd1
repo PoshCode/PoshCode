@@ -68,7 +68,7 @@
       Description = "PowerShell Visio Automation"
       Author = 'Justin Rich'
 
-      PackageManifestUri="https://raw.github.com/jrich523/PSVA/master/visioAutomation.psd1"
+      PackageManifestUri="https://raw.github.com/jrich523/PSVA/master/VisioAutomation/package.psd1"
       ModuleInfoUri="https://github.com/jrich523/PSVA"
       LicenseUri="http://opensource.org/licenses/ms-pl"
     }
@@ -77,7 +77,7 @@
       Description = "Nimble Storage Module"
       Author = 'Justin Rich'
 
-      PackageManifestUri="https://raw.github.com/jrich523/NimblePowerShell/master/Nimble.psd1"
+      PackageManifestUri="https://raw.github.com/jrich523/NimblePowerShell/master/package.psd1"
       ModuleInfoUri="https://github.com/jrich523/NimblePowerShell"
       LicenseUri="http://opensource.org/licenses/ms-pl"
     }
@@ -86,20 +86,10 @@
       Description = 'Great command line editing in the PowerShell console host'
       Author = 'Jason Shirk'
 
-      DownloadUri = 'https://github.com/lzybkr/PSReadLine/archive/master.zip'
+      DownloadUri = 'https://github.com/lzybkr/PSReadLine/blob/master/PSReadline.zip'
       ZipFolder = '*\PSReadLine'
       LicenseUri = 'https://raw.github.com/lzybkr/PSReadLine/master/License.txt'
       ModuleInfoUri = 'https://github.com/lzybkr/PSReadLine'
     }
-    "Pester" = @{
-      Name = 'Pester'
-      Description = 'A BDD style testing tool for Powershell'
-      Author = 'Pester Team'
-      # Note the problem with this module is that I can't write a ZipFolder (the module is in the root)
-      # And since there's no Pester.psd1, the module ends up in Pester-master
-      DownloadUri = 'https://github.com/pester/Pester/archive/master.zip'
-      LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
-      ModuleInfoUri = 'https://github.com/Pester/Pester'
-   }
   }
 }
