@@ -504,6 +504,24 @@ function Install-Module {
          }         
       }
 
+
+      # If the Package is just a module name (and doesn't exist), we can search for it
+      if( ($Package.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -eq -1) -and !(Test-Path $Package) ){
+         $SearchResults = Find-Module -Name $Package
+         if(@($SearchResults).Count -eq 1) {
+            $URI = $(if($SearchResults.DownloadUri) { $SearchResults.DownloadUri } else { $SearchResults.PackageManifestUri })
+            if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Module: $($SearchResults.Name)")) {
+               $SearchResults | Install-Module
+            }
+         } elseif(@($SearchResults).Count -gt 1) {
+            Write-Warning "Multiple matching modules found, please call Install-Module with the right PackageManifestUrl below:"
+            $SearchResults
+         } else {
+            Write-Error "Can't find module package $Package"
+         }
+         return
+      }
+
       # At this point, the Package must be a file 
       $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
@@ -593,8 +611,10 @@ function Install-Module {
 
             # If they have a PackageManifestUri, we can try that:
             if($RequiredModule.PackageManifestUri) {
-               Write-Warning "Installing required module $($RequiredModule.MOduleName) from $($RequiredModule.PackageManifestUri)"
-               Install-Module $RequiredModule.PackageManifestUri $InstallPath
+               $URI = $(if($RequiredModule.DownloadUri) { $RequiredModule.DownloadUri } else { $RequiredModule.PackageManifestUri })
+               if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Required Module: $($RequiredModule.Name)")) {
+                  Install-Module -Package $URI -InstallPath $InstallPath 
+               }
                continue
             } 
    
