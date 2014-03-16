@@ -2,10 +2,14 @@
 # NOTE: these types are needed elsewhere (Packaging Module)
 #       the types aren't needed for the installer
 #       but they are part of the "packaging light" module, so here they are.
-# This is what nuget uses for .nuspec, we use it for .moduleinfo ;)
+
+# Nuget XML Schema namespace
+$NuGetNamespace          = "http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd"
+# This is what nuget uses for .nuspec
 $ManifestType            = "http://schemas.microsoft.com/packaging/2010/07/manifest"
 # We need to make up a URL for the metadata psd1 relationship type
 $ModuleMetadataType      = "http://schemas.poshcode.org/package/module-metadata"
+$PackageMetadataType     = "http://schemas.poshcode.org/package/package-metadata"
 $ModuleHelpInfoType      = "http://schemas.poshcode.org/package/help-info"
 $PackageThumbnailType    = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"
 # I'm not sure there's any benefit to extra types:
@@ -32,6 +36,7 @@ if(Test-Path $EmptyPath) {
 }
 
 # Our Extensions
+$NuSpecManifestExtension = ".nuspec"
 $ModuleInfoFile          = "package.psd1"
 $ModuleInfoExtension     = ".psd1"
 $ModuleManifestExtension = ".psd1"

@@ -4,6 +4,7 @@
    Author = 'Joel Bennett'
    Description = 'PowerShell Packaging Module'
    AuthorEmail = 'Jaykul@HuddledMasses.org'
+   Tags = 'PoshCode','Packaging','NuGet','PSGet'
 
    ModuleInfoUri="https://github.com/Jaykul/poshcode"
    LicenseUri="http://opensource.org/licenses/ms-pl"

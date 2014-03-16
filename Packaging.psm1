@@ -74,7 +74,7 @@ function Compress-Module {
       Write-Verbose "$($Module  | % { $_.FileList } | Out-String)"
       Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    
 
-      # If the Module.Path isn't a PSD1, then there is none, so we can't package this module
+      # If the Module.Path isn't a PSD1, then there is none, so we will refuse to package this module
       if( $Module -isnot [System.Management.Automation.PSModuleInfo] -and [IO.Path]::GetExtension($Module.Path) -ne ".psd1" ) {
          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (.psd1) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
       }
@@ -84,7 +84,7 @@ function Compress-Module {
       if($Module.Version -gt "0.0") {
          $PackageVersion = $Module.Version
       } else {
-         Write-Warning "Module Version not specified properly: using 1.0"
+         Write-Warning "Module Version not specified properly, using 1.0"
          $PackageVersion = "1.0"
       }
    
@@ -94,7 +94,7 @@ function Compress-Module {
          $OutputPath = Split-Path $OutputPath
       }
       if(Test-Path $OutputPath -ErrorAction Stop) {
-         $PackagePath = Join-Path $OutputPath "${PackageName}-${PackageVersion}${ModulePackageExtension}"
+         $PackagePath = Join-Path $OutputPath "${PackageName}.${PackageVersion}${ModulePackageExtension}"
          $PackageInfoPath = Join-Path $OutputPath "${PackageName}${ModuleInfoExtension}"
       }
 
@@ -120,11 +120,7 @@ function Compress-Module {
             Get-Item $PackageInfoPath
 
             Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Preparing File List" -Id 0    
-
-            $MetadataName = "${PackageName}.psd1"
-            $MetadataPath = Join-Path $Module.ModuleBase $MetadataName
-            $ModuleRootRex = [regex]::Escape((Split-Path $Module.ModuleBase))
-
+            
             [String[]]$FileList = Get-ChildItem $Module.ModuleBase -Recurse | 
                Where-Object {-not $_.PSIsContainer} | 
                Select-Object -Expand FullName
@@ -156,7 +152,7 @@ function Compress-Module {
 
             # Create the package
             $Package = [System.IO.Packaging.Package]::Open( $PackagePath, [IO.FileMode]::Create )
-            Set-PackageProperties $Package.PackageProperties $Module
+            Set-PackageProperties $Package $Module
 
             try {
                # Now pack up all the files we've found:
@@ -165,86 +161,7 @@ function Compress-Module {
                foreach($file in $FileList) {
                   $Count += 1
                   Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Packing File $Count of $Target" -Id 0 -PercentComplete ((($count-1)/$target)*100)
-
-                  $FileRelativePath = $File -replace $ModuleRootRex, ""
-                  $FileUri = [System.IO.Packaging.PackUriHelper]::CreatePartUri( $FileRelativePath )
-
-                  Write-Verbose "Packing $file to ${PackageName}$ModulePackageExtension::$FileUri"
-
-                  # TODO: add MimeTypes for specific powershell types (would let us extract just one type of file)
-                  switch -regex ([IO.Path]::GetExtension($File)) {
-                     "\.(?:psd1|psm1|ps1|cs)" {
-                        # Add a text file part to the Package ( [System.Net.Mime.MediaTypeNames+Text]::Xml )
-                        $part = $Package.CreatePart( $FileUri, "text/plain", "Maximum" ); 
-                        Write-Verbose "    as text/plain"
-                        break;
-                     }
-                     "\.ps1xml|\.xml" {
-                        $part = $Package.CreatePart( $FileUri, "text/xml", "Maximum" ); 
-                        Write-Verbose "    as text/xml"
-                        break
-                     } 
-                     "\.xaml" {
-                        $part = $Package.CreatePart( $FileUri, "text/xaml", "Maximum" ); 
-                        Write-Verbose "    as text/xaml"
-                        break
-                     } 
-                     default {
-                        $part = $Package.CreatePart( $FileUri, "application/octet-stream", "Maximum" ); 
-                        Write-Verbose "    as application/octet-stream"
-                     }
-                  }
-
-                  # Copy the data to the Document Part 
-                  try {
-                    $reader = [IO.File]::Open($File, "Open", "Read", "Read")
-                     $writer = $part.GetStream()
-                     Copy-Stream $reader $writer -Length (Get-Item $File).Length -Activity "Packing $file"
-                  } catch [Exception]{
-                     $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
-                  } finally {
-                     if($writer) {
-                        $writer.Close()
-                     }
-                     if($reader) {
-                        $reader.Close()
-                     }
-                  }
-
-
-                  # Add a Package Relationship to the Document Part
-                  switch -regex ($File) {
-                     ([regex]::Escape($MetadataName)) {
-                        $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleMetadataType)
-                        Write-Verbose "    Added Relationship: $ModuleMetadataType"
-                        break
-                     } 
-
-                     ([regex]::Escape($ModuleInfoFile) + '$') {
-                        $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ManifestType)
-                        Write-Verbose "    Added Relationship: $ManifestType"
-                        break
-                     }
-
-                     # I'm not sure there's any benefit to pointing out the RootModule, but it can't hurt
-                     # OMG - If I ever get a chance to clue-bat the person that OK'd this change to "RootModule":
-                     ([regex]::Escape($(if($module.RootModule){$module.RootModule}else{$module.ModuleToProcess})) + '$') {
-                        $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleRootType)
-                        Write-Verbose "    Added Relationship: $ModuleRootType"
-                        break
-                     }
-
-                     ([regex]::Escape($PackageName + "\.(png|gif|jpg)") + '$') {
-                        $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $PackageThumbnailType)
-                        Write-Verbose "    Added Relationship: $PackageThumbnailType"
-                        break
-                     }
-
-                     default {
-                        $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleContentType)
-                        Write-Verbose "    Added Relationship: $ModuleContentType"
-                     }
-                  }
+                  Add-File $Package $File
                }
 
                if($Module.HelpInfoUri) {
@@ -281,29 +198,183 @@ function Compress-Module {
    }
 }
 
+
+function Add-File {
+   [CmdletBinding(DefaultParameterSetName="FilePath")]
+   param(
+      [Parameter(Mandatory=$true, Position=1)]
+      $Package,
+
+      [Parameter(Mandatory=$true, Position=2, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+      [Alias("PSPath")]
+      $Path,
+
+      [Parameter(ParameterSetName="FakeFile",Mandatory=$true)]
+      $Content
+   )
+   begin {
+      $ModuleRootRex = [regex]::Escape($Module.ModuleBase)
+      $PackageName = $Package.PackageProperties.Title
+      $MetadataName = "${PackageName}.psd1"
+   }
+   process {
+      $FileRelativePath = $Path -replace $ModuleRootRex, ""
+      $FileUri = [System.IO.Packaging.PackUriHelper]::CreatePartUri( $FileRelativePath )
+
+      Write-Verbose "Packing $Path to ${PackageName}$ModulePackageExtension::$FileUri"
+
+      # TODO: add MimeTypes for specific powershell types (would let us extract just one type of file)
+      switch -regex ([IO.Path]::GetExtension($Path)) {
+         "\.(?:psd1|psm1|ps1|cs|txt|md)" {
+            # Add a text file part to the Package ( [System.Net.Mime.MediaTypeNames+Text]::Xml )
+            $part = $Package.CreatePart( $FileUri, "text/plain", "Maximum" ); 
+            Write-Verbose "    as text/plain"
+            break;
+         }
+         "\.ps1xml|\.xml" {
+            $part = $Package.CreatePart( $FileUri, "text/xml", "Maximum" ); 
+            Write-Verbose "    as text/xml"
+            break
+         } 
+         "\.xaml" {
+            $part = $Package.CreatePart( $FileUri, "text/xaml", "Maximum" ); 
+            Write-Verbose "    as text/xaml"
+            break
+         } 
+         default {
+            $part = $Package.CreatePart( $FileUri, "application/octet-stream", "Maximum" ); 
+            Write-Verbose "    as application/octet-stream"
+         }
+      }
+
+      # Copy the data to the Document Part 
+      try {
+         if($Content) {
+            $reader = New-Object System.IO.MemoryStream (,[Text.Encoding]::UTF8.GetBytes($Content))
+         } else {
+            $reader = [IO.File]::Open($Path, "Open", "Read", "Read")
+         }
+         $writer = $part.GetStream()
+         Copy-Stream $reader $writer -Length $reader.Length -Activity "Packing $Path"
+      } catch [Exception]{
+         $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+      } finally {
+         if($writer) {
+            $writer.Close()
+         }
+         if($reader) {
+            $reader.Close()
+         }
+      }
+
+
+      # Add a Package Relationship to the Document Part
+      switch -regex ($Path) {
+         ([regex]::Escape($MetadataName)) {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleMetadataType)
+            Write-Verbose "    Added Relationship: $ModuleMetadataType"
+            break
+         } 
+
+         ([regex]::Escape($ModuleInfoFile) + '$') {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $PackageMetadataType)
+            Write-Verbose "    Added Relationship: $PackageMetadataType"
+            break
+         }
+         ([regex]::Escape($PackageName + $NuSpecManifestExtension) + '$') {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ManifestType)
+            Write-Verbose "    Added Relationship: $ManifestType"
+            break
+         }
+
+         ([regex]::Escape($PackageName + "\.(png|gif|jpg)") + '$') {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $PackageThumbnailType)
+            Write-Verbose "    Added Relationship: $PackageThumbnailType"
+            break
+         }
+
+         default {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleContentType)
+            Write-Verbose "    Added Relationship: $ModuleContentType"
+         }
+      }
+   }
+}
+
 # internal function for setting the PackageProperties of a psmx file
 function Set-PackageProperties {
   #.Synopsis
   #   Sets PackageProperties from a PSModuleInfo
-  PARAM(
+  param(
     # The PackageProperties object to set
     [Parameter(Mandatory=$true, Position=0)]
-    [System.IO.Packaging.PackageProperties]$PackageProperties,
+    $Package,
 
     # The ModuleInfo to get values from
     [Parameter(Mandatory=$true, Position=1)]
     $ModuleInfo
   )
   process {
-    $PackageProperties.Title = $ModuleInfo.Name
-    $PackageProperties.Identifier = $ModuleInfo.GUID
+    $PackageProperties = $Package.PackageProperties
+
+    # Sanity check: you can't require license acceptance unless you specify the license...
+    if(!$ModuleInfo.LicenseUri) {
+       $ModuleInfo.RequireLicenseAcceptance = $false 
+    }
+
+    
+
+    # Add a nuget manifest
+    [xml]$doc = "<?xml version='1.0'?>
+    <package xmlns='$NuGetNamespace'>
+      <metadata>
+        <id>$([System.Security.SecurityElement]::Escape($ModuleInfo.Name))</id>
+        <version>$([System.Security.SecurityElement]::Escape($ModuleInfo.Version))</version>
+        <authors>$([System.Security.SecurityElement]::Escape($ModuleInfo.Author))</authors>
+        <owners>$([System.Security.SecurityElement]::Escape($ModuleInfo.CompanyName))</owners>
+        <licenseUrl>$([System.Security.SecurityElement]::Escape($ModuleInfo.LicenseUri))</licenseUrl>
+        <projectUrl>$([System.Security.SecurityElement]::Escape($ModuleInfo.ModuleInfoUri))</projectUrl>
+        <iconUrl>$([System.Security.SecurityElement]::Escape($ModuleInfo.ModuleIconUri))</iconUrl>
+        <requireLicenseAcceptance>$(([bool]$ModuleInfo.RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>
+        <description>$([System.Security.SecurityElement]::Escape($ModuleInfo.Description))</description>
+        <releaseNotes>$([System.Security.SecurityElement]::Escape($ModuleInfo.ReleaseNotes))</releaseNotes>
+        <copyright>$([System.Security.SecurityElement]::Escape($ModuleInfo.Copyright))</copyright>
+        <tags>$([System.Security.SecurityElement]::Escape($ModuleInfo.Tags -join ' '))</tags>
+      </metadata>
+    </package>"
+
+    # Remove nodes without values (this is to clean up the "Url" nodes that aren't set)
+    $($doc.package.metadata.GetElementsByTagName("*")) | 
+       Where-Object { $_."#text" -eq $null } | 
+       ForEach-Object { $null = $doc.package.metadata.RemoveChild( $_ ) }
+    
+    if( $ModuleInfo.RequiredModules ) {
+       $dependencies = $doc.package.metadata.AppendChild( $doc.CreateElement("dependencies", $NuGetNamespace) )
+       foreach($req in $ModuleInfo.RequiredModules) {
+          $dependency = $dependencies.AppendChild( $doc.CreateElement("dependency", $NuGetNamespace) )
+          $dependency.SetAttribute("id", $req.Name)
+          $dependency.SetAttribute("version", $req.Version)
+       }
+    }
+
+    Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content $doc.OuterXml
+
+    ## NuGet does the WRONG thing here, assuming the package name is unique, pretending there's only one repo
+    #$PackageProperties.Title = $ModuleInfo.Name
+    #$PackageProperties.Identifier = $ModuleInfo.GUID
+    $PackageProperties.Identifier = $ModuleInfo.Name
+
     $PackageProperties.Version = $ModuleInfo.Version
     $PackageProperties.Creator = $ModuleInfo.Author
     $PackageProperties.Description = $ModuleInfo.Description
-    $PackageProperties.Subject = $ModuleInfo.HelpInfoUri
     $PackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
     $PackageProperties.Created = Get-Date
-
+    if($ModuleInfo.Tags) {
+      $PackageProperties.Keywords = $ModuleInfo.Tags -join ' '
+    }
+    if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
+      $PackageProperties.Subject = $anyUrl
+    }
   }
 }
 
