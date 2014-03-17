@@ -168,14 +168,19 @@ function Compress-Module {
                   $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
                }
                if($Module.PackageManifestUri) {
-                  $null = $Package.CreateRelationship( $Module.PackageManifestUri, "External", $ModuleReleaseType )
+                  $null = $Package.CreateRelationship( $Module.PackageManifestUri, "External", $PackageManifestType )
                }
                if($Module.LicenseUri) {
                   $null = $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
                }
                if($Module.DownloadUri) {
-                  $null = $Package.CreateRelationship( $Module.DownloadUri, "External", $ModuleReleaseType )
+                  $null = $Package.CreateRelationship( $Module.DownloadUri, "External", $PackageDownloadType )
                }
+               if($Module.ModuleInfoUri) {
+                  $null = $Package.CreateRelationship( $Module.ModuleInfoUri, "External", $ModuleProjectType )
+               }
+
+               
 
             } catch [Exception] {
                $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
@@ -270,32 +275,28 @@ function Add-File {
 
       # Add a Package Relationship to the Document Part
       switch -regex ($Path) {
-         ([regex]::Escape($MetadataName)) {
-            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleMetadataType)
-            Write-Verbose "    Added Relationship: $ModuleMetadataType"
+         ([regex]::Escape($PackageName + $NuSpecManifestExtension) + '$') {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ManifestType)
+            Write-Verbose "    Added Relationship: ManifestType - $ManifestType"
             break
-         } 
+         }
 
          ([regex]::Escape($ModuleInfoFile) + '$') {
             $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $PackageMetadataType)
-            Write-Verbose "    Added Relationship: $PackageMetadataType"
+            Write-Verbose "    Added Relationship: PackageMetadata - $PackageMetadataType"
             break
          }
-         ([regex]::Escape($PackageName + $NuSpecManifestExtension) + '$') {
-            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ManifestType)
-            Write-Verbose "    Added Relationship: $ManifestType"
+
+         ([regex]::Escape($MetadataName) + '$') {
+            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleMetadataType)
+            Write-Verbose "    Added Relationship: ModuleMetadata - $ModuleMetadataType"
             break
-         }
+         } 
 
          ([regex]::Escape($PackageName + "\.(png|gif|jpg)") + '$') {
             $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $PackageThumbnailType)
-            Write-Verbose "    Added Relationship: $PackageThumbnailType"
+            Write-Verbose "    Added Relationship: PackageThumbnail - $PackageThumbnailType"
             break
-         }
-
-         default {
-            $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $ModuleContentType)
-            Write-Verbose "    Added Relationship: $ModuleContentType"
          }
       }
    }
@@ -319,10 +320,8 @@ function Set-PackageProperties {
 
     # Sanity check: you can't require license acceptance unless you specify the license...
     if(!$ModuleInfo.LicenseUri) {
-       $ModuleInfo.RequireLicenseAcceptance = $false 
+       Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false 
     }
-
-    
 
     # Add a nuget manifest
     [xml]$doc = "<?xml version='1.0'?>
@@ -339,7 +338,7 @@ function Set-PackageProperties {
         <description>$([System.Security.SecurityElement]::Escape($ModuleInfo.Description))</description>
         <releaseNotes>$([System.Security.SecurityElement]::Escape($ModuleInfo.ReleaseNotes))</releaseNotes>
         <copyright>$([System.Security.SecurityElement]::Escape($ModuleInfo.Copyright))</copyright>
-        <tags>$([System.Security.SecurityElement]::Escape($ModuleInfo.Tags -join ' '))</tags>
+        <tags>$([System.Security.SecurityElement]::Escape($ModuleInfo.Keywords -join ' '))</tags>
       </metadata>
     </package>"
 
@@ -369,8 +368,8 @@ function Set-PackageProperties {
     $PackageProperties.Description = $ModuleInfo.Description
     $PackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
     $PackageProperties.Created = Get-Date
-    if($ModuleInfo.Tags) {
-      $PackageProperties.Keywords = $ModuleInfo.Tags -join ' '
+    if($ModuleInfo.Keywords) {
+      $PackageProperties.Keywords = $ModuleInfo.Keywords -join ' '
     }
     if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
       $PackageProperties.Subject = $anyUrl

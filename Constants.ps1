@@ -16,9 +16,11 @@ $PackageThumbnailType    = "http://schemas.openxmlformats.org/package/2006/relat
 # CorePropertiesType is the .psmdcp
 $CorePropertiesType      = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
 $ModuleRootType          = "http://schemas.poshcode.org/package/module-root"
-$ModuleContentType       = "http://schemas.poshcode.org/package/module-file"
-$ModuleReleaseType       = "http://schemas.poshcode.org/package/module-release"
 $ModuleLicenseType       = "http://schemas.poshcode.org/package/module-license"
+
+$ModuleProjectType       = "http://schemas.poshcode.org/package/project"
+$PackageDownloadType     = "http://schemas.poshcode.org/package/release"
+$PackageManifestType     = "http://schemas.poshcode.org/package/manifest"
 
 $PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
 if(!$PoshCodeModuleRoot) {

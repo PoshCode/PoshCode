@@ -136,31 +136,53 @@ function Get-ModulePackage {
          try {
             $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $mPath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
 
-            ## First load the package manifest (which has URLs in it)
+            ## First load the package metadata if there is one (that has URLs in it)
+            $Manifest = @($Package.GetRelationshipsByType( $PackageMetadataType ))[0]
+
+            if(!$Manifest -or !$Manifest.TargetUri) {
+               $DownloadUri = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
+               $ManifestUri = @($Package.GetRelationshipsByType( $PackageManifestType ))[0]
+               if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUri -or !$DownloadUri.TargetUri)) {
+                  Write-Warning "This is not a PoshCode Package, it has not specified the manifest nor a download Url"
+               }
+               $PackageManifest = @{}
+            } else {
+               $Part = $Package.GetPart( $Manifest.TargetUri )
+               if(!$Part) {
+                  Write-Warning "This file is not a valid PoshCode Package, the specified Package manifest is missing at $($Manifest.TargetUri)"
+                  $PackageManifest = @{}
+               } else {
+                  Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
+                  $PackageManifest = Import-ManifestStream ($Part.GetStream())
+               }
+            }
+
             $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
             if(!$Manifest -or !$Manifest.TargetUri) {
-               Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
-               return
+               Write-Warning "This is not a NuGet Package, it does not specify a nuget manifest"
+            } else {
+               $Part = $Package.GetPart( $Manifest.TargetUri )
+               if(!$Part) {
+                  Write-Warning "This file is not a valid NuGet Package, the specified nuget manifest is missing at $($Manifest.TargetUri)"
+               } else {
+                  Write-Verbose "Reading NuGet Manifest From Package: $($Manifest.TargetUri)"
+                  if($NuGetManifest = Import-NuGetStream ($Part.GetStream())) {
+                     $PackageManifest = Update-Dictionary $NuGetManifest $PackageManifest
+                  }
+               } 
             }
-            $Part = $Package.GetPart( $Manifest.TargetUri )
-            if(!$Part) {
-               Write-Warning "This file is not a valid PoshCode Package, it has no manifest at $($Manifest.TargetUri)"
-               return
-            }
-            Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-            $PackageManifest = Import-ManifestStream ($Part.GetStream())
 
             ## Now load the module manifest (which has everything else in it)
             $Manifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
             if(!$Manifest -or !$Manifest.TargetUri) {
-               Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
-               return
-            }
-            if($Part = $Package.GetPart( $Manifest.TargetUri )) {
-               Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
-               if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
-                  ## If we got the module manifest, update the PackageManifest
-                  $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
+               Write-Warning "This file is not a PoshCode Package, it does not specify the module manifest"
+            } else {
+               if($Part = $Package.GetPart( $Manifest.TargetUri )) {
+                  Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
+                  if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
+                     ## If we got the module manifest, update the PackageManifest
+                     $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
+                  }
                }
             }
             New-Object PSObject -Property $PackageManifest
@@ -195,6 +217,7 @@ function Update-ModuleInfo {
 
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
          $ModuleManifestPath = Convert-Path $ModuleInfo
+
          try {
             if(!$ExistingModuleInfo) {
                $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
@@ -219,9 +242,22 @@ function Update-ModuleInfo {
       }
 
       if($ModuleInfo) {
-         $PackageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) "Package.psd1"
          $ModuleBase = Split-Path $ModuleInfo.Path
+         $PackageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) "Package.psd1"
          $ModuleManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf).psd1"
+         $NugetManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf).nuspec"
+
+         if(Test-Path $NugetManifestPath) {
+            try {
+               $reader = [IO.File]::Open($NugetManifestPath, "Open", "Read", "Read")
+               $NugetInfo = Import-NugetStream -Stream $reader
+               $ModuleInfo = Update-Dictionary $ModuleInfo $NugetInfo
+            } catch {
+               $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Nuget Manifest", "InvalidResult", $_) )
+            } finally {
+               $reader.close()
+            }
+         }
 
          ## This is the PoshCode metadata file: Package.psd1
          # Since we're not using anything else, we won't add the aliases...
@@ -352,6 +388,50 @@ function Update-Dictionary {
       $Authoritative | Add-SimpleNames
    }
 }
+
+function Import-NugetStream {
+   param(
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
+      [System.IO.Stream]$stream,
+
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
+   )
+   try {
+      $reader = New-Object System.IO.StreamReader $stream
+      # This gets the package info
+      $ManifestContent = $reader.ReadToEnd()
+   } catch [Exception] {
+      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+   } finally {
+      if($reader) {
+         $reader.Close()
+         $reader.Dispose()
+      }
+      if($stream) {
+         $stream.Close()
+         $stream.Dispose()
+      }
+   }
+   $NugetManifest = ([Xml]$ManifestContent).package.metadata
+   $NugetData = @{}
+   if($NugetManifest.id)         { $NugetData.ModuleName    = $NugetManifest.id }
+   if($NugetManifest.version)    { $NugetData.ModuleVersion = $NugetManifest.version }
+   if($NugetManifest.authors)    { $NugetData.Author        = $NugetManifest.authors }
+   if($NugetManifest.owners)     { $NugetData.CompanyName   = $NugetManifest.owners }
+   if($NugetManifest.description){ $NugetData.Description   = $NugetManifest.description }
+   if($NugetManifest.copyright)  { $NugetData.Copyright     = $NugetManifest.copyright }
+   if($NugetManifest.licenseUrl) { $NugetData.LicenseUri    = $NugetManifest.licenseUrl }
+   if($NugetManifest.projectUrl) { $NugetData.ModuleInfoUri = $NugetManifest.projectUrl }
+   if($NugetManifest.tags)       { $NugetData.Keywords      = $NugetManifest.tags -split ',' }
+
+   if($AsObject) {
+      New-Object PSObject -Property $NugetData
+   } else {
+      $NugetData
+   }
+}
+
 
 # Internal Function for parsing Module and Package Manifest Streams from Get-ModulePackage
 # This is called twice from within Get-ModulePackage (and from nowhere else)
@@ -537,7 +617,8 @@ function Export-Metadata {
 # Private Functions (which could be exported)
 
 function ConvertFrom-Metadata {
-   [CmdletBinding()]param(
+   [CmdletBinding()]
+   param(
       [Parameter(ValueFromPipelineByPropertyName="True", Position=0)]
       [Alias("PSPath")]
       $InputObject,
@@ -573,7 +654,9 @@ function ConvertFrom-Metadata {
       }
 
       if($ParseErrors -ne $null) {
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
+         Write-Host (Get-PSCallStack | Out-String) -ForegroundColor Cyan
+         $ParseException = New-Object System.Management.Automation.ParseException (,[System.Management.Automation.Language.ParseError[]]$ParseErrors)
+         $PSCmdlet.ThrowTerminatingError((New-Object System.Management.Automation.ErrorRecord $ParseException, "Metadata Error", "ParserError", $InputObject))
       }
 
       if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Kind) -and ($_.Name -eq "PSScriptRoot") } | ForEach-Object { $_.Extent } )) {
