@@ -42,7 +42,12 @@ $NuSpecManifestExtension = ".nuspec"
 $ModuleInfoFile          = "package.psd1"
 $ModuleInfoExtension     = ".psd1"
 $ModuleManifestExtension = ".psd1"
-$ModulePackageExtension  = ".psmx"
+# Perhaps we should use NuGet's extension now that I've added the nuget manifest
+# Using .nupkg instead of .psmx 
+# 1) prevents us from having a custom icon
+# 2) allows NuGet to find/process our packages
+# 3) allows us to find/process their packages 
+$ModulePackageExtension  = ".nupkg"
 
 if(!("System.IO.Packaging.Package" -as [Type])) {
     Add-Type -Assembly 'WindowsBase', 'PresentationFramework'

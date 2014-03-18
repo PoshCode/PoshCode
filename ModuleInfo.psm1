@@ -138,12 +138,14 @@ function Get-ModulePackage {
 
             ## First load the package metadata if there is one (that has URLs in it)
             $Manifest = @($Package.GetRelationshipsByType( $PackageMetadataType ))[0]
+            $NugetManifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
+            $ModuleManifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
 
             if(!$Manifest -or !$Manifest.TargetUri) {
                $DownloadUri = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
                $ManifestUri = @($Package.GetRelationshipsByType( $PackageManifestType ))[0]
                if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUri -or !$DownloadUri.TargetUri)) {
-                  Write-Warning "This is not a PoshCode Package, it has not specified the manifest nor a download Url"
+                  Write-Warning "This is not a full PoshCode Package, it has not specified the manifest nor a download Url"
                }
                $PackageManifest = @{}
             } else {
@@ -157,15 +159,14 @@ function Get-ModulePackage {
                }
             }
 
-            $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
-            if(!$Manifest -or !$Manifest.TargetUri) {
+            if(!$NugetManifest -or !$NugetManifest.TargetUri) {
                Write-Warning "This is not a NuGet Package, it does not specify a nuget manifest"
             } else {
-               $Part = $Package.GetPart( $Manifest.TargetUri )
+               $Part = $Package.GetPart( $NugetManifest.TargetUri )
                if(!$Part) {
-                  Write-Warning "This file is not a valid NuGet Package, the specified nuget manifest is missing at $($Manifest.TargetUri)"
+                  Write-Warning "This file is not a valid NuGet Package, the specified nuget manifest is missing at $($NugetManifest.TargetUri)"
                } else {
-                  Write-Verbose "Reading NuGet Manifest From Package: $($Manifest.TargetUri)"
+                  Write-Verbose "Reading NuGet Manifest From Package: $($NugetManifest.TargetUri)"
                   if($NuGetManifest = Import-NuGetStream ($Part.GetStream())) {
                      $PackageManifest = Update-Dictionary $NuGetManifest $PackageManifest
                   }
@@ -173,16 +174,25 @@ function Get-ModulePackage {
             }
 
             ## Now load the module manifest (which has everything else in it)
-            $Manifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
-            if(!$Manifest -or !$Manifest.TargetUri) {
-               Write-Warning "This file is not a PoshCode Package, it does not specify the module manifest"
+            if(!$ModuleManifest -or !$ModuleManifest.TargetUri) {
+               # Try finding it by name
+               if($Package.PackageProperties.Title) {
+                  $IdenfierModuleManifest = ($Package.PackageProperties.Title + $ModuleManifestExtension)
+               } else {
+                  $IdenfierModuleManifest = ($Package.PackageProperties.Identifier + $ModuleManifestExtension)
+               }
+               $Part = $Package.GetParts() | Where-Object { (Split-Path $_.Uri -Leaf) -eq $IdenfierModuleManifest } | Sort-Object {$_.Uri.ToString().Length} | Select-Object -First 1
             } else {
-               if($Part = $Package.GetPart( $Manifest.TargetUri )) {
-                  Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
-                  if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
-                     ## If we got the module manifest, update the PackageManifest
-                     $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
-                  }
+               $Part = $Package.GetPart( $ModuleManifest.TargetUri )
+            }
+
+            if(!$Part) {
+               Write-Warning "This package does not appear to be a PowerShell Module, can't find Module Manifest $IdenfierModuleManifest"
+            } else {
+               Write-Verbose "Reading Module Manifest From Package: $($ModuleManifest.TargetUri)"
+               if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
+                  ## If we got the module manifest, update the PackageManifest
+                  $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
                }
             }
             New-Object PSObject -Property $PackageManifest
