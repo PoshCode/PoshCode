@@ -95,7 +95,7 @@ function Compress-Module {
       }
       if(Test-Path $OutputPath -ErrorAction Stop) {
          $PackagePath = Join-Path $OutputPath "${PackageName}.${PackageVersion}${ModulePackageExtension}"
-         $PackageInfoPath = Join-Path $OutputPath "${PackageName}${ModuleInfoExtension}"
+         $PackageInfoPath = Join-Path $OutputPath "${PackageName}${PackageInfoExtension}"
       }
 
       Write-Verbose "Creating Module in $OutputPath"
@@ -105,14 +105,15 @@ function Compress-Module {
       if($PSCmdlet.ShouldProcess("Package the module '$($Module.ModuleBase)' to '$PackagePath'", "Package '$($Module.ModuleBase)' to '$PackagePath'?", "Packaging $($Module.Name)" )) {
          if($Force -Or !(Test-Path $PackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$PackagePath' already exists, do you want to replace it?", "Packaging $($Module.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
 
-            # If there's no ModuleInfo file, then we need to *create* one so that we can package this module
-            $ModuleInfoPath = Join-Path (Split-Path $Module.Path) $ModuleInfoFile
+            # If there's no packageData file, we ought *create* one with urls in it -- but we don't know the URLs
+            $PackageDataPath = Join-Path (Split-Path $Module.Path) ($PackageName + $PackageInfoExtension)
+            $NuSpecPath = Join-Path (Split-Path $Module.Path) ($PackageName + $NuSpecManifestExtension)
 
-            if(!(Test-Path $ModuleInfoPath))
+            if(!(Test-Path $PackageDataPath) -and !(Test-Path $NuSpecPath))
             {
-               $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't find the Package Manifest File: ${ModuleInfoPath}"), "Manifest Not Found", "ObjectNotFound", $_) )
+               $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't find the a package manifest: ${PackageInfoExtension} or ${NuSpecManifestExtension}"), "Manifest Not Found", "ObjectNotFound", $_) )
             } else {
-               Copy-Item $ModuleInfoPath $PackageInfoPath -ErrorVariable CantWrite
+               Copy-Item $PackageDataPath $PackageInfoPath -ErrorVariable CantWrite
                if($CantWrite) {
                   $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
                }
@@ -197,7 +198,7 @@ function Compress-Module {
             Get-Item $PackagePath
 
             # TODO: once the URLs are mandatory, print the full URL here
-            Write-Host "You should now copy the $ModuleInfoExtension and $ModulePackageExtension files to the locations specified by the PackageManifestUri and DownloadUri"  
+            Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageManifestUri and DownloadUri"  
          }
       }
    }
@@ -281,7 +282,7 @@ function Add-File {
             break
          }
 
-         ([regex]::Escape($ModuleInfoFile) + '$') {
+         ([regex]::Escape($PackageName + $PackageInfoExtension) + '$') {
             $relationship = $Package.CreateRelationship( $part.Uri, "Internal", $PackageMetadataType)
             Write-Verbose "    Added Relationship: PackageMetadata - $PackageMetadataType"
             break
@@ -323,6 +324,36 @@ function Set-PackageProperties {
        Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false 
     }
 
+    Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content (Get-NuspecContent $ModuleInfo)
+
+    ## NuGet does the WRONG thing here, assuming the package name is unique, pretending there's only one repo
+    #$PackageProperties.Title = $ModuleInfo.Name
+    #$PackageProperties.Identifier = $ModuleInfo.GUID
+    $PackageProperties.Identifier = $ModuleInfo.Name
+
+    $PackageProperties.Version = $ModuleInfo.Version
+    $PackageProperties.Creator = $ModuleInfo.Author
+    $PackageProperties.Description = $ModuleInfo.Description
+    $PackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
+    $PackageProperties.Created = Get-Date
+    if($ModuleInfo.Keywords) {
+      $PackageProperties.Keywords = $ModuleInfo.Keywords -join ' '
+    }
+    if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
+      $PackageProperties.Subject = $anyUrl
+    }
+  }
+}
+
+
+function Get-NuspecContent {
+    [CmdletBinding()]
+    param(
+        # The ModuleInfo to get values from
+        [Parameter(Mandatory=$true, Position=1)]
+        $ModuleInfo
+    )
+
     # Add a nuget manifest
     [xml]$doc = "<?xml version='1.0'?>
     <package xmlns='$NuGetNamespace'>
@@ -356,124 +387,221 @@ function Set-PackageProperties {
        }
     }
 
-    Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content $doc.OuterXml
-
-    ## NuGet does the WRONG thing here, assuming the package name is unique, pretending there's only one repo
-    #$PackageProperties.Title = $ModuleInfo.Name
-    #$PackageProperties.Identifier = $ModuleInfo.GUID
-    $PackageProperties.Identifier = $ModuleInfo.Name
-
-    $PackageProperties.Version = $ModuleInfo.Version
-    $PackageProperties.Creator = $ModuleInfo.Author
-    $PackageProperties.Description = $ModuleInfo.Description
-    $PackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
-    $PackageProperties.Created = Get-Date
-    if($ModuleInfo.Keywords) {
-      $PackageProperties.Keywords = $ModuleInfo.Keywords -join ' '
-    }
-    if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
-      $PackageProperties.Subject = $anyUrl
-    }
-  }
+    $doc.OuterXml
 }
 
 
-function New-PackageManifest {
-   <#
+function Set-ModuleInfo {
+    <#
       .Synopsis
-         Creates a package manifest (package.psd1) for a module that already has a module manifest.
+         Creates or updates Module manifest (.psd1), package manifest (.nuspec) and data files (.packageData) for a module.
       .Description
          Creates a package manifest with the mandatory and optional properties
-   #>   
-   [CmdletBinding()]
-   param(
-      # The name of the module to create a new package.psd1 file for.
-      [Parameter(Mandatory=$true)]
-      [String]$Name,
+    #>   
+    [CmdletBinding()]
+    param(
+        # The name of the module to create a new package.psd1 file for.
+        [Parameter(Mandatory=$true, Position=0)]
+        [String]$Name,
 
-      # The url where the module package will be uploaded
-      [Parameter(Mandatory=$true)]
-      [String]$DownloadUri,
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        ${NestedModules},
+
+        [guid]
+        ${Guid},
+
+        [AllowEmptyString()]
+        [string[]]
+        ${Author},
+
+        [AllowEmptyString()]
+        [Alias("Owner")]
+        [string]
+        ${CompanyName},
+
+        [AllowEmptyString()]
+        [string]
+        ${Copyright},
+
+        [Alias('ModuleToProcess')]
+        [AllowEmptyString()]
+        [string]
+        ${RootModule},
+
+        [ValidateNotNull()]
+        [version]
+        ${ModuleVersion},
+
+        [AllowEmptyString()]
+        [string]
+        ${Description},
+
+        [System.Reflection.ProcessorArchitecture]
+        ${ProcessorArchitecture},
+
+        [version]
+        ${PowerShellVersion},
+
+        [version]
+        ${ClrVersion},
+
+        [version]
+        ${DotNetFrameworkVersion},
+
+        [string]
+        ${PowerShellHostName},
+
+        [version]
+        ${PowerShellHostVersion},
+
+        # The Required modules is a hashtable of ModuleName=PackageManifestUri, or an array of module names, etc
+        [System.Object[]]
+        ${RequiredModules},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${TypesToProcess},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${FormatsToProcess},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${ScriptsToProcess},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${RequiredAssemblies},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${FileList},
+
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        ${ModuleList},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${FunctionsToExport},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${AliasesToExport},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${VariablesToExport},
+
+        [AllowEmptyCollection()]
+        [string[]]
+        ${CmdletsToExport},
+
+        [AllowNull()]
+        [System.Object]
+        ${PrivateData},
+
+        [AllowNull()]
+        [string]
+        ${HelpInfoUri},
+
+        [switch]
+        ${PassThru},
+
+        [AllowNull()]
+        [string]
+        ${DefaultCommandPrefix},
+
+        # The url where the module package will be uploaded
+        [String]$DownloadUri,
       
-      # The url where the module's package manifest will be uploaded (defaults to the download URI modified to ModuleName.psd1)
-      [String]$PackageManifestUri = $( $DownloadUri -replace ([Regex]::Escape([IO.Path]::GetFileName($DownloadUri))), "${Name}.psd1" ),
+        # The url where the module's package manifest will be uploaded (defaults to the download URI modified to ModuleName.psd1)
+        [String]$PackageManifestUri,
 
-      # The relative uri for a license file, or a url to a license file
-      [String]$LicenseUri,
+        # The url to a license
+        [String]$LicenseUri,
 
-      # The Required modules is a hashtable of ModuleName=PackageManifestUri
-      [Hashtable]$RequiredModules,
+        # If set, require the license to be accepted during installation (not supported yet)
+        [Switch]$RequireLicenseAcceptance,
 
-      # Choose one category from the list:
-      [ValidateSet("Active Directory", "Applications", "App-V", "Backup and System Restore", "Databases", "Desktop Management", "Exchange", "Group Policy", "Hardware", "Interoperability and Migration", "Local Account Management", "Logs and monitoring", "Lync", "Messaging & Communication", "Microsoft Dynamics", "Multimedia", "Networking", "Office", "Office 365", "Operating System", "Other Directory Services", "Printing", "Remote Desktop Services", "Scripting Techniques", "Security", "Servers", "SharePoint", "Storage", "System Center", "UE-V", "Using the Internet", "Windows Azure", "Windows Update")]
-      [String]$Category,
+        # Choose one category from the list:
+        [ValidateSet("Active Directory", "Applications", "App-V", "Backup and System Restore", "Databases", "Desktop Management", "Exchange", "Group Policy", "Hardware", "Interoperability and Migration", "Local Account Management", "Logs and monitoring", "Lync", "Messaging & Communication", "Microsoft Dynamics", "Multimedia", "Networking", "Office", "Office 365", "Operating System", "Other Directory Services", "Printing", "Remote Desktop Services", "Scripting Techniques", "Security", "Servers", "SharePoint", "Storage", "System Center", "UE-V", "Using the Internet", "Windows Azure", "Windows Update")]
+        [String]$Category,
 
-      # An array of keyword tags for search
-      [String[]]$Keywords,
+        # An array of keyword tags for search
+        [String[]]$Keywords,
 
-      # a URL or relative path to your personal avatar in gif/jpg/png form
-      [String]$AuthorAvatarUri,
+        # a URL or relative path to your personal avatar in gif/jpg/png form
+        [String]$AuthorAvatarUri,
+        
+        # the address for your your company website
+        [String]$CompanyUri,
 
-      # your company name, if you have one
-      [String]$CompanyName,
+        # a URL or relative path to your corporate logo in gif/jpg/png form
+        [String]$CompanyIconUri,
 
-      # the address for your your company website
-      [String]$CompanyUri,
+        # a URL or relative path to a web page about this module
+        [String]$ModuleInfoUri,
 
-      # a URL or relative path to your corporate logo in gif/jpg/png form
-      [String]$CompanyIconUri,
+        # a URL or relative path to an icon for the module in gif/jpg/png form
+        [String]$ModuleIconUri,
 
-      # a URL or relative path to a web page about this module
-      [String]$ModuleInfoUri,
+        # a web URL for a bug tracker or support forum, or a mailto: address for the author/support team.
+        [String]$SupportUri,
 
-      # a URL or relative path to an icon for the module in gif/jpg/png form
-      [String]$ModuleIconUri,
+        [Switch]$AutoIncrementBuildNumber
+    )
+    end {
+        $Manifest = Read-Module $Name -ListAvailable 
 
-      # a web URL for a bug tracker or support forum, or a mailto: address for the author/support team.
-      [String]$SupportUri
-   )
-   end {
-      $Manifest = Read-Module $Name -ListAvailable 
+        if(!$Manifest) {
+            throw "Couldn't find module $Name"
+        }
 
-      if(!$Manifest) {
-         throw "Couldn't find module $Name"
-      }
+        if($Manifest.Version -gt "0.0") {
+            $PackageVersion = $Module.Version
+        } elseif($ModuleVersion) {
+            $PackageVersion = $ModuleVersion 
+        } else {
+            Write-Warning "Module Version not specified properly, using 1.0"
+            [Version]$PackageVersion = "1.0"
+        }
 
-      if($PackageManifestUri) {
-         $PSBoundParameters.PackageManifestUri = $PackageManifestUri
-      }
+        if($AutoIncrementBuildNumber) {
+            $PackageVersion.Build = $PackageVersion.Build + 1
+        }
+        $Manifest.Version = $PackageVersion
 
-      $PSBoundParameters.Version = $Manifest.Version
-      $PSBoundParameters.Author  = $Manifest.Author
-
-      if($Manifest.RequiredModules.Count -gt 0) {
-         $Modules = @()
-         # TODO: loop through $RequiredModules and make @{ Name="Name"; PackageManifestUri = "$PackageManifestUri" }
-         if($Manifest.RequiredModules -is [Array]) {
-            foreach($moduleInfo in $Manifest.RequiredModules) {
-               $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
-               if($RequiredModules.ContainsKey($Name)) {
-                  $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
-               } else {
-                  Write-Host "Please enter the PackageManifestURI:"
-                  $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
-               }
-            }
-         } else {
-            $moduleInfo = $Manifest.RequiredModules
-            $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
-            if($RequiredModules -and $RequiredModules.ContainsKey($Name)) {
-               $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
+        if($Manifest.RequiredModules.Count -gt 0) {
+            $Modules = @()
+            # TODO: loop through $RequiredModules and make @{ Name="Name"; PackageManifestUri = "$PackageManifestUri" }
+            if($Manifest.RequiredModules -is [Array]) {
+                foreach($moduleInfo in $Manifest.RequiredModules) {
+                    $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
+                    if($RequiredModules.ContainsKey($Name)) {
+                        $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
+                    } else {
+                        Write-Host "Please enter the PackageManifestURI:"
+                        $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+                    }
+                }
             } else {
-               Write-Host "Please enter the PackageManifestURI:"
-               $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+                $moduleInfo = $Manifest.RequiredModules
+                $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
+                if($RequiredModules -and $RequiredModules.ContainsKey($Name)) {
+                    $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
+                } else {
+                    Write-Host "Please enter the PackageManifestURI:"
+                    $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+                }
             }
-         }
-         $PSBoundParameters["RequiredModules"] = $Modules
-      } elseif($PSBoundParameters.RequiredModules.Count -eq 0) {
-         $PSBoundParameters.Remove("RequiredModules")
-      }
+            $PSBoundParameters["RequiredModules"] = $Modules
+        } elseif($PSBoundParameters.RequiredModules.Count -eq 0) {
+            $PSBoundParameters.Remove("RequiredModules")
+        }
 
-      $PSBoundParameters | Export-Metadata -Path (Join-Path $Manifest.ModuleBase "package.psd1")
-   }
+        $PSBoundParameters | Export-Metadata -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension))
+    }
 }

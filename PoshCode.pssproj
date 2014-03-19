@@ -40,9 +40,10 @@
     <Compile Include="ModuleInfo.psm1" />
     <Compile Include="New-InstallScript.ps1" />
     <Compile Include="NewModule.psm1" />
-    <Compile Include="package.psd1" />
+    <Compile Include="PoshCode.packageInfo" />
     <Compile Include="Packaging.psm1" />
     <Compile Include="PoshCode.format.ps1xml" />
+    <Compile Include="PoshCode.nuspec" />
     <Compile Include="PoshCode.psd1" />
     <Compile Include="PoshCode.types.ps1xml" />
     <Compile Include="README.md" />

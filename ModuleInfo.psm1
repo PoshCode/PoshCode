@@ -220,7 +220,7 @@ function Update-ModuleInfo {
       Write-Verbose "> Updating ModuleInfo $($ModuleInfo.GetType().Name)"
       # On PowerShell 2, Modules that aren't loaded have little information, and we need to Import-Metadata
       # Modules that aren't loaded have no SessionState. If their path points at a PSD1 file, load that
-      if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleInfoExtension) {
+      if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleManifestExtension) {
          $ExistingModuleInfo = $ModuleInfo
          $ModuleInfo = $ModuleInfo.Path
       }
@@ -553,7 +553,7 @@ function Import-Metadata {
       if(Test-Path $Path) {
          Write-Verbose "Importing Metadata file from `$Path: $Path"
          if(!(Test-Path $Path -PathType Leaf)) {
-            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
+            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleManifestExtension)
          }
       }
 

@@ -486,12 +486,12 @@ function Install-Module {
             $FileName = [IO.Path]::GetFileName( $WebResponse.BaseResponse.ResponseUri.AbsolutePath )
          }
 
-         $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $ModuleInfoExtension })
+         $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $PackageInfoExtension })
 
          if(!$FileName) {
             $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetRandomFileName(), $ext )
          } 
-         elseif(![IO.path]::HasExtension($FileName) -or !($ModuleInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
+         elseif(![IO.path]::HasExtension($FileName) -or !($PackageInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
             $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
          }
 
@@ -528,7 +528,7 @@ function Install-Module {
       ## If we just got back a module manifest (text file vs. zip/psmx)
       ## Figure out the real package Uri and recurse so we can download it
       # TODO: Check the file contents instead (it's just testing extensions right now)
-      if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
+      if($PackageInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
          Write-Verbose "The file '$PackagePath' is just a manifest, get DownloadUri."
          $MI = Import-Metadata $PackagePath -ErrorAction "SilentlyContinue"
          Remove-Item $PackagePath
@@ -564,8 +564,8 @@ function Install-Module {
          }
       }
 
-      if(!(Test-Path (Join-Path $ModuleFolder.FullName $ModuleInfoFile))) {
-         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the package.psd1 manifest)"
+      if(!(Test-Path (Join-Path $ModuleFolder.FullName "*$ModuleManifestExtension"))) {
+         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the $PackageInfoExtension manifest)"
       }
 
       if(!$Manifest) {

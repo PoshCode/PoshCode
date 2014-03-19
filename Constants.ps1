@@ -39,15 +39,13 @@ if(Test-Path $EmptyPath) {
 
 # Our Extensions
 $NuSpecManifestExtension = ".nuspec"
-$ModuleInfoFile          = "package.psd1"
-$ModuleInfoExtension     = ".psd1"
+$PackageInfoExtension    = ".packageInfo"
 $ModuleManifestExtension = ".psd1"
-# Perhaps we should use NuGet's extension now that I've added the nuget manifest
+$ModulePackageExtension  = ".nupkg"
 # Using .nupkg instead of .psmx 
 # 1) prevents us from having a custom icon
 # 2) allows NuGet to find/process our packages
-# 3) allows us to find/process their packages 
-$ModulePackageExtension  = ".nupkg"
+# 3) allows us to find/process their packages more easily
 
 if(!("System.IO.Packaging.Package" -as [Type])) {
     Add-Type -Assembly 'WindowsBase', 'PresentationFramework'

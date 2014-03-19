@@ -73,7 +73,7 @@ FileList = 'package.psd1', 'PoshCode.psd1', 'Constants.ps1',
            'README.md'
 
 # Functions to export from this module
-FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'New-PackageManifest', 'Update-Module', 'Import-Metadata', 'Export-Metadata',
+FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Set-ModuleInfo', 'Update-Module', 'Import-Metadata', 'Export-Metadata',
                     'Get-ConfigData', 'Set-ConfigData', 'Get-SpecialFolder', # 'Test-ExecutionPolicy', 
                     'Get-PoshCode', 'Send-PoshCode','Find-Module'
 
