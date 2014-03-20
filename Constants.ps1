@@ -7,17 +7,24 @@
 $NuGetNamespace          = "http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd"
 # This is what nuget uses for .nuspec
 $ManifestType            = "http://schemas.microsoft.com/packaging/2010/07/manifest"
+
 # We need to make up a URL for the metadata psd1 relationship type
 $ModuleMetadataType      = "http://schemas.poshcode.org/package/module-metadata"
+# The package metadata should probably be in:
+# http ://schemas.openxmlformats.org/package/2006/relationships/metadata/extended-properties
+# But that is supposed to be in XML format: application/vnd.openxmlformats-officedocument.extended-properties+xml
 $PackageMetadataType     = "http://schemas.poshcode.org/package/package-metadata"
+
+
 $ModuleHelpInfoType      = "http://schemas.poshcode.org/package/help-info"
 $PackageThumbnailType    = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"
-# I'm not sure there's any benefit to extra types:
+# I'm not sure we have any use for these extra types:
 # CorePropertiesType is the .psmdcp
 $CorePropertiesType      = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
-$ModuleRootType          = "http://schemas.poshcode.org/package/module-root"
-$ModuleLicenseType       = "http://schemas.poshcode.org/package/module-license"
 
+# Relationships for the license document (allows it to be internal, instead of always external as in NuGet)
+$ModuleLicenseType       = "http://schemas.poshcode.org/package/license"
+# Relationships for the project and download and manifest links (these MUST be external)
 $ModuleProjectType       = "http://schemas.poshcode.org/package/project"
 $PackageDownloadType     = "http://schemas.poshcode.org/package/release"
 $PackageManifestType     = "http://schemas.poshcode.org/package/manifest"
@@ -36,6 +43,9 @@ if(Test-Path $EmptyPath) {
 } else {
    $EmptyPath = New-Item -Force -ItemType Directory -Path $EmptyPath | Convert-Path
 }
+
+$ModulePackageKeyword = "PSGet"
+$UserAgent = "PoshCode\Packaging Module"
 
 # Our Extensions
 $NuSpecManifestExtension = ".nuspec"

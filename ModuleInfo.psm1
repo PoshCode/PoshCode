@@ -309,6 +309,9 @@ function Add-SimpleNames {
             if($rm.ModuleVersion -and !$rm.Version) {
                $rm.Version = $rm.ModuleVersion
             }
+            if($rm.RootModule -and !$rm.ModuleToProcess) {
+               $rm.ModuleToProcess = $rm.RootModule
+            }
          }
       } else {
          foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
@@ -317,6 +320,9 @@ function Add-SimpleNames {
             }
             if($rm.ModuleVersion -and !$rm.Version) {
                Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
+            }
+            if($rm.RootModule -and !$rm.ModuleToProcess) {
+               Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -ErrorAction SilentlyContinue
             }
          }
       }

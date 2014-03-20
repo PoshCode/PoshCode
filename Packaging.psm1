@@ -324,7 +324,7 @@ function Set-PackageProperties {
        Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false 
     }
 
-    Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content (Get-NuspecContent $ModuleInfo)
+    Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
 
     ## NuGet does the WRONG thing here, assuming the package name is unique, pretending there's only one repo
     #$PackageProperties.Title = $ModuleInfo.Name
@@ -336,8 +336,11 @@ function Set-PackageProperties {
     $PackageProperties.Description = $ModuleInfo.Description
     $PackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
     $PackageProperties.Created = Get-Date
+    $PackageProperties.LastModifiedBy = $UserAgent
+    $PackageProperties.Category = $ModuleInfo.Category
+
     if($ModuleInfo.Keywords) {
-      $PackageProperties.Keywords = $ModuleInfo.Keywords -join ' '
+      $PackageProperties.Keywords = @(@($ModuleInfo.Keywords) + $ModulePackageKeyword | Sort-Unique) -join ' '
     }
     if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
       $PackageProperties.Subject = $anyUrl
@@ -349,27 +352,69 @@ function Set-PackageProperties {
 function Get-NuspecContent {
     [CmdletBinding()]
     param(
-        # The ModuleInfo to get values from
-        [Parameter(Mandatory=$true, Position=1)]
-        $ModuleInfo
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("id")]
+        [String]$Name,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [String]$Version,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("Authors")]
+        [String]$Author,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("Owners")]
+        [String]$CompanyName,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("LicenseUrl")]
+        [String]$LicenseUri,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("ProjectUrl")]
+        [String]$ModuleInfoUri,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("IconUrl")]
+        [String]$ModuleIconUri,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [String]$RequireLicenseAcceptance,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [String]$Description,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [String]$ReleaseNotes,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [String]$Copyright,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [Alias("tags")]
+        [String[]]$Keywords,
+
+        [Parameter(ValueFromPipelineByPropertyName=$True)]
+        [String]$RequiredModules
     )
 
     # Add a nuget manifest
     [xml]$doc = "<?xml version='1.0'?>
     <package xmlns='$NuGetNamespace'>
       <metadata>
-        <id>$([System.Security.SecurityElement]::Escape($ModuleInfo.Name))</id>
-        <version>$([System.Security.SecurityElement]::Escape($ModuleInfo.Version))</version>
-        <authors>$([System.Security.SecurityElement]::Escape($ModuleInfo.Author))</authors>
-        <owners>$([System.Security.SecurityElement]::Escape($ModuleInfo.CompanyName))</owners>
-        <licenseUrl>$([System.Security.SecurityElement]::Escape($ModuleInfo.LicenseUri))</licenseUrl>
-        <projectUrl>$([System.Security.SecurityElement]::Escape($ModuleInfo.ModuleInfoUri))</projectUrl>
-        <iconUrl>$([System.Security.SecurityElement]::Escape($ModuleInfo.ModuleIconUri))</iconUrl>
-        <requireLicenseAcceptance>$(([bool]$ModuleInfo.RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>
-        <description>$([System.Security.SecurityElement]::Escape($ModuleInfo.Description))</description>
-        <releaseNotes>$([System.Security.SecurityElement]::Escape($ModuleInfo.ReleaseNotes))</releaseNotes>
-        <copyright>$([System.Security.SecurityElement]::Escape($ModuleInfo.Copyright))</copyright>
-        <tags>$([System.Security.SecurityElement]::Escape($ModuleInfo.Keywords -join ' '))</tags>
+        <id>$([System.Security.SecurityElement]::Escape($Name))</id>
+        <version>$([System.Security.SecurityElement]::Escape($Version))</version>
+        <authors>$([System.Security.SecurityElement]::Escape($Author))</authors>
+        <owners>$([System.Security.SecurityElement]::Escape($CompanyName))</owners>
+        <licenseUrl>$([System.Security.SecurityElement]::Escape($LicenseUri))</licenseUrl>
+        <projectUrl>$([System.Security.SecurityElement]::Escape($ModuleInfoUri))</projectUrl>
+        <iconUrl>$([System.Security.SecurityElement]::Escape($ModuleIconUri))</iconUrl>
+        <requireLicenseAcceptance>$(([bool]$RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>
+        <description>$([System.Security.SecurityElement]::Escape($Description))</description>
+        <releaseNotes>$([System.Security.SecurityElement]::Escape($ReleaseNotes))</releaseNotes>
+        <copyright>$([System.Security.SecurityElement]::Escape($Copyright))</copyright>
+        <tags>$([System.Security.SecurityElement]::Escape($Keywords -join ' '))</tags>
       </metadata>
     </package>"
 
@@ -380,7 +425,7 @@ function Get-NuspecContent {
     
     if( $ModuleInfo.RequiredModules ) {
        $dependencies = $doc.package.metadata.AppendChild( $doc.CreateElement("dependencies", $NuGetNamespace) )
-       foreach($req in $ModuleInfo.RequiredModules) {
+       foreach($req in $RequiredModules) {
           $dependency = $dependencies.AppendChild( $doc.CreateElement("dependency", $NuGetNamespace) )
           $dependency.SetAttribute("id", $req.Name)
           $dependency.SetAttribute("version", $req.Version)
