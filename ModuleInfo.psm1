@@ -571,12 +571,14 @@ function Import-Metadata {
 
       if($ModuleInfo -and $AsObject) {
          $ModuleInfo | % { 
-            $_.RequiredModules = $_.RequiredModules | % { 
-               New-Object PSObject -Property $_ } | % {
+            $_.RequiredModules = foreach($M in @($_.RequiredModules)) { 
+               if($M -is [String]) { $M = @{ModuleName=$M} }
+               New-Object PSObject -Property $M | % {
                   $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
                   $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
                   $_
                }
+            }
 
             New-Object PSObject -Property $_ } | % {
             $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")

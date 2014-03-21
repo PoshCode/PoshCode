@@ -108,6 +108,7 @@ function Compress-Module {
             # If there's no packageData file, we ought *create* one with urls in it -- but we don't know the URLs
             $PackageDataPath = Join-Path (Split-Path $Module.Path) ($PackageName + $PackageInfoExtension)
             $NuSpecPath = Join-Path (Split-Path $Module.Path) ($PackageName + $NuSpecManifestExtension)
+            $ModuleInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $ModuleManifestExtension)
 
             if(!(Test-Path $PackageDataPath) -and !(Test-Path $NuSpecPath))
             {
@@ -396,7 +397,7 @@ function Get-NuspecContent {
         [String[]]$Keywords,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
-        [String]$RequiredModules
+        [Array]$RequiredModules
     )
 
     # Add a nuget manifest
@@ -427,8 +428,10 @@ function Get-NuspecContent {
        $dependencies = $doc.package.metadata.AppendChild( $doc.CreateElement("dependencies", $NuGetNamespace) )
        foreach($req in $RequiredModules) {
           $dependency = $dependencies.AppendChild( $doc.CreateElement("dependency", $NuGetNamespace) )
-          $dependency.SetAttribute("id", $req.Name)
-          $dependency.SetAttribute("version", $req.Version)
+          if($req.Name) { $dependency.SetAttribute("id", $req.Name) }
+          if($req.ModuleName) { $dependency.SetAttribute("id", $req.ModuleName) }
+          if($req.Version) { $dependency.SetAttribute("version", $req.Version) }
+          if($req.ModuleVersion) { $dependency.SetAttribute("version", $req.ModuleVersion) }
        }
     }
 
@@ -598,17 +601,55 @@ function Set-ModuleInfo {
 
         [Switch]$AutoIncrementBuildNumber
     )
+    begin {
+        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
+        $PoshCodeProperties = 'DownloadUri','PackageManifestUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
+        $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
+    }
     end {
-        $Manifest = Read-Module $Name -ListAvailable 
+        $Manifest = Read-Module $Name | Select-Object *
+        if(!$Manifest) {
+            $Manifest = Read-Module $Name -ListAvailable | Select-Object *
+        }
+
+        $Path = $Manifest.ModuleManifestPath
+        if(!$Path.EndsWith($ModuleManifestExtension) -or !(Test-Path $Path)){ 
+            Write-Warning "Manifest file not found: $Path"
+            $Path = $Manifest.Path
+            if(!$Path.EndsWith($ModuleManifestExtension) -or !(Test-Path $Path)){ 
+                Write-Warning "Manifest file not found: $Path"
+                $Path = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)
+                if(!(Test-Path $Path)){ 
+                     Write-Warning "Manifest file not found: $Path"
+                     $Path = [IO.Path]::ChangeExtension($Manifest.Path, $ModuleManifestExtension)
+                }
+            }
+        }
+
+        if(Test-Path $Path) {
+            $Manifest = Update-ModuleInfo $Path
+        } else {
+            Write-Warning "No Manifest file: $Path"
+
+            # When loading a module without an existing manifest, punt
+            $ModuleManifestProperties = @('Copyright')
+        }
+
+        Write-Verbose ("Loaded $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
+
+        if(@($Manifest).Count -gt 1) {
+            Write-Error "Found more than one module matching '$Name', please Import-Module the one you want to work with and try again"
+            $Manifest
+        }
 
         if(!$Manifest) {
             throw "Couldn't find module $Name"
         }
 
         if($Manifest.Version -gt "0.0") {
-            $PackageVersion = $Module.Version
+            [Version]$PackageVersion = $Module.Version
         } elseif($ModuleVersion) {
-            $PackageVersion = $ModuleVersion 
+            [Version]$PackageVersion = $ModuleVersion 
         } else {
             Write-Warning "Module Version not specified properly, using 1.0"
             [Version]$PackageVersion = "1.0"
@@ -617,36 +658,103 @@ function Set-ModuleInfo {
         if($AutoIncrementBuildNumber) {
             $PackageVersion.Build = $PackageVersion.Build + 1
         }
-        $Manifest.Version = $PackageVersion
+        $Manifest = Add-Member -InputObject $Manifest -Name Version -MemberType NoteProperty -Value $PackageVersion -Force -PassThru 
 
-        if($Manifest.RequiredModules.Count -gt 0) {
-            $Modules = @()
-            # TODO: loop through $RequiredModules and make @{ Name="Name"; PackageManifestUri = "$PackageManifestUri" }
-            if($Manifest.RequiredModules -is [Array]) {
-                foreach($moduleInfo in $Manifest.RequiredModules) {
-                    $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
-                    if($RequiredModules.ContainsKey($Name)) {
-                        $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
+        # Normalize RequiredModules to an array of hashtables
+        if(!$RequiredModules -and @($Manifest.RequiredModules).Count -gt 0) {
+            $RequiredModules = @($Manifest.RequiredModules)
+        }
+        if($RequiredModules){
+            # Required modules can be specified like any of the following:
+            # -RequiredModules "ModuleOne"
+            # -RequiredModules @{ModuleName="PowerBot"; ModuleVersion="1.0" }
+            # -RequiredModules "ModuleOne", "ModuleTwo", "ModuleThree"
+            # -RequiredModules @( @{ModuleName="PowerBot"; ModuleVersion="1.0"; PackageInfoUrl="https://raw.github.com/Jaykul/PowerBot/master/PowerBot.psd1"}, ... )
+            # But it's always treated as an array, so the question is: did they pass in module names, or hashtables?
+            $RequiredModules = foreach($Module in $RequiredModules) {
+                if($Module -is [String]) { 
+                    @{ModuleName=$Module} 
+                } 
+                else {
+                    $M = @{}
+                    if($Module.ModuleName) {
+                        $M.ModuleName = $Module.ModuleName
+                    } elseif( $Module.Name ) {
+                        $M.ModuleName = $Module.Name
                     } else {
-                        Write-Host "Please enter the PackageManifestURI:"
-                        $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+                        throw "The RequiredModules must be an array of module names or an array of ModuleInfo hashtables or objects (which must have a ModuleName key and optionally a ModuleVersion and PackageInfoUrl)"
                     }
-                }
-            } else {
-                $moduleInfo = $Manifest.RequiredModules
-                $Name = $( if($moduleInfo.Name) { $moduleInfo.Name } else { "$moduleInfo" } )
-                if($RequiredModules -and $RequiredModules.ContainsKey($Name)) {
-                    $Modules += @{ Name = $Name; PackageManifestUri = $RequiredModules.$Name }
-                } else {
-                    Write-Host "Please enter the PackageManifestURI:"
-                    $Modules += @{ Name = $Name; PackageManifestUri = (Read-Host $Name )}
+
+                    if($Module.ModuleVersion) {
+                        $M.ModuleVersion = $Module.ModuleVersion
+                    } elseif( $Module.Version ) {
+                        $M.ModuleVersion = $Module.Version
+                    }
+
+                    if($Module.ModuleGuid) {
+                        $M.ModuleGuid = $Module.ModuleGuid
+                    } elseif( $Module.Guid ) {
+                        $M.ModuleGuid = $Module.Guid
+                    }
+
+                    if($Module.PackageInfoUrl) {
+                        $M.PackageInfoUrl = $Module.PackageInfoUrl
+                    } elseif($Prop = $Module | Get-Member *Url -Type Property | Select-Object -First 1) {
+                        $M.PackageInfoUrl = $Module.($Prop.Name)
+                    }
+
+                    $M 
                 }
             }
-            $PSBoundParameters["RequiredModules"] = $Modules
-        } elseif($PSBoundParameters.RequiredModules.Count -eq 0) {
-            $PSBoundParameters.Remove("RequiredModules")
+            $PSBoundParameters["RequiredModules"] = $RequiredModules
         }
 
-        $PSBoundParameters | Export-Metadata -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension))
+        foreach($Key in $PSBoundParameters.Keys) {
+            if($Manifest.$Key -ne $PSBoundParameters.$Key) {
+               $Manifest = Add-Member -InputObject $Manifest -Name $Key -MemberType NoteProperty -Value $PSBoundParameters.$Key -Force -PassThru 
+            }
+        }
+
+        function ValidProperties {
+            param(
+               [Parameter(ValueFromPipeline=$true)]
+               $InputObject,
+
+               [Parameter(Position=0)]
+               [String[]]$Property = "*"
+            )
+            begin   { $Output=@{} } 
+            end     { $Output } 
+            process {
+               $Property = Get-Member $Property -Input $InputObject -Type Properties | % { $_.Name }
+               foreach($Name in $Property) {
+                  if(($InputObject.$Name -ne $null) -and (@($InputObject.$Name).Count -gt 0) -and ($InputObject.$Name -ne "")) {
+                     $Output.$Name = $InputObject.$Name 
+                  }
+               }
+            }
+        }
+
+        Write-Verbose ("Exporting $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
+
+        # All the parameters, except "Path"
+        $ModuleManifest = $Manifest | ValidProperties $ModuleManifestProperties
+        # Fix the Required Modules for New-ModuleManifest
+        if( $ModuleManifest.RequiredModules ) {
+            $ModuleManifest.RequiredModules = $ModuleManifest.RequiredModules | % { 
+               $null = $_.Remove("PackageInfoUrl"); 
+               if(!$_.ContainsKey("ModuleVersion")) {  $_.ModuleName } else { $_ }
+            }
+        }
+        New-ModuleManifest -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)) @ModuleManifest
+
+
+        $PoshCode = $Manifest | ValidProperties $PoshCodeProperties
+        $PoshCode | Export-Metadata -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension))
+
+
+        #$NuGetSpec = $Manifest | Get-Member $NuGetProperties -Type Properties | ForEach-Object {$H=@{}}{ $H.($_.Name) = $Manifest.($_.Name) }{$H}
+
+        Set-Content -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $NuSpecManifestExtension)) -Value ($Manifest | Get-NuspecContent)
     }
 }
