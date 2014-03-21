@@ -405,6 +405,42 @@ function Update-Dictionary {
    }
 }
 
+function ConvertTo-Hashtable {
+    #.Synopsis
+    #   Converts an object to a hashtable (with the specified properties), optionally discarding empty properties
+    #.Example
+    #   $Hash = Get-Module PoshCode | ConvertTo-Hashtable -IgnoreEmptyProperties
+    #   New-ModuleManifest -Path .\PoshCode.psd1 @Hash
+    #
+    #   Demonstrates the most common reason for converting an object to a hashtable: splatting
+    #.Example
+    #   Get-Module PoshCode | ConvertTo-Hashtable -IgnoreEmpty | %{ New-ModuleManifest -Path .\PoshCode.psd1 @_ }
+    #
+    #   Demonstrates the most common reason for converting an object to a hashtable: splatting
+    param(
+        # The input object to convert to a hashtable 
+        [Parameter(ValueFromPipeline=$true)]
+        $InputObject,
+
+        # The properties to convert (a list, or wildcards). Defaults to all properties
+        [Parameter(Position=0)]
+        [String[]]$Property = "*",
+
+        # If set, all selected properties are included. By default, empty properties are discarded
+        [Switch]$IgnoreEmptyProperties
+    )
+    begin   { $Output=@{} } 
+    end     { $Output } 
+    process {
+        $Property = Get-Member $Property -Input $InputObject -Type Properties | % { $_.Name }
+        foreach($Name in $Property) {
+            if(!$IgnoreEmptyProperties -or (($InputObject.$Name -ne $null) -and (@($InputObject.$Name).Count -gt 0) -and ($InputObject.$Name -ne ""))) {
+                $Output.$Name = $InputObject.$Name 
+            }
+        }
+    }
+}
+
 function Import-NugetStream {
    param(
       [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
@@ -777,4 +813,4 @@ function ConvertTo-Metadata {
    }
 }
 
-Export-ModuleMember -Function Read-Module, Update-ModuleInfo, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata
+Export-ModuleMember -Function Read-Module, Update-ModuleInfo, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata, ConvertTo-Hashtable

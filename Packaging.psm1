@@ -635,7 +635,7 @@ function Set-ModuleInfo {
             $ModuleManifestProperties = @('Copyright')
         }
 
-        Write-Verbose ("Loaded $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
+        Write-Debug ("Loaded $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
 
         if(@($Manifest).Count -gt 1) {
             Write-Error "Found more than one module matching '$Name', please Import-Module the one you want to work with and try again"
@@ -715,30 +715,10 @@ function Set-ModuleInfo {
             }
         }
 
-        function ValidProperties {
-            param(
-               [Parameter(ValueFromPipeline=$true)]
-               $InputObject,
-
-               [Parameter(Position=0)]
-               [String[]]$Property = "*"
-            )
-            begin   { $Output=@{} } 
-            end     { $Output } 
-            process {
-               $Property = Get-Member $Property -Input $InputObject -Type Properties | % { $_.Name }
-               foreach($Name in $Property) {
-                  if(($InputObject.$Name -ne $null) -and (@($InputObject.$Name).Count -gt 0) -and ($InputObject.$Name -ne "")) {
-                     $Output.$Name = $InputObject.$Name 
-                  }
-               }
-            }
-        }
-
-        Write-Verbose ("Exporting $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
+        Write-Debug ("Exporting $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
 
         # All the parameters, except "Path"
-        $ModuleManifest = $Manifest | ValidProperties $ModuleManifestProperties
+        $ModuleManifest = $Manifest | ConvertTo-Hashtable $ModuleManifestProperties -IgnoreEmptyProperties
         # Fix the Required Modules for New-ModuleManifest
         if( $ModuleManifest.RequiredModules ) {
             $ModuleManifest.RequiredModules = $ModuleManifest.RequiredModules | % { 
@@ -749,7 +729,7 @@ function Set-ModuleInfo {
         New-ModuleManifest -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)) @ModuleManifest
 
 
-        $PoshCode = $Manifest | ValidProperties $PoshCodeProperties
+        $PoshCode = $Manifest | ConvertTo-Hashtable $PoshCodeProperties -IgnoreEmptyProperties
         $PoshCode | Export-Metadata -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension))
 
 
