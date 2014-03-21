@@ -58,8 +58,8 @@ FormatsToProcess = @('PoshCode.format.ps1xml')
 ModuleList = @('ModuleInfo', 'Configuration', 'Installation', 'InvokeWeb', 'Packaging', 'Scripts', 'Repository')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-# Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
-NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1')
+# Note: We do not specify InvokeWeb -- That should only be imported if the test in the Installation module fails
+NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 'Repository.psm1')
 
 # List of all files packaged with this module
 FileList = 'package.psd1', 'PoshCode.psd1', 'Constants.ps1',
