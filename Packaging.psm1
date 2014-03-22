@@ -93,32 +93,32 @@ function Compress-Module {
          $OutputPath = Split-Path $OutputPath
       }
       if(Test-Path $OutputPath -ErrorAction Stop) {
-         $PackagePath = Join-Path $OutputPath "${PackageName}.${PackageVersion}${ModulePackageExtension}"
-         $PackageInfoPath = Join-Path $OutputPath "${PackageName}${PackageInfoExtension}"
+         $OutputPackagePath = Join-Path $OutputPath "${PackageName}.${PackageVersion}${ModulePackageExtension}"
+         $OutputPackageInfoPath = Join-Path $OutputPath "${PackageName}${PackageInfoExtension}"
       }
 
       Write-Verbose "Creating Module in $OutputPath"
-      Write-Verbose "Package File Path: $PackagePath"
-      Write-Verbose "Package Manifest : $PackageInfoPath"
+      Write-Verbose "Package File Path: $OutputPackagePath"
+      Write-Verbose "Package Manifest : $OutputPackageInfoPath"
 
-      if($PSCmdlet.ShouldProcess("Package the module '$($Module.ModuleBase)' to '$PackagePath'", "Package '$($Module.ModuleBase)' to '$PackagePath'?", "Packaging $($Module.Name)" )) {
-         if($Force -Or !(Test-Path $PackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$PackagePath' already exists, do you want to replace it?", "Packaging $($Module.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
+      if($PSCmdlet.ShouldProcess("Package the module '$($Module.ModuleBase)' to '$OutputPackagePath'", "Package '$($Module.ModuleBase)' to '$OutputPackagePath'?", "Packaging $($Module.Name)" )) {
+         if($Force -Or !(Test-Path $OutputPackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$OutputPackagePath' already exists, do you want to replace it?", "Packaging $($Module.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
 
-            # If there's no packageData file, we ought *create* one with urls in it -- but we don't know the URLs
-            $PackageDataPath = Join-Path (Split-Path $Module.Path) ($PackageName + $PackageInfoExtension)
+            # If there's no packageInfo file, we ought *create* one with urls in it -- but we don't know the URLs
+            $packageInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $PackageInfoExtension)
             $NuSpecPath = Join-Path (Split-Path $Module.Path) ($PackageName + $NuSpecManifestExtension)
             $ModuleInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $ModuleManifestExtension)
 
-            if(!(Test-Path $PackageDataPath) -and !(Test-Path $NuSpecPath))
+            if(!(Test-Path $packageInfoPath) -and !(Test-Path $NuSpecPath))
             {
                $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't find the a package manifest: ${PackageInfoExtension} or ${NuSpecManifestExtension}"), "Manifest Not Found", "ObjectNotFound", $_) )
             } else {
-               Copy-Item $PackageDataPath $PackageInfoPath -ErrorVariable CantWrite
+               Copy-Item $packageInfoPath $OutputPackageInfoPath -ErrorVariable CantWrite
                if($CantWrite) {
                   $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
                }
             }
-            Get-Item $PackageInfoPath
+            Get-Item $OutputPackageInfoPath
 
             Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Preparing File List" -Id 0    
             
@@ -152,7 +152,7 @@ function Compress-Module {
             }
 
             # Create the package
-            $Package = [System.IO.Packaging.Package]::Open( $PackagePath, [IO.FileMode]::Create )
+            $Package = [System.IO.Packaging.Package]::Open( $OutputPackagePath, [IO.FileMode]::Create )
             Set-PackageProperties $Package $Module
 
             try {
@@ -195,7 +195,7 @@ function Compress-Module {
             Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Complete" -Id 0 -Complete
 
             # Write out the FileInfo for the package
-            Get-Item $PackagePath
+            Get-Item $OutputPackagePath
 
             # TODO: once the URLs are mandatory, print the full URL here
             Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageInfoUri and DownloadUri"  
