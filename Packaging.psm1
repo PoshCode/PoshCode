@@ -231,7 +231,7 @@ function Add-File {
 
       # TODO: add MimeTypes for specific powershell types (would let us extract just one type of file)
       switch -regex ([IO.Path]::GetExtension($Path)) {
-         "\.(?:psd1|psm1|ps1|cs|txt|md)" {
+         "\.(?:psd1|psm1|ps1|cs|txt|md|nuspec|packageInfo)" {
             # Add a text file part to the Package ( [System.Net.Mime.MediaTypeNames+Text]::Xml )
             $part = $Package.CreatePart( $FileUri, "text/plain", "Maximum" ); 
             Write-Verbose "    as text/plain"
@@ -326,9 +326,10 @@ function Set-PackageProperties {
 
     Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
 
-    ## NuGet does the WRONG thing here, assuming the package name is unique, pretending there's only one repo
-    #$PackageProperties.Title = $ModuleInfo.Name
+    ## NuGet does the WRONG thing here, assuming the package name is unique
+    ## And  pretending there's only one repo, and no need for unique identifiers
     #$PackageProperties.Identifier = $ModuleInfo.GUID
+    $PackageProperties.Title = $ModuleInfo.Name
     $PackageProperties.Identifier = $ModuleInfo.Name
 
     $PackageProperties.Version = $ModuleInfo.Version

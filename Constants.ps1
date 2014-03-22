@@ -52,6 +52,9 @@ $NuSpecManifestExtension = ".nuspec"
 $PackageInfoExtension    = ".packageInfo"
 $ModuleManifestExtension = ".psd1"
 $ModulePackageExtension  = ".nupkg"
+
+$NuGetMagicPaths = "_rels", "package"
+
 # Using .nupkg instead of .psmx 
 # 1) prevents us from having a custom icon
 # 2) allows NuGet to find/process our packages

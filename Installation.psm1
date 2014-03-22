@@ -681,16 +681,16 @@ function Expand-Package {
          $PackagePath = Convert-Path $PackagePath
          $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
          $ModuleVersion = if($Package.PackageProperties.Version) {$Package.PackageProperties.Version } else {""}
-         Write-Verbose ($Package.PackageProperties|Select-Object Title,Version,@{n="Guid";e={$_.Identifier}},Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
+         Write-Verbose ($Package.PackageProperties|Select-Object Title,Identifier,Version,Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
 
-         if($ModuleResult = $ModuleName = $Package.PackageProperties.Title) {
+         if($ModuleResult = $ModuleName = if($Package.PackageProperties.Title) { $Package.PackageProperties.Title } else { $Package.PackageProperties.Identifier}) {
             if($InstallPath -match ([Regex]::Escape($ModuleName)+'$')) {
                $InstallPath = Split-Path $InstallPath
             }
          } else {
-            $Name = Split-Path $PackagePath -Leaf
-            $Name = @($Name -split "[\-\.]")[0]
-            if($InstallPath -match ([Regex]::Escape((Join-Path (Split-Path $PackagePath) $Name)))) {
+            $ModuleName = Split-Path $PackagePath -Leaf
+            $ModuleName = @($ModuleName -split "\.")[0]
+            if($InstallPath -match ([Regex]::Escape((Join-Path (Split-Path $PackagePath) $ModuleName)))) {
                $InstallPath = Split-Path $InstallPath
             }
          }
@@ -705,19 +705,23 @@ function Expand-Package {
             return
          }
 
-         if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $ModuleName $ModuleVersion" )) {
-            if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName $ModuleVersion", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
-               if(Test-Path "$InstallPath\$ModuleName") {
-                  Remove-Item "$InstallPath\$ModuleName" -Recurse -Force -ErrorAction Stop
+         $InstallPath = Join-Path  $InstallPath $ModuleName
+
+         if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath'", "Extract '$ModuleName' to '$InstallPath'?", "Installing $ModuleName $ModuleVersion" )) {
+            if($Force -Or !(Test-Path "$InstallPath" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath' already exists, do you want to wipe and replace it?", "Installing $ModuleName $ModuleVersion", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
+               if(Test-Path $InstallPath) {
+                  Remove-Item $InstallPath -Recurse -Force -ErrorAction Stop
                }
-               $ModuleResult = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
+               $ModuleResult = New-Item -Type Directory -Path $InstallPath -Force -ErrorVariable FailMkDir
              
                ## Handle the error if they asked for -Common and don't have permissions
                if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
-                  throw "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated."
+                  throw "You do not have permission to install a module to '$InstallPath'. You may need to be elevated."
                }
 
-               foreach($part in $Package.GetParts() | Where-Object {$_.Uri -match ("^/" + $ModuleName)}) {
+               $ForbiddenPathsPattern = "^/(?:{0})/" -f ($(foreach($nmp in $NuGetMagicPaths){[regex]::Escape($nmp)}) -join "|")
+
+               foreach($part in $Package.GetParts() | Where-Object {$_.Uri -notmatch $ForbiddenPathsPattern}) {
                   $fileSuccess = $false
                   # Copy the data to the file system
                   try {
@@ -747,7 +751,7 @@ function Expand-Package {
                }
                $success = $true
             } else { # !Force
-               $Import = $false # Don't _EVER_ import if they refuse the install
+               $Import = $false # Don't import if they refuse the install (duh!)
             }        
          } # ShouldProcess
          if(!$success) { $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.Management.Automation.HaltCommandException "Can't overwrite $ModuleName module: User Refused"), "ShouldContinue:False", "OperationStopped", $_) ) }
