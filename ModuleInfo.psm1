@@ -694,6 +694,10 @@ function ConvertFrom-Metadata {
             $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
             Set-Content -Path $Path $InputObject
             $InputObject = $Path
+         } elseif(!"$InputObject".EndsWith($ModuleManifestExtension)) {
+            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
+            Rename-Item $InputObject $Path
+            $InputObject = $Path
          }
          $Result = $null
          Import-LocalizedData -BindingVariable Result -BaseDirectory (Split-Path $InputObject) -FileName (Split-Path $InputObject -Leaf) -SupportedCommand $ValidCommands
