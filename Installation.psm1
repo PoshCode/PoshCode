@@ -104,18 +104,18 @@ function Update-Module {
          $WebParam = @{Uri = $M.PackageInfoUri}
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
-            $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
+            $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebError -ErrorAction SilentlyContinue
          } catch [System.Net.WebException] {
-            if(!$WebException) { $WebException = @($_.Exception) }
+            if(!$WebError) { $WebError = @($_.Exception) }
          } finally {
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
          }
 
-         if($WebException){
-            $Source = $WebException[0].InnerException.Response.StatusCode
-            if(!$Source) { $Source = $WebException[0].InnerException }
+         if($WebError){
+            $Source = $WebError[0].InnerException.Response.StatusCode
+            if(!$Source) { $Source = $WebError[0].InnerException }
 
-            Write-Warning "Can't fetch ModuleInfo from $($M.PackageInfoUri) for $($M.Name): $(@($WebException)[0].Message)"
+            Write-Warning "Can't fetch ModuleInfo from $($M.PackageInfoUri) for $($M.Name): $(@($WebError)[0].Message)"
             continue # Check the rest of the modules...
          }
 
@@ -478,7 +478,13 @@ function Install-Module {
             $Source = @($WebException)[0].InnerException.Response.StatusCode
             if(!$Source) { $Source = @($WebException)[0].InnerException }
 
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord @($WebException)[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source) )
+            $WebError = if(@($WebException)[0] -isnot [System.Management.Automation.ErrorRecord]) {
+               New-Object System.Management.Automation.ErrorRecord @($WebException)[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source
+            } else { 
+               @($WebException)[0]
+            }
+
+            $PSCmdlet.ThrowTerminatingError( $WebError )
          }
 
          $FileName = ([regex]'(?i)filename=(.*)$').Match( $WebResponse.Headers["Content-Disposition"] ).Groups[1].Value

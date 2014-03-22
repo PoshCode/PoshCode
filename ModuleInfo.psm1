@@ -690,13 +690,14 @@ function ConvertFrom-Metadata {
       $Tokens = $Null; $ParseErrors = $Null
 
       if($PSVersionTable.PSVersion -lt "3.0") {
+         Write-Verbose "$InputObject"
          if(!(Test-Path $InputObject -ErrorAction SilentlyContinue)) {
             $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
             Set-Content -Path $Path $InputObject
             $InputObject = $Path
          } elseif(!"$InputObject".EndsWith($ModuleManifestExtension)) {
             $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
-            Rename-Item $InputObject $Path
+            Copy-Item "$InputObject" "$Path"
             $InputObject = $Path
          }
          $Result = $null
