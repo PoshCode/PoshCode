@@ -42,8 +42,8 @@ test "Read-Module Adds Simple Names" {
 #    assert {
 #       "Name = Reflection".MustEqual( ("Name = " + $RequiredModules.Name) )
 #
-#       "http://poshcode.org/Modules/PSAINT.psd1".MustEqual( $ModuleManifest.PackageManifestUri )
-#       "http://PoshCode.org/Modules/Reflection.psdxml".MustEqual( $RequiredModules.PackageManifestUri )
+#       "http://poshcode.org/Modules/PSAINT.psd1".MustEqual( $ModuleManifest.PackageInfoUri )
+#       "http://PoshCode.org/Modules/Reflection.psdxml".MustEqual( $RequiredModules.PackageInfoUri )
 #    }
 # } -Category AddSimpleNames
 
@@ -63,8 +63,8 @@ test "Read-Module Supports Packages Includes Both Manifest" {
    }
    assert {
       "Name = Reflection".MustEqual( ("Name = " + $RequiredModules.Name) )
-      "http://poshcode.org/Modules/WASP.psd1".MustEqual( $ModuleManifest.PackageManifestUri )
-      "http://PoshCode.org/Modules/Reflection.psd1".MustEqual( $RequiredModules.PackageManifestUri )
+      "http://poshcode.org/Modules/WASP.psd1".MustEqual( $ModuleManifest.PackageInfoUri )
+      "http://PoshCode.org/Modules/Reflection.psd1".MustEqual( $RequiredModules.PackageInfoUri )
    }
 } -Category Packages
 
@@ -85,8 +85,8 @@ test "Read-Module As Object" {
    assert {
       "Name = Reflection".MustEqual( ("Name = " + $RequiredModules.Name) )
 
-      "http://poshcode.org/Modules/WASP.psd1".MustEqual( $ModuleManifest.PackageManifestUri )
-      "http://PoshCode.org/Modules/Reflection.psd1".MustEqual( $RequiredModules.PackageManifestUri )
+      "http://poshcode.org/Modules/WASP.psd1".MustEqual( $ModuleManifest.PackageInfoUri )
+      "http://PoshCode.org/Modules/Reflection.psd1".MustEqual( $RequiredModules.PackageInfoUri )
    }
 } -Category Packages
 

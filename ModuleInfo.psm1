@@ -61,7 +61,7 @@ function Read-Module {
             $PSBoundParameters['Name'] = @($moduleName | Where-Object { $_ -and !$_.EndsWith($ModulePackageExtension) })
             $moduleName | Where-Object { $_ -and $_.EndsWith($ModulePackageExtension) } | Get-ModulePackage 
 
-            # If they passed (just) the name to a psmx, we need to set a fake name that couldn't possibly be a real module name
+            # If they passed (just) the name to a package, we need to set a fake name that couldn't possibly be a real module name
             if(($moduleName.Count -gt 0) -and ($PSBoundParameters['Name'].Count -eq 0)) {
                $PSBoundParameters['Name'] = " "
             }
@@ -116,8 +116,8 @@ function Read-Module {
    #>
 }
 
-# Private Function Called by Read-Module when you explicitly pass it a psmx file
-# Basically the same as Read-Module, but for working with Package (psmx) files 
+# Private Function Called by Read-Module when you explicitly pass it a package file
+# Basically the same as Read-Module, but for working with package files 
 # TODO: Make this work for simple .zip files if they have a ".packageInfo" or ".nuspec" file in them.
 #       That way, we can use it for source zips from GitHub etc.
 # TODO: Make this work for nuget packages (parse the xml, and if they have a module, parse it's maifest)
@@ -359,8 +359,8 @@ function Update-Dictionary {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
                Write-Verbose "Module Requires: $($rmNames -join ',')"
-               # The only reason to bother with RequiredModules is if they have a PackageManifestUri
-               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageManifestUri })) {
+               # The only reason to bother with RequiredModules is if they have a PackageInfoUri
+               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageInfoUri })) {
                   $name = $depInfo.Name
                   Write-Verbose "Additional Requires: $name"
                   # If this Required Module is already listed, then just add the uri
@@ -370,15 +370,15 @@ function Update-Dictionary {
                         if(($required -is [string]) -and ($required -eq $name)) {
                            $Authoritative.RequiredModules[([Array]::IndexOf($Authoritative.RequiredModules,$required))] = $depInfo
                         } elseif($required.Name -eq $name) {
-                           Write-Verbose "Authoritative also Requires $name - adding PackageManifestUri ($($depInfo.PackageManifestUri))"
+                           Write-Verbose "Authoritative also Requires $name - adding PackageInfoUri ($($depInfo.PackageInfoUri))"
                            if($required -is [System.Collections.IDictionary]) {
-                              Write-Verbose "Required is a Hashtable, adding PackageManifestUri: $($depInfo.PackageManifestUri)"
-                              if(!$required.Contains("PackageManifestUri")) {
-                                 $required.Add("PackageManifestUri", $depInfo.PackageManifestUri)
+                              Write-Verbose "Required is a Hashtable, adding PackageInfoUri: $($depInfo.PackageInfoUri)"
+                              if(!$required.Contains("PackageInfoUri")) {
+                                 $required.Add("PackageInfoUri", $depInfo.PackageInfoUri)
                               }
                            } else {
-                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageManifestUri" -Value $depInfo.PackageManifestUri -ErrorAction SilentlyContinue
-                              Write-Verbose "Required is an object, added PackageManifestUri: $($required | FL * | Out-String | % TrimEnd )"
+                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageInfoUri" -Value $depInfo.PackageInfoUri -ErrorAction SilentlyContinue
+                              Write-Verbose "Required is an object, added PackageInfoUri: $($required | FL * | Out-String | % TrimEnd )"
                            }
                         }
                      }

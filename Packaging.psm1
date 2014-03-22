@@ -22,7 +22,7 @@ if(!$PoshCodeModuleRoot) {
 
 function Compress-Module {
    #.Synopsis
-   #   Create a new psmx package for a module
+   #   Create a new package for a module
    #.Description
    #   Create a module package based on a .psd1 metadata module. 
    #.Notes
@@ -88,7 +88,6 @@ function Compress-Module {
          $PackageVersion = "1.0"
       }
    
-      # .psmx
       if($OutputPath.EndsWith($ModulePackageExtension)) {
          Write-Verbose "Specified OutputPath include the Module name (ends with $ModulePackageExtension)"
          $OutputPath = Split-Path $OutputPath
@@ -169,8 +168,8 @@ function Compress-Module {
                if($Module.HelpInfoUri) {
                   $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
                }
-               if($Module.PackageManifestUri) {
-                  $null = $Package.CreateRelationship( $Module.PackageManifestUri, "External", $PackageManifestType )
+               if($Module.PackageInfoUri) {
+                  $null = $Package.CreateRelationship( $Module.PackageInfoUri, "External", $PackageManifestType )
                }
                if($Module.LicenseUri) {
                   $null = $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
@@ -199,7 +198,7 @@ function Compress-Module {
             Get-Item $PackagePath
 
             # TODO: once the URLs are mandatory, print the full URL here
-            Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageManifestUri and DownloadUri"  
+            Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageInfoUri and DownloadUri"  
          }
       }
    }
@@ -304,7 +303,7 @@ function Add-File {
    }
 }
 
-# internal function for setting the PackageProperties of a psmx file
+# internal function for setting the PackageProperties of a package file
 function Set-PackageProperties {
   #.Synopsis
   #   Sets PackageProperties from a PSModuleInfo
@@ -512,7 +511,7 @@ function Set-ModuleInfo {
         [version]
         ${PowerShellHostVersion},
 
-        # The Required modules is a hashtable of ModuleName=PackageManifestUri, or an array of module names, etc
+        # The Required modules is a hashtable of ModuleName=PackageInfoUri, or an array of module names, etc
         [System.Object[]]
         ${RequiredModules},
 
@@ -575,7 +574,7 @@ function Set-ModuleInfo {
         [String]$DownloadUri,
       
         # The url where the module's package manifest will be uploaded (defaults to the download URI modified to ModuleName.psd1)
-        [String]$PackageManifestUri,
+        [String]$PackageInfoUri,
 
         # The url to a license
         [String]$LicenseUri,
@@ -612,7 +611,7 @@ function Set-ModuleInfo {
     )
     begin {
         $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
-        $PoshCodeProperties = 'DownloadUri','PackageManifestUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
+        $PoshCodeProperties = 'DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
     }
     end {

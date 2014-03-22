@@ -1,6 +1,6 @@
 
 @{
-  PackageManifestUri = 'http://poshcode.org/Modules/PoshCode.packageData'
+  PackageInfoUri = 'http://poshcode.org/Modules/PoshCode.packageData'
   AuthorEmail = 'Jaykul@HuddledMasses.org'
   DownloadUri = 'http://poshcode.org/Modules/PoshCode-4.0.1.0.nupkg'
   Keywords = @('PoshCode Packaging NuGet PSGet')

@@ -65,8 +65,8 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
             'Author'=$_.repository.owner.login
             'ModuleName'=$_.repository.name
             'Description'=$_.repository.description
-            # The PackageManifestUri should point at the raw version of the html_url so tools can download it
-            'PackageManifestUri'=$_.html_url -replace "(https?://)",'$1raw.' -replace "/blob",""
+            # The PackageInfoUri should point at the raw version of the html_url so tools can download it
+            'PackageInfoUri'=$_.html_url -replace "(https?://)",'$1raw.' -replace "/blob",""
 
             'SourceRepoUri'=$_.repository.html_url
             'Repository' = @{ GitHub = $Root }

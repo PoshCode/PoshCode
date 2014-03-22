@@ -274,10 +274,10 @@ function New-Module {
                '   # A relative path to a license file, or the url to a license, like http://opensource.org/licenses/MIT' +
                '   LicenseUri    = ""' +
                '   ' +
-               '   # The web address where this psd1 file will be uploaded' +
-               '   PackageManifestUri = ""' +
+               '   # The web address where this packageInfo file will be uploaded' +
+               '   PackageInfoUri = ""' +
                '   ' +
-               '   # The web address where the psmx package file will be uploaded' +
+               '   # The web address where the package file will be uploaded' +
                '   DownloadUri    = ""' +
                '   ' +
                '   # This version number is here so users can check for the latest version' +
