@@ -4,8 +4,8 @@
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ###############################################################################
-## Installation.psm1 defines the core commands for installing packages:
-## Read-Module and Install-Module 
+## ModuleInfo.psm1 defines the core commands for reading packages and modules:
+## Read-Module, Import-Metadata, Export-Metadata
 ## It depends on the Configuration module and the Invoke-WebRequest cmdlet
 
 
@@ -269,7 +269,7 @@ function Update-ModuleInfo {
             }
          }
 
-         ## This is the PoshCode metadata file: Package.psd1
+         ## This is the PoshCode metadata file: ModuleName.packageInfo
          # Since we're not using anything else, we won't add the aliases...
          if(Test-Path $PackageInfoPath) {
             Write-Verbose "Loading package info from $PackageInfoPath"
@@ -691,7 +691,7 @@ function ConvertFrom-Metadata {
 
       if($PSVersionTable.PSVersion -lt "3.0") {
          if(!(Test-Path $InputObject -ErrorAction SilentlyContinue)) {
-            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(),"psd1")
+            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
             Set-Content -Path $Path $InputObject
             $InputObject = $Path
          }

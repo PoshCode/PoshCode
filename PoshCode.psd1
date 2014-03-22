@@ -62,7 +62,7 @@ ModuleList = @('ModuleInfo', 'Configuration', 'Installation', 'InvokeWeb', 'Pack
 NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 'Repository.psm1')
 
 # List of all files packaged with this module
-FileList = 'package.psd1', 'PoshCode.psd1', 'Constants.ps1',
+FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1',
            'ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1',
            'InvokeWeb.psm1', 'UserSettings.psd1',
            # Repository Modules
