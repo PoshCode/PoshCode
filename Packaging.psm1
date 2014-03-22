@@ -340,7 +340,7 @@ function Set-PackageProperties {
     $PackageProperties.Category = $ModuleInfo.Category
 
     if($ModuleInfo.Keywords) {
-      $PackageProperties.Keywords = @(@($ModuleInfo.Keywords) + $ModulePackageKeyword | Sort-Unique) -join ' '
+      $PackageProperties.Keywords = @(@($ModuleInfo.Keywords) + $ModulePackageKeyword | Sort-Object -Unique) -join ' '
     }
     if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
       $PackageProperties.Subject = $anyUrl
