@@ -5,7 +5,7 @@
 *.pdb
 
 # Packaging Output
-*.psmx
+*.nupkg
 *.zip
 
 Modules/

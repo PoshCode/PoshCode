@@ -4,7 +4,7 @@
 ModuleToProcess = 'Packaging.psm1'
 
 # Version number of this module.
-ModuleVersion = '4.0.0.10'
+ModuleVersion = '4.0.1.0'
 
 # ID used to uniquely identify the PoshCode module
 GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'

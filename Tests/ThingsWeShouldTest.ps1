@@ -24,15 +24,15 @@ Test "Install a module with dependencies from a url with dependencies that have 
 # Get Module Info
 Test "Validate the error message when getting module info from a module with no .psd1" { assert { throw "Test Not Written" } -Category "ModuleInfo"
 Test "Get Module Info from an installed module with just .psd1" { assert { throw "Test Not Written" } -Category "ModuleInfo"
-Test "Get Module Info from an installed module with a .moduleinfo" { assert { throw "Test Not Written" } -Category "ModuleInfo"
-Test "Get Module Info from a local .psmx package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
+Test "Get Module Info from an installed module with a .packageInfo" { assert { throw "Test Not Written" } -Category "ModuleInfo"
+Test "Get Module Info from a local .nupkg package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
 Test "Get Module Info from a remote (UNC) package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
 Test "Get Module Info from a remote (http) package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
 
 # Update Module Info
 Test "Update Module Info when there are new things in the .psd1" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
 Test "Update Module Info when there are things removed from the .psd1 (not supported yet)" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
-Test "Update Module Info when the .moduleinfo file hasn't been created yet" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
+Test "Update Module Info when the .packageInfo file hasn't been created yet" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
 Test "Update Module Info with various parameters" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
 
 # SIG # Begin signature block

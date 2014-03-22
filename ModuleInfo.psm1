@@ -118,7 +118,7 @@ function Read-Module {
 
 # Private Function Called by Read-Module when you explicitly pass it a psmx file
 # Basically the same as Read-Module, but for working with Package (psmx) files 
-# TODO: Make this work for simple .zip files if they have a "package.psd1" file in them.
+# TODO: Make this work for simple .zip files if they have a ".packageInfo" or ".nuspec" file in them.
 #       That way, we can use it for source zips from GitHub etc.
 # TODO: Make this work for nuget packages (parse the xml, and if they have a module, parse it's maifest)
 function Get-ModulePackage {
@@ -253,9 +253,9 @@ function Update-ModuleInfo {
 
       if($ModuleInfo) {
          $ModuleBase = Split-Path $ModuleInfo.Path
-         $PackageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) "Package.psd1"
-         $ModuleManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf).psd1"
-         $NugetManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf).nuspec"
+         $PackageInfoPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$PackageInfoExtension"
+         $ModuleManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$ModuleManifestExtension"
+         $NugetManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$NuSpecManifestExtension"
 
          if(Test-Path $NugetManifestPath) {
             try {
@@ -606,20 +606,23 @@ function Import-Metadata {
       }
 
       if($ModuleInfo -and $AsObject) {
-         $ModuleInfo | % { 
-            $_.RequiredModules = foreach($M in @($_.RequiredModules)) { 
-               if($M -is [String]) { $M = @{ModuleName=$M} }
-               New-Object PSObject -Property $M | % {
-                  $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-                  $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-                  $_
-               }
-            }
+         foreach($Info in $ModuleInfo) {
+            if($Info.RequiredModules) {
+                $Info.RequiredModules = foreach($Module in @($Info.RequiredModules)) {
+                    if($Module -is [String]) { $Module = @{ModuleName=$Module} }
 
-            New-Object PSObject -Property $_ } | % {
-            $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-            $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-            $_
+                    New-Object PSObject -Property $Module | % {
+                       $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                       $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                       $_
+                    }
+                }
+            }
+            New-Object PSObject -Property $Info | % {
+                $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                $_
+            }
          }
       } else {
          Write-Output $ModuleInfo

@@ -133,11 +133,11 @@ end {{
       Write-Verbose ("Selected Module Path: " + $PSBoundParameters["InstallPath"])
     }}
 
-    $Package = Invoke-WebRequest -Uri "http://PoshCode.org/Modules/PoshCode.psmx" -OutFile (Join-Path $InstallPath PoshCode.psmx) -ErrorVariable FourOhFour | Convert-Path
+    $Package = Invoke-WebRequest -Uri "http://PoshCode.org/Modules/PoshCode.nupkg" -OutFile (Join-Path $InstallPath PoshCode.psmx) -ErrorVariable FourOhFour | Convert-Path
     if($FourOhFour){{
       $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
     }}
-    if(!$Package){{ $Package = Join-Path $InstallPath PoshCode.psmx }}
+    if(!$Package){{ $Package = Join-Path $InstallPath PoshCode.nupkg }}
 
     $PSBoundParameters["Package"] = $Package
     Install-Module @PSBoundParameters
@@ -207,7 +207,7 @@ if($Package) {
    Write-Host
    # Update-ModuleInfo PoshCode -Version $Version
    $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
-   $Files += $Files | Where-Object { $_.Name.EndsWith(".psmx") } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.psmx) -Passthru
+   $Files += $Files | Where-Object { $_.Name.EndsWith($ModulePackageExtension) } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.nupkg) -Passthru
    @(Get-Item $InstallScript) + @($Files) | Out-Default
 
 }

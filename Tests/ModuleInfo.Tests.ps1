@@ -51,10 +51,10 @@ test "Read-Module Adds Simple Names" {
 
 test "Read-Module Supports Packages Includes Both Manifest" {
    arrange {
-      $ModulePackage = "~\Documents\WindowsPowerShell\Modules\WASP.psmx"
+      $ModulePackage = "~\Documents\WindowsPowerShell\Modules\WASP.nupkg"
       
       if(!(Test-Path $ModulePackage)) {
-         $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.psmx" -OutFile $ModulePackage
+         $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.nupkg" -OutFile $ModulePackage
       }
    }
    act {
@@ -72,10 +72,10 @@ test "Read-Module Supports Packages Includes Both Manifest" {
 
 test "Read-Module As Object" {
    arrange {
-      $ModulePackage = "~\Documents\WindowsPowerShell\Modules\WASP.psmx"
+      $ModulePackage = "~\Documents\WindowsPowerShell\Modules\WASP.nupkg"
       
       if(!(Test-Path $ModulePackage)) {
-         $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.psmx" -OutFile $ModulePackage
+         $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.nupkg" -OutFile $ModulePackage
       }
       $ModuleManifest = Read-Module $ModulePackage
    }

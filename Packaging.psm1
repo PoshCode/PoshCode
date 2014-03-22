@@ -76,10 +76,10 @@ function Compress-Module {
 
       # If the Module.Path isn't a PSD1, then there is none, so we will refuse to package this module
       if( $Module -isnot [System.Management.Automation.PSModuleInfo] -and [IO.Path]::GetExtension($Module.Path) -ne ".psd1" ) {
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (.psd1) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
+         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (${ModuleManifestExtension}) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
       }
 
-      # Our packages are ModuleName.psmx (for now, $ModulePackageExtension = .psmx)
+      # Our packages are ModuleName.nupkg (for now, $ModulePackageExtension = .nupkg)
       $PackageName = $Module.Name
       if($Module.Version -gt "0.0") {
          $PackageVersion = $Module.Version
@@ -149,7 +149,7 @@ function Compress-Module {
                }
 
             } else {
-               Write-Warning "FileList not set in module metadata (.psd1) file. Packing all files from path: $($Module.ModuleBase)"
+               Write-Warning "FileList not set in module metadata (${ModuleManifestExtension}) file. Packing all files from path: $($Module.ModuleBase)"
             }
 
             # Create the package
@@ -222,7 +222,7 @@ function Add-File {
    begin {
       $ModuleRootRex = [regex]::Escape($Module.ModuleBase)
       $PackageName = $Package.PackageProperties.Title
-      $MetadataName = "${PackageName}.psd1"
+      $MetadataName = "${PackageName}${ModuleManifestExtension}"
    }
    process {
       $FileRelativePath = $Path -replace $ModuleRootRex, ""
@@ -358,7 +358,7 @@ function Get-NuspecContent {
         [String]$Name,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
-        [String]$Version,
+        [Version]$Version,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
         [Alias("Authors")]
@@ -435,20 +435,28 @@ function Get-NuspecContent {
        }
     }
 
-    $doc.OuterXml
+    $StringWriter = New-Object System.IO.StringWriter
+    $XmlWriter = New-Object System.Xml.XmlTextWriter $StringWriter
+    $xmlWriter.Formatting = "indented"
+    $xmlWriter.Indentation = $Indent
+    $xmlWriter.IndentChar = $Character
+    $doc.WriteContentTo($XmlWriter)
+    $XmlWriter.Flush()
+    $StringWriter.Flush()
+    Write-Output $StringWriter.ToString()
 }
 
 
 function Set-ModuleInfo {
     <#
       .Synopsis
-         Creates or updates Module manifest (.psd1), package manifest (.nuspec) and data files (.packageData) for a module.
+         Creates or updates Module manifest (.psd1), package manifest (.nuspec) and data files (.packageInfo) for a module.
       .Description
          Creates a package manifest with the mandatory and optional properties
     #>   
     [CmdletBinding()]
     param(
-        # The name of the module to create a new package.psd1 file for.
+        # The name of the module to create a new package manifest(s) for
         [Parameter(Mandatory=$true, Position=0)]
         [String]$Name,
 
@@ -477,6 +485,7 @@ function Set-ModuleInfo {
         [string]
         ${RootModule},
 
+        [Alias("Version")]
         [ValidateNotNull()]
         [version]
         ${ModuleVersion},
@@ -607,20 +616,21 @@ function Set-ModuleInfo {
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
     }
     end {
+        $ErrorActionPreference = "Stop"
         $Manifest = Read-Module $Name | Select-Object *
         if(!$Manifest) {
             $Manifest = Read-Module $Name -ListAvailable | Select-Object *
         }
 
-        $Path = $Manifest.ModuleManifestPath
+        $Path = "$($Manifest.ModuleManifestPath)"
         if(!$Path.EndsWith($ModuleManifestExtension) -or !(Test-Path $Path)){ 
-            Write-Warning "Manifest file not found: $Path"
-            $Path = $Manifest.Path
+            Write-Debug "Manifest file not found: $Path"
+            $Path = "$($Manifest.Path)"
             if(!$Path.EndsWith($ModuleManifestExtension) -or !(Test-Path $Path)){ 
-                Write-Warning "Manifest file not found: $Path"
+                Write-Debug "Manifest file not found: $Path"
                 $Path = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)
                 if(!(Test-Path $Path)){ 
-                     Write-Warning "Manifest file not found: $Path"
+                     Write-WarningDebug "Manifest file not found: $Path"
                      $Path = [IO.Path]::ChangeExtension($Manifest.Path, $ModuleManifestExtension)
                 }
             }
@@ -628,6 +638,15 @@ function Set-ModuleInfo {
 
         if(Test-Path $Path) {
             $Manifest = Update-ModuleInfo $Path
+
+            ## NOTE: this is here to preserve "extra" metadata to the moduleInfo file
+            $ErrorActionPreference = "SilentlyContinue"
+            $PInfoPath = [IO.Path]::ChangeExtension($Path, $PackageInfoExtension)
+            if(Test-Path $PInfoPath) {
+                $Info = Import-Metadata $PInfoPath
+                $PoshCodeProperties = ($PoshCodeProperties + $Info.Keys) | Select -Unique
+            }
+            $ErrorActionPreference = "Stop"
         } else {
             Write-Warning "No Manifest file: $Path"
 
@@ -646,10 +665,10 @@ function Set-ModuleInfo {
             throw "Couldn't find module $Name"
         }
 
-        if($Manifest.Version -gt "0.0") {
-            [Version]$PackageVersion = $Module.Version
-        } elseif($ModuleVersion) {
+        if($ModuleVersion) {
             [Version]$PackageVersion = $ModuleVersion 
+        } elseif($Manifest.Version -gt "0.0") {
+            [Version]$PackageVersion = $Module.Version
         } else {
             Write-Warning "Module Version not specified properly, using 1.0"
             [Version]$PackageVersion = "1.0"
@@ -658,7 +677,9 @@ function Set-ModuleInfo {
         if($AutoIncrementBuildNumber) {
             $PackageVersion.Build = $PackageVersion.Build + 1
         }
-        $Manifest = Add-Member -InputObject $Manifest -Name Version -MemberType NoteProperty -Value $PackageVersion -Force -PassThru 
+        # TODO: Figure out a way to get rid of one of these throughout PoshCode stuff
+        $PSBoundParameters["ModuleVersion"] = $PackageVersion
+        $PSBoundParameters["Version"] = $PackageVersion
 
         # Normalize RequiredModules to an array of hashtables
         if(!$RequiredModules -and @($Manifest.RequiredModules).Count -gt 0) {
@@ -669,7 +690,7 @@ function Set-ModuleInfo {
             # -RequiredModules "ModuleOne"
             # -RequiredModules @{ModuleName="PowerBot"; ModuleVersion="1.0" }
             # -RequiredModules "ModuleOne", "ModuleTwo", "ModuleThree"
-            # -RequiredModules @( @{ModuleName="PowerBot"; ModuleVersion="1.0"; PackageInfoUrl="https://raw.github.com/Jaykul/PowerBot/master/PowerBot.psd1"}, ... )
+            # -RequiredModules @( @{ModuleName="PowerBot"; ModuleVersion="1.0"; PackageInfoUrl="https://raw.github.com/Jaykul/PowerBot/master/PowerBot.packageInfo"}, ... )
             # But it's always treated as an array, so the question is: did they pass in module names, or hashtables?
             $RequiredModules = foreach($Module in $RequiredModules) {
                 if($Module -is [String]) { 
@@ -682,6 +703,9 @@ function Set-ModuleInfo {
                     } elseif( $Module.Name ) {
                         $M.ModuleName = $Module.Name
                     } else {
+                        Write-Warning ("RequiredModules is a " + $RequiredModules.GetType().FullName + " and this Module is a " + $Module.GetType().FullName)
+                        Write-Debug (($Module | Format-List * -Force | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n")
+                        Write-Debug (($Module | Get-Member | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n")
                         throw "The RequiredModules must be an array of module names or an array of ModuleInfo hashtables or objects (which must have a ModuleName key and optionally a ModuleVersion and PackageInfoUrl)"
                     }
 
@@ -730,6 +754,8 @@ function Set-ModuleInfo {
 
 
         $PoshCode = $Manifest | ConvertTo-Hashtable $PoshCodeProperties -IgnoreEmptyProperties
+        Write-Debug ("Exporting $Name Info " + (($PoshCode | Format-Table | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
+
         $PoshCode | Export-Metadata -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension))
 
 

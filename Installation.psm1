@@ -318,11 +318,11 @@ function Expand-ZipFile {
 
       # Finally, double-check the file name (it's likely to be Name-v.x.x)
       $BaseName = [IO.Path]::GetFileNameWithoutExtension($Destination)
-      Write-Verbose "Test: $Destination\$BaseName.psd1"
-      if(!(Test-Path (Join-Path $Destination "${BaseName}.psd1"))) {
+      Write-Verbose "Test: $Destination\$BaseName${ModuleManifestExtension}"
+      if(!(Test-Path (Join-Path $Destination "${BaseName}${ModuleManifestExtension}"))) {
          $BaseName, $null = $BaseName -Split '-'
-         Write-Verbose "Test: $Destination\$BaseName.psd1"
-         if(Test-Path (Join-Path $Destination "${BaseName}.psd1")) {
+         Write-Verbose "Test: $Destination\$BaseName${ModuleManifestExtension}"
+         if(Test-Path (Join-Path $Destination "${BaseName}${ModuleManifestExtension}")) {
             Write-Verbose "Rename-Item $Destination $BaseName"
             $Destination = Rename-Item $Destination $BaseName
          } else {
@@ -564,7 +564,7 @@ function Install-Module {
          }
       }
 
-      if(!(Test-Path (Join-Path $ModuleFolder.FullName "*$ModuleManifestExtension"))) {
+      if(!(Test-Path (Join-Path $ModuleFolder.FullName "*${ModuleManifestExtension}"))) {
          Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the $PackageInfoExtension manifest)"
       }
 
