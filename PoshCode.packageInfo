@@ -1,7 +1,7 @@
 
 @{
-  Name = 'PoshCode'
-  Version = '4.0.1.1'
+  ModuleName = 'PoshCode'
+  ModuleVersion = '4.0.1.1'
   AuthorEmail = 'Jaykul@HuddledMasses.org'
   DownloadUri = 'http://poshcode.org/Modules/PoshCode.4.0.1.1.nupkg'
   PackageInfoUri = 'http://poshcode.org/Modules/PoshCode.packageInfo'

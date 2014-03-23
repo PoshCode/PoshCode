@@ -612,7 +612,7 @@ function Set-ModuleInfo {
     )
     begin {
         $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
-        $PoshCodeProperties = 'Name','Version','DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
+        $PoshCodeProperties = 'ModuleName','ModuleVersion','DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
     }
     end {
