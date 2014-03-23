@@ -758,8 +758,7 @@ function ConvertTo-Metadata {
          $InputObject -is [Int64] -or 
          $InputObject -is [Double] -or 
          $InputObject -is [Decimal] -or 
-         $InputObject -is [Byte] -or
-         $InputObject -is [Version] ) { 
+         $InputObject -is [Byte] ) { 
          # Write-Verbose "Numbers"
          "$InputObject" 
       }
@@ -775,7 +774,8 @@ function ConvertTo-Metadata {
          # Write-Verbose "DateTime"
          "DateTimeOffset '{0}'" -f $InputObject.ToString('o')
       }
-      elseif($InputObject -is [String])  {
+      elseif($InputObject -is [String] -or
+             $InputObject -is [Version])  {
          # Write-Verbose "String"
          "'$InputObject'" 
       }
