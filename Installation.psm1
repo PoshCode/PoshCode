@@ -121,10 +121,25 @@ function Update-Module {
 
          try {
             $null = $WebResponse.RawContentStream.Seek(0,"Begin")
-            $reader = New-Object System.IO.StreamReader $WebResponse.RawContentStream, $WebResponse.BaseResponse.CharacterSet
-            $content = $reader.ReadToEnd()
+            if($WebResponse.BaseResponse.CharacterSet) {
+               $encoding = $WebResponse.BaseResponse.CharacterSet 
+               Write-Debug "Reading response in $encoding"
+               $reader = New-Object System.IO.StreamReader $WebResponse.RawContentStream, $encoding
+               $content = $reader.ReadToEnd()
+            } else {
+               $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $PackageInfoExtension )
+               if( $WebResponse.Content -is [Byte[]] ) {
+                  Set-Content $FileName $WebResponse.Content -Encoding Byte
+                  [string]$content = Get-Content $FileName -Delimiter ([char]0)
+                  Write-Debug "Buffered $($content.GetType().Name) response to $FileName as bytes: $((Get-Item $FileName).Length)`n$content"
+                  Remove-Item $FileName 
+               } else {
+                  [string]$content = $WebResponse.Content
+                  Write-Debug "Reading $($content.GetType().Name) response directly:`n$content"
+               }
+            }
          } catch {
-            $content= $WebResponse.Content
+            [string]$content= $WebResponse.Content
          } finally {
             if($reader) { $reader.Close() }
          }
@@ -432,7 +447,7 @@ function Install-Module {
             $InstallPath = Split-Path $InstallPath
          }
       } else {
-         $InstallPath = "$InstallPath".TrimEnd("\")
+         $InstallPath = "$InstallPath".TrimEnd("/\")
    
          # Warn them if they're installing in an irregular location
          [string[]]$ModulePaths = $(
@@ -488,26 +503,32 @@ function Install-Module {
          }
 
          $FileName = ([regex]'(?i)filename=(.*)$').Match( $WebResponse.Headers["Content-Disposition"] ).Groups[1].Value
+         Write-Debug "Content-Disposition: $FileName"
          if(!$FileName) {
             $FileName = [IO.Path]::GetFileName( $WebResponse.BaseResponse.ResponseUri.AbsolutePath )
+            Write-Debug "AbsolutePath: $FileName"
          }
 
          $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $PackageInfoExtension })
 
          if(!$FileName) {
-            $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetRandomFileName(), $ext )
+            $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $ext )
          } 
          elseif(![IO.path]::HasExtension($FileName) -or !($PackageInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
             $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
          }
 
+         Write-Debug "FileName: $FileName"
+
          $Package = Join-Path $InstallPath $FileName
 
          if( $WebResponse.Content -is [Byte[]] ) {
             Set-Content $Package $WebResponse.Content -Encoding Byte
+            Write-Debug "Buffering bytes to $Package $((Get-Item $Package).Length)"
          } else {
             Set-Content $Package $WebResponse.Content
-         }         
+            Write-Debug "Buffering text to $Package $((Get-Item $Package).Length)"
+         }
       }
 
 

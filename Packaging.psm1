@@ -612,7 +612,7 @@ function Set-ModuleInfo {
     )
     begin {
         $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
-        $PoshCodeProperties = 'DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
+        $PoshCodeProperties = 'Name','Version','DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
     }
     end {
@@ -666,9 +666,10 @@ function Set-ModuleInfo {
         }
 
         if($ModuleVersion) {
+            Write-Debug "Setting Module Version from parameter $ModuleVersion"
             [Version]$PackageVersion = $ModuleVersion 
         } elseif($Manifest.Version -gt "0.0") {
-            [Version]$PackageVersion = $Module.Version
+            [Version]$PackageVersion = $Manifest.Version
         } else {
             Write-Warning "Module Version not specified properly, using 1.0"
             [Version]$PackageVersion = "1.0"
