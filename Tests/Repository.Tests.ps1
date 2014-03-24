@@ -43,7 +43,7 @@ test "Base Case: Search" {
       # Assert-That { $Modules | Where Name -eq "PoshCode" }
       
       $Modules | Assert-That Name -FailMessage "Modules must all have names"
-      # $Modules | Assert-That PackageManifestUri -FailMessage "Modules must all have PackageManifestUri"
+      # $Modules | Assert-That PackageInfoUri -FailMessage "Modules must all have PackageInfoUri"
       $Error.Remove($NoSuchRepo)
    }
 } -Category Search

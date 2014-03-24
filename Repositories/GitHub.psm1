@@ -40,12 +40,12 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
          $search = ""
       }
     
-      Write-Verbose "q=${search}path:package.psd1"
+      Write-Verbose "q=${search}path:*${PackageInfoExtension}"
       
       Add-Type -AssemblyName System.Web.Extensions
 
       # Note: while in preview, the GitHub api requires an "Accept" header as acknowledgement of it's beta status.
-      $wr = Invoke-WebRequest $Root -Body @{q="$search path:package.psd1"} -Headers @{Accept='application/vnd.github.preview'}
+      $wr = Invoke-WebRequest $Root -Body @{q="$search path:*${PackageInfoExtension}"} -Headers @{Accept='application/vnd.github.preview'}
       # Read the data using the right character set, because Invoke-WebRequest doesn't
       try {
          $null = $wr.RawContentStream.Seek(0,"Begin")
@@ -65,8 +65,8 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
             'Author'=$_.repository.owner.login
             'ModuleName'=$_.repository.name
             'Description'=$_.repository.description
-            # The PackageManifestUri should point at the raw version of the html_url so tools can download it
-            'PackageManifestUri'=$_.html_url -replace "(https?://)",'$1raw.' -replace "/blob",""
+            # The PackageInfoUri should point at the raw version of the html_url so tools can download it
+            'PackageInfoUri'=$_.html_url -replace "(https?://)",'$1raw.' -replace "/blob",""
 
             'SourceRepoUri'=$_.repository.html_url
             'Repository' = @{ GitHub = $Root }

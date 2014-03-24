@@ -29,7 +29,7 @@ function Update-Module {
       .Synopsis
          Checks if you have the latest version of each module
       .Description
-         Test the PackageManifestUri indicate if there's an upgrade available
+         Test the PackageInfoUri indicate if there's an upgrade available
    #>
    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
    param(
@@ -43,7 +43,7 @@ function Update-Module {
       [Alias("TestOnly")]
       [Switch]$ListAvailable,
    
-      # Force an attempt to update even modules which don't have a PackageManifestUri
+      # Force an attempt to update even modules which don't have a PackageInfoUri
       [Switch]$Force,
    
       #  Specifies the client certificate that is used for a secure web request. Enter a variable that contains a certificate or a command or expression that gets the certificate.
@@ -79,7 +79,7 @@ function Update-Module {
    process {
       $ModuleInfo = $(
          foreach($m in Read-Module $Module -ListAvailable) {
-            if($Force -or $m.PackageManifestUri) {
+            if($Force -or $m.PackageInfoUri) {
                if($m -is [Hashtable]) {
                   $m.Add("Update","Unknown")
                   New-Object PSObject -Property $m
@@ -94,37 +94,52 @@ function Update-Module {
       Write-Verbose "Testing for new versions of $(@($ModuleInfo).Count) modules."
       foreach($M in $ModuleInfo){
          Write-Progress -Activity "Updating module $($M.Name)" -Status "Checking for new version (current: $($M.Version))" -id 0
-         if(!$M.PackageManifestUri) {
+         if(!$M.PackageInfoUri) {
             # TODO: once the search domain is up, we need to do a search here.
-            Write-Warning "Unable to check for update to $($M.Name) because there is no PackageManifestUri"
+            Write-Warning "Unable to check for update to $($M.Name) because there is no PackageInfoUri"
             continue
          }
    
-         ## Download the PackageManifestUri and see what version we got...
-         $WebParam = @{Uri = $M.PackageManifestUri}
+         ## Download the PackageInfoUri and see what version we got...
+         $WebParam = @{Uri = $M.PackageInfoUri}
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
-            $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
+            $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebError -ErrorAction SilentlyContinue
          } catch [System.Net.WebException] {
-            if(!$WebException) { $WebException = @($_.Exception) }
+            if(!$WebError) { $WebError = @($_.Exception) }
          } finally {
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
          }
 
-         if($WebException){
-            $Source = $WebException[0].InnerException.Response.StatusCode
-            if(!$Source) { $Source = $WebException[0].InnerException }
+         if($WebError){
+            $Source = $WebError[0].InnerException.Response.StatusCode
+            if(!$Source) { $Source = $WebError[0].InnerException }
 
-            Write-Warning "Can't fetch ModuleInfo from $($M.PackageManifestUri) for $($M.Name): $(@($WebException)[0].Message)"
+            Write-Warning "Can't fetch ModuleInfo from $($M.PackageInfoUri) for $($M.Name): $(@($WebError)[0].Message)"
             continue # Check the rest of the modules...
          }
 
          try {
             $null = $WebResponse.RawContentStream.Seek(0,"Begin")
-            $reader = New-Object System.IO.StreamReader $WebResponse.RawContentStream, $WebResponse.BaseResponse.CharacterSet
-            $content = $reader.ReadToEnd()
+            if($WebResponse.BaseResponse.CharacterSet) {
+               $encoding = $WebResponse.BaseResponse.CharacterSet 
+               Write-Debug "Reading response in $encoding"
+               $reader = New-Object System.IO.StreamReader $WebResponse.RawContentStream, $encoding
+               $content = $reader.ReadToEnd()
+            } else {
+               $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $PackageInfoExtension )
+               if( $WebResponse.Content -is [Byte[]] ) {
+                  Set-Content $FileName $WebResponse.Content -Encoding Byte
+                  [string]$content = Get-Content $FileName -Delimiter ([char]0)
+                  Write-Debug "Buffered $($content.GetType().Name) response to $FileName as bytes: $((Get-Item $FileName).Length)`n$content"
+                  Remove-Item $FileName 
+               } else {
+                  [string]$content = $WebResponse.Content
+                  Write-Debug "Reading $($content.GetType().Name) response directly:`n$content"
+               }
+            }
          } catch {
-            $content= $WebResponse.Content
+            [string]$content= $WebResponse.Content
          } finally {
             if($reader) { $reader.Close() }
          }
@@ -318,11 +333,11 @@ function Expand-ZipFile {
 
       # Finally, double-check the file name (it's likely to be Name-v.x.x)
       $BaseName = [IO.Path]::GetFileNameWithoutExtension($Destination)
-      Write-Verbose "Test: $Destination\$BaseName.psd1"
-      if(!(Test-Path (Join-Path $Destination "${BaseName}.psd1"))) {
+      Write-Verbose "Test: $Destination\$BaseName${ModuleManifestExtension}"
+      if(!(Test-Path (Join-Path $Destination "${BaseName}${ModuleManifestExtension}"))) {
          $BaseName, $null = $BaseName -Split '-'
-         Write-Verbose "Test: $Destination\$BaseName.psd1"
-         if(Test-Path (Join-Path $Destination "${BaseName}.psd1")) {
+         Write-Verbose "Test: $Destination\$BaseName${ModuleManifestExtension}"
+         if(Test-Path (Join-Path $Destination "${BaseName}${ModuleManifestExtension}")) {
             Write-Verbose "Rename-Item $Destination $BaseName"
             $Destination = Rename-Item $Destination $BaseName
          } else {
@@ -344,7 +359,7 @@ function Install-Module {
    param(
       # The package file to be installed
       [Parameter(ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
-      [Alias("PSPath","PackagePath","PackageManifestUri","DownloadUri")]
+      [Alias("PSPath","PackagePath","PackageInfoUri","DownloadUri")]
       $Package,
    
       # A custom path to install the module to
@@ -427,13 +442,12 @@ function Install-Module {
          $null = $PsBoundParameters.Add("InstallPath", $InstallPath)
       }
 
-
       if(Test-Path $InstallPath) {
          if(Test-Path $InstallPath -PathType Leaf) {
             $InstallPath = Split-Path $InstallPath
          }
       } else {
-         $InstallPath = "$InstallPath".TrimEnd("\")
+         $InstallPath = "$InstallPath".TrimEnd("/\")
    
          # Warn them if they're installing in an irregular location
          [string[]]$ModulePaths = $(
@@ -479,41 +493,70 @@ function Install-Module {
             $Source = @($WebException)[0].InnerException.Response.StatusCode
             if(!$Source) { $Source = @($WebException)[0].InnerException }
 
-            $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord @($WebException)[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source) )
+            $WebError = if(@($WebException)[0] -isnot [System.Management.Automation.ErrorRecord]) {
+               New-Object System.Management.Automation.ErrorRecord @($WebException)[0], "Can't Download $($WebParam.Uri)", "InvalidData", $Source
+            } else { 
+               @($WebException)[0]
+            }
+
+            $PSCmdlet.ThrowTerminatingError( $WebError )
          }
 
          $FileName = ([regex]'(?i)filename=(.*)$').Match( $WebResponse.Headers["Content-Disposition"] ).Groups[1].Value
+         Write-Debug "Content-Disposition: $FileName"
          if(!$FileName) {
             $FileName = [IO.Path]::GetFileName( $WebResponse.BaseResponse.ResponseUri.AbsolutePath )
+            Write-Debug "AbsolutePath: $FileName"
          }
 
-         $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $ModuleInfoExtension })
+         $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $PackageInfoExtension })
 
          if(!$FileName) {
-            $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetRandomFileName(), $ext )
+            $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $ext )
          } 
-         elseif(![IO.path]::HasExtension($FileName) -or !($ModuleInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
+         elseif(![IO.path]::HasExtension($FileName) -or !($PackageInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
             $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
          }
+
+         Write-Debug "FileName: $FileName"
 
          $Package = Join-Path $InstallPath $FileName
 
          if( $WebResponse.Content -is [Byte[]] ) {
             Set-Content $Package $WebResponse.Content -Encoding Byte
+            Write-Debug "Buffering bytes to $Package $((Get-Item $Package).Length)"
          } else {
             Set-Content $Package $WebResponse.Content
-         }         
+            Write-Debug "Buffering text to $Package $((Get-Item $Package).Length)"
+         }
+      }
+
+
+      # If the Package is just a module name (and doesn't exist), we can search for it
+      if( ($Package.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -eq -1) -and !(Test-Path $Package) ){
+         $SearchResults = Find-Module -Name $Package
+         if(@($SearchResults).Count -eq 1) {
+            $URI = $(if($SearchResults.DownloadUri) { $SearchResults.DownloadUri } else { $SearchResults.PackageInfoUri })
+            if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Module: $($SearchResults.Name)")) {
+               $SearchResults | Install-Module
+            }
+         } elseif(@($SearchResults).Count -gt 1) {
+            Write-Warning "Multiple matching modules found, please call Install-Module with the right PackageManifestUrl below:"
+            $SearchResults
+         } else {
+            Write-Error "Can't find module package $Package"
+         }
+         return
       }
 
       # At this point, the Package must be a file 
-      # TODO: consider supporting install from a (UNC Path) folder for corporate environments
       $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
-      ## If we just got back a module manifest (text file vs. zip/psmx)
+      ## If we just got back a module manifest (text file vs. zip/nupkg)
       ## Figure out the real package Uri and recurse so we can download it
       # TODO: Check the file contents instead (it's just testing extensions right now)
-      if($ModuleInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
-         Write-Verbose "Downloaded file '$PackagePath' is just a manifest, get DownloadUri."
+      if($PackageInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
+         Write-Verbose "The file '$PackagePath' is just a manifest, get DownloadUri."
          $MI = Import-Metadata $PackagePath -ErrorAction "SilentlyContinue"
          Remove-Item $PackagePath
 
@@ -533,7 +576,7 @@ function Install-Module {
       Write-Verbose "PackagePath: $PackagePath"
       Write-Verbose "InstallPath: $InstallPath"
       $Manifest = Read-Module $PackagePath
-      # Expand the package (psmx/zip: npkg not supported yet)
+      # Expand the package
       $ModuleFolder = Expand-Package $PackagePath $InstallPath -Force:$Force -ZipFolder:$ZipFolder -ErrorAction Stop
 
       # On ocassions when we downloaded the package to the Install Path, we want to rename it if 
@@ -548,8 +591,8 @@ function Install-Module {
          }
       }
 
-      if(!(Test-Path (Join-Path $ModuleFolder.FullName $ModuleInfoFile))) {
-         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the package.psd1 manifest)"
+      if(!(Test-Path (Join-Path $ModuleFolder.FullName "*${ModuleManifestExtension}"))) {
+         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the $PackageInfoExtension manifest)"
       }
 
       if(!$Manifest) {
@@ -574,10 +617,10 @@ function Install-Module {
                   }
                   continue
                } else {
-                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version). Trying upgrade:"
+                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version)."
                }
             } else {
-               Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module. Trying install:"
+               Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module."
             }
 
             # Check for a local copy, maybe we get lucky:
@@ -593,14 +636,16 @@ function Install-Module {
                continue
             }
 
-            # If they have a PackageManifestUri, we can try that:
-            if($RequiredModule.PackageManifestUri) {
-               Write-Warning "Installing required module $($RequiredModule.MOduleName) from $($RequiredModule.PackageManifestUri)"
-               Install-Module $RequiredModule.PackageManifestUri $InstallPath
+            # If they have a PackageInfoUri, we can try that:
+            if($RequiredModule.PackageInfoUri) {
+               $URI = $(if($RequiredModule.DownloadUri) { $RequiredModule.DownloadUri } else { $RequiredModule.PackageInfoUri })
+               if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Required Module: $($RequiredModule.Name)")) {
+                  Install-Module -Package $URI -InstallPath $InstallPath 
+               }
                continue
             } 
    
-            Write-Warning "The module package does not have a PackageManifestUri for the required module $($RequiredModule.MOduleName), and there's not a local copy."
+            Write-Warning "The module package does not have a PackageInfoUri for the required module $($RequiredModule.ModuleName), and there's not a local copy."
             $FailedModules += $RequiredModule
             continue
          }
@@ -663,16 +708,16 @@ function Expand-Package {
          $PackagePath = Convert-Path $PackagePath
          $Package = [System.IO.Packaging.Package]::Open( $PackagePath, "Open", "Read" )
          $ModuleVersion = if($Package.PackageProperties.Version) {$Package.PackageProperties.Version } else {""}
-         Write-Verbose ($Package.PackageProperties|Select-Object Title,Version,@{n="Guid";e={$_.Identifier}},Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
+         Write-Verbose ($Package.PackageProperties|Select-Object Title,Identifier,Version,Creator,Description, @{n="Package";e={$PackagePath}}|Out-String)
 
-         if($ModuleResult = $ModuleName = $Package.PackageProperties.Title) {
+         if($ModuleResult = $ModuleName = if($Package.PackageProperties.Title) { $Package.PackageProperties.Title } else { $Package.PackageProperties.Identifier}) {
             if($InstallPath -match ([Regex]::Escape($ModuleName)+'$')) {
                $InstallPath = Split-Path $InstallPath
             }
          } else {
-            $Name = Split-Path $PackagePath -Leaf
-            $Name = @($Name -split "[\-\.]")[0]
-            if($InstallPath -match ([Regex]::Escape((Join-Path (Split-Path $PackagePath) $Name)))) {
+            $ModuleName = Split-Path $PackagePath -Leaf
+            $ModuleName = @($ModuleName -split "\.")[0]
+            if($InstallPath -match ([Regex]::Escape((Join-Path (Split-Path $PackagePath) $ModuleName)))) {
                $InstallPath = Split-Path $InstallPath
             }
          }
@@ -687,19 +732,23 @@ function Expand-Package {
             return
          }
 
-         if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath\$ModuleName'", "Extract '$ModuleName' to '$InstallPath\$ModuleName'?", "Installing $ModuleName $ModuleVersion" )) {
-            if($Force -Or !(Test-Path "$InstallPath\$ModuleName" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath\$ModuleName' already exists, do you want to replace it?", "Installing $ModuleName $ModuleVersion", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
-               if(Test-Path "$InstallPath\$ModuleName") {
-                  Remove-Item "$InstallPath\$ModuleName" -Recurse -Force -ErrorAction Stop
+         $InstallPath = Join-Path  $InstallPath $ModuleName
+
+         if($PSCmdlet.ShouldProcess("Extracting the module '$ModuleName' to '$InstallPath'", "Extract '$ModuleName' to '$InstallPath'?", "Installing $ModuleName $ModuleVersion" )) {
+            if($Force -Or !(Test-Path "$InstallPath" -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The module '$InstallPath' already exists, do you want to wipe and replace it?", "Installing $ModuleName $ModuleVersion", [ref]$ConfirmAllOverwriteOnInstall, [ref]$RejectAllOverwriteOnInstall)) {
+               if(Test-Path $InstallPath) {
+                  Remove-Item $InstallPath -Recurse -Force -ErrorAction Stop
                }
-               $ModuleResult = New-Item -Type Directory -Path "$InstallPath\$ModuleName" -Force -ErrorVariable FailMkDir
+               $ModuleResult = New-Item -Type Directory -Path $InstallPath -Force -ErrorVariable FailMkDir
              
                ## Handle the error if they asked for -Common and don't have permissions
                if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
-                  throw "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated."
+                  throw "You do not have permission to install a module to '$InstallPath'. You may need to be elevated."
                }
 
-               foreach($part in $Package.GetParts() | Where-Object {$_.Uri -match ("^/" + $ModuleName)}) {
+               $ForbiddenPathsPattern = "^/(?:{0})/" -f ($(foreach($nmp in $NuGetMagicPaths){[regex]::Escape($nmp)}) -join "|")
+
+               foreach($part in $Package.GetParts() | Where-Object {$_.Uri -notmatch $ForbiddenPathsPattern}) {
                   $fileSuccess = $false
                   # Copy the data to the file system
                   try {
@@ -729,7 +778,7 @@ function Expand-Package {
                }
                $success = $true
             } else { # !Force
-               $Import = $false # Don't _EVER_ import if they refuse the install
+               $Import = $false # Don't import if they refuse the install (duh!)
             }        
          } # ShouldProcess
          if(!$success) { $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.Management.Automation.HaltCommandException "Can't overwrite $ModuleName module: User Refused"), "ShouldContinue:False", "OperationStopped", $_) ) }

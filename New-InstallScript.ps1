@@ -133,13 +133,7 @@ end {{
       Write-Verbose ("Selected Module Path: " + $PSBoundParameters["InstallPath"])
     }}
 
-    $Package = Invoke-WebRequest -Uri "http://PoshCode.org/Modules/PoshCode.psmx" -OutFile (Join-Path $InstallPath PoshCode.psmx) -ErrorVariable FourOhFour | Convert-Path
-    if($FourOhFour){{
-      $PSCmdlet.ThrowTerminatingError( $FourOhFour[0] )
-    }}
-    if(!$Package){{ $Package = Join-Path $InstallPath PoshCode.psmx }}
-
-    $PSBoundParameters["Package"] = $Package
+    $PSBoundParameters["Package"] = "http://PoshCode.org/Modules/PoshCode.packageInfo"
     Install-Module @PSBoundParameters
 
     # Ditch the temporary module and import the real one
@@ -174,7 +168,7 @@ end {{
 }}
 
 begin {{
-
+  Set-StrictMode -Off
   $PoshCodeModule = Get-Module PoshCode -ListAvailable
 
   if(!$PoshCodeModule -or ($PoshCodeModule.GUID -ne '88c6579a-27b2-41c8-86c6-cd23acb791e9') -or $PoshCodeModule.Version -lt '4.0.0') {{
@@ -202,12 +196,12 @@ begin {{
 
 Sign $InstallScript -WA 0 -EA 0
 if($Package) {
-   (Get-Module PoshCode).FileList | Get-Item | Where { ".psd1",".psm1",".ps1",".ps1xml",".dll" -contains $_.Extension } | Sign
+   (Get-Module PoshCode).FileList | Get-Item | Where { ".psd1",".psm1",".ps1",".ps1xml",".dll",".packageInfo",".nuspec" -contains $_.Extension } | Sign
 
    Write-Host
    # Update-ModuleInfo PoshCode -Version $Version
    $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
-   $Files += $Files | Where-Object { $_.Name.EndsWith(".psmx") } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.psmx) -Passthru
+   $Files += $Files | Where-Object { $_.Name.EndsWith($ModulePackageExtension) } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.nupkg) -Passthru
    @(Get-Item $InstallScript) + @($Files) | Out-Default
 
 }

@@ -4,7 +4,7 @@
 ModuleToProcess = 'Packaging.psm1'
 
 # Version number of this module.
-ModuleVersion = '4.0.0.10'
+ModuleVersion = '4.0.1.2'
 
 # ID used to uniquely identify the PoshCode module
 GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'
@@ -58,11 +58,11 @@ FormatsToProcess = @('PoshCode.format.ps1xml')
 ModuleList = @('ModuleInfo', 'Configuration', 'Installation', 'InvokeWeb', 'Packaging', 'Scripts', 'Repository')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-# Note: We do not specify InvokeWeb -- Thatt should only be imported if the test in the Installation module fails
-NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1')
+# Note: We do not specify InvokeWeb -- That should only be imported if the test in the Installation module fails
+NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 'Repository.psm1')
 
 # List of all files packaged with this module
-FileList = 'package.psd1', 'PoshCode.psd1', 'Constants.ps1',
+FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1',
            'ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1',
            'InvokeWeb.psm1', 'UserSettings.psd1',
            # Repository Modules
@@ -73,7 +73,7 @@ FileList = 'package.psd1', 'PoshCode.psd1', 'Constants.ps1',
            'README.md'
 
 # Functions to export from this module
-FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Update-Module','Import-Metadata','Export-Metadata',
+FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Set-ModuleInfo', 'Update-Module', 'Import-Metadata', 'Export-Metadata',
                     'Get-ConfigData', 'Set-ConfigData', 'Get-SpecialFolder', # 'Test-ExecutionPolicy', 
                     'Get-PoshCode', 'Send-PoshCode','Find-Module'
 

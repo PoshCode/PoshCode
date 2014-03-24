@@ -632,7 +632,7 @@ function Import-LocalStorage {
             $Output = @{}
             foreach($Name in $Path) {
                $Key = Split-Path $Name -Leaf
-               $Output.$Key = Import-Metadatae -Path $Name
+               $Output.$Key = Import-Metadata -Path $Name
             }
          } else {
             Import-Metadata -Path $Path

@@ -7,12 +7,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageManifestUri = 'http://poshcode.org/Modules/PSAINT.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/PSAINT.psd1'
       LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
       ModuleInfoUri = 'http://huddledmasses.org/arrange-act-assert-intuitive-testing/'
       RequiredModules = @(@{
         Name = 'Reflection'
-        PackageManifestUri = 'http://PoshCode.org/Modules/Reflection.psd1'
+        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.psd1'
       })
     }
     "PoshCode" = @{
@@ -21,7 +21,7 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageManifestUri = 'http://poshcode.org/Modules/PoshCode.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/PoshCode.psd1'
       LicenseUri = 'http://opensource.org/licenses/ms-pl'
       ModuleInfoUri = 'https://github.com/Jaykul/poshcode'
     }
@@ -31,12 +31,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageManifestUri = 'http://poshcode.org/Modules/Reflection.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/Reflection.psd1'
       ModuleInfoUri = 'http://huddledmasses.org/'
       LicenseUri = 'license.txt'
       RequiredModules = @(@{
         Name = 'Autoload'
-        PackageManifestUri = 'http://PoshCode.org/Modules/Autoload.psd1'
+        PackageInfoUri = 'http://PoshCode.org/Modules/Autoload.psd1'
       })
     }
     "Autoload" = @{
@@ -45,7 +45,7 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageManifestUri = 'http://poshcode.org/Modules/Autoload.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/Autoload.psd1'
       LicenseUri = 'license.txt'
       ModuleInfoUri = 'http://huddledmasses.org/'
     }
@@ -55,12 +55,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageManifestUri = 'http://poshcode.org/Modules/WASP.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/WASP.psd1'
       ModuleInfoUri = 'https://wasp.codeplex.com/'
       LicenseUri = 'https://wasp.codeplex.com/license'
       RequiredModules = @(@{
         Name = 'Reflection'
-        PackageManifestUri = 'http://PoshCode.org/Modules/Reflection.psd1'
+        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.psd1'
       })
     }
     "VisioAutomation" = @{
@@ -68,7 +68,7 @@
       Description = "PowerShell Visio Automation"
       Author = 'Justin Rich'
 
-      PackageManifestUri="https://raw.github.com/jrich523/PSVA/master/visioAutomation.psd1"
+      PackageInfoUri="https://raw.github.com/jrich523/PSVA/master/VisioAutomation/package.psd1"
       ModuleInfoUri="https://github.com/jrich523/PSVA"
       LicenseUri="http://opensource.org/licenses/ms-pl"
     }
@@ -77,7 +77,7 @@
       Description = "Nimble Storage Module"
       Author = 'Justin Rich'
 
-      PackageManifestUri="https://raw.github.com/jrich523/NimblePowerShell/master/Nimble.psd1"
+      PackageInfoUri="https://raw.github.com/jrich523/NimblePowerShell/master/package.psd1"
       ModuleInfoUri="https://github.com/jrich523/NimblePowerShell"
       LicenseUri="http://opensource.org/licenses/ms-pl"
     }
@@ -86,20 +86,10 @@
       Description = 'Great command line editing in the PowerShell console host'
       Author = 'Jason Shirk'
 
-      DownloadUri = 'https://github.com/lzybkr/PSReadLine/archive/master.zip'
+      DownloadUri = 'https://github.com/lzybkr/PSReadLine/blob/master/PSReadline.zip'
       ZipFolder = '*\PSReadLine'
       LicenseUri = 'https://raw.github.com/lzybkr/PSReadLine/master/License.txt'
       ModuleInfoUri = 'https://github.com/lzybkr/PSReadLine'
     }
-    "Pester" = @{
-      Name = 'Pester'
-      Description = 'A BDD style testing tool for Powershell'
-      Author = 'Pester Team'
-      # Note the problem with this module is that I can't write a ZipFolder (the module is in the root)
-      # And since there's no Pester.psd1, the module ends up in Pester-master
-      DownloadUri = 'https://github.com/pester/Pester/archive/master.zip'
-      LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
-      ModuleInfoUri = 'https://github.com/Pester/Pester'
-   }
   }
 }

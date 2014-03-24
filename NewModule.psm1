@@ -210,9 +210,9 @@ function New-Module {
             }
          }
 
-         if($Force -Or $Upgrade -or !(Test-Path "${ModuleName}.psd1") -or $PSCmdlet.ShouldContinue("The specified '${ModuleName}.psd1' already exists in '$ModulePath'. Do you want to update it?", "Creating new '${ModuleName}.psd1'")) {
-            if($Upgrade -and (Test-Path "${ModuleName}.psd1")) {
-               $ModuleInfo = Import-Metadata (Join-Path $ModulePath "${ModuleName}.psd1" )
+         if($Force -Or $Upgrade -or !(Test-Path "${ModuleName}$ModuleManifestExtension") -or $PSCmdlet.ShouldContinue("The specified '${ModuleName}$ModuleManifestExtension' already exists in '$ModulePath'. Do you want to update it?", "Creating new '${ModuleName}$ModuleManifestExtension'")) {
+            if($Upgrade -and (Test-Path "${ModuleName}$ModuleManifestExtension")) {
+               $ModuleInfo = Import-Metadata (Join-Path $ModulePath "${ModuleName}$ModuleManifestExtension" )
             } else {
                # If there's no upgrade, then we want to use all the parameter (default) values, not just the PSBoundParameters:
                $ModuleInfo = @{
@@ -235,7 +235,7 @@ function New-Module {
 
             $ModuleVersion = [Math]::Floor(1.0 + $ModuleInfo.ModuleVersion).ToString("F1")
             # Overwrite existing values with the new truth ;)
-            $ModuleInfo.Path = Resolve-Path "${ModuleName}.psd1"
+            $ModuleInfo.Path = Resolve-Path "${ModuleName}$ModuleManifestExtension"
             $ModuleInfo.RootModule = "${ModuleName}.psm1"
             $ModuleInfo.ModuleVersion = $ModuleVersion
             $ModuleInfo.FileList = $FileList
@@ -260,11 +260,11 @@ function New-Module {
             New-ModuleManifest @ModuleInfo
             Get-Item $ModulePath
          }  else {
-            throw "The specified Module Manifest '${ModuleName}.psd1' already exists in '$ModulePath'. Please create a new Module, or specify -Force to overwrite the existing one."
+            throw "The specified Module Manifest '${ModuleName}$ModuleManifestExtension' already exists in '$ModulePath'. Please create a new Module, or specify -Force to overwrite the existing one."
          }
 
-         if($Force -Or !(Test-Path "package.psd1")) {
-            Set-Content "package.psd1" '@{' +
+         if($Force -Or !(Test-Path "${ModuleName}${PackageInfoExtension}")) {
+            Set-Content "${ModuleName}${PackageInfoExtension}" '@{' +
                "   ModuleName     = `"${ModuleName}`"" +
                "   ModuleVersion  = `"${ModuleVersion}`"" +
                '   ' +
@@ -274,10 +274,10 @@ function New-Module {
                '   # A relative path to a license file, or the url to a license, like http://opensource.org/licenses/MIT' +
                '   LicenseUri    = ""' +
                '   ' +
-               '   # The web address where this psd1 file will be uploaded' +
-               '   PackageManifestUri = ""' +
+               '   # The web address where this packageInfo file will be uploaded' +
+               '   PackageInfoUri = ""' +
                '   ' +
-               '   # The web address where the psmx package file will be uploaded' +
+               '   # The web address where the package file will be uploaded' +
                '   DownloadUri    = ""' +
                '   ' +
                '   # This version number is here so users can check for the latest version' +
