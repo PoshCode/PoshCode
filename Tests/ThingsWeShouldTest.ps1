@@ -18,21 +18,21 @@ Test "Install a module with no dependencies from a url" { assert { throw "Test N
 Test "Install an upgrade module from a url (should overwrite module files but not delete ini files)" { assert { throw "Test Not Written" }} -Category "Download"
 Test "Install an downgrade module from a url (should delete all files first)" { assert { throw "Test Not Written" }} -Category "Download"
 Test "Install a module with dependencies from a url with dependency package is available in the install folder" { assert { throw "Test Not Written" }} -Category "Download"
-Test "Install a module with dependencies from a url with dependency PackageManifestUri set correctly (should download to same place and install)" { assert { throw "Test Not Written" }} -Category "Download"
-Test "Install a module with dependencies from a url with dependencies that have unreachable PackageManifestUri (should fail cleanly!)" { assert { throw "Test Not Written" }} -Category "Download"
+Test "Install a module with dependencies from a url with dependency PackageInfoUri set correctly (should download to same place and install)" { assert { throw "Test Not Written" }} -Category "Download"
+Test "Install a module with dependencies from a url with dependencies that have unreachable PackageInfoUri (should fail cleanly!)" { assert { throw "Test Not Written" }} -Category "Download"
 
 # Get Module Info
 Test "Validate the error message when getting module info from a module with no .psd1" { assert { throw "Test Not Written" } -Category "ModuleInfo"
 Test "Get Module Info from an installed module with just .psd1" { assert { throw "Test Not Written" } -Category "ModuleInfo"
-Test "Get Module Info from an installed module with a .moduleinfo" { assert { throw "Test Not Written" } -Category "ModuleInfo"
-Test "Get Module Info from a local .psmx package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
+Test "Get Module Info from an installed module with a .packageInfo" { assert { throw "Test Not Written" } -Category "ModuleInfo"
+Test "Get Module Info from a local .nupkg package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
 Test "Get Module Info from a remote (UNC) package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
 Test "Get Module Info from a remote (http) package file." { assert { throw "Test Not Written" } -Category "ModuleInfo"
 
 # Update Module Info
 Test "Update Module Info when there are new things in the .psd1" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
 Test "Update Module Info when there are things removed from the .psd1 (not supported yet)" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
-Test "Update Module Info when the .moduleinfo file hasn't been created yet" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
+Test "Update Module Info when the .packageInfo file hasn't been created yet" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
 Test "Update Module Info with various parameters" { assert { throw "Test Not Written" } -Category "UpdateModuleInfo","ModuleInfo"
 
 # SIG # Begin signature block

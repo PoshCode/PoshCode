@@ -6,10 +6,10 @@ Import-Module "$PSScriptRoot\..\Installation.psm1" -ErrorAction Stop
 
 test "Expand Package" {
    arrange {
-      $ModulePackage = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP.psmx"
+      $ModulePackage = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP.nupkg"
       $ModulePath = Convert-Path "~\Documents\WindowsPowerShell\Modules\WASP\"
       if(!(Test-Path $ModulePackage)) {
-         $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.psmx" -OutFile $ModulePackage
+         $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.nupkg" -OutFile $ModulePackage
       }
       if(Test-Path $ModulePath) {
          Remove-Item $ModulePath -Recurse -Force
@@ -25,7 +25,7 @@ test "Expand Package" {
       # If these three are there, the rest are there too...
       $ModuleFiles.FullName.MustContain( (Join-Path $ModulePath "WASP.psm1") )
       $ModuleFiles.FullName.MustContain( (Join-Path $ModulePath "WASP.psd1") )
-      $ModuleFiles.FullName.MustContain( (Join-Path $ModulePath "package.psd1") )
+      $ModuleFiles.FullName.MustContain( (Join-Path $ModulePath "WASP.packageInfo") )
 
       $ModuleFiles | % {
          Assert-That { Test-Path $_ }

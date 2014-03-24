@@ -4,8 +4,8 @@
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ###############################################################################
-## Installation.psm1 defines the core commands for installing packages:
-## Read-Module and Install-Module 
+## ModuleInfo.psm1 defines the core commands for reading packages and modules:
+## Read-Module, Import-Metadata, Export-Metadata
 ## It depends on the Configuration module and the Invoke-WebRequest cmdlet
 
 
@@ -61,7 +61,7 @@ function Read-Module {
             $PSBoundParameters['Name'] = @($moduleName | Where-Object { $_ -and !$_.EndsWith($ModulePackageExtension) })
             $moduleName | Where-Object { $_ -and $_.EndsWith($ModulePackageExtension) } | Get-ModulePackage 
 
-            # If they passed (just) the name to a psmx, we need to set a fake name that couldn't possibly be a real module name
+            # If they passed (just) the name to a package, we need to set a fake name that couldn't possibly be a real module name
             if(($moduleName.Count -gt 0) -and ($PSBoundParameters['Name'].Count -eq 0)) {
                $PSBoundParameters['Name'] = " "
             }
@@ -116,9 +116,9 @@ function Read-Module {
    #>
 }
 
-# Private Function Called by Read-Module when you explicitly pass it a psmx file
-# Basically the same as Read-Module, but for working with Package (psmx) files 
-# TODO: Make this work for simple .zip files if they have a "package.psd1" file in them.
+# Private Function Called by Read-Module when you explicitly pass it a package file
+# Basically the same as Read-Module, but for working with package files 
+# TODO: Make this work for simple .zip files if they have a ".packageInfo" or ".nuspec" file in them.
 #       That way, we can use it for source zips from GitHub etc.
 # TODO: Make this work for nuget packages (parse the xml, and if they have a module, parse it's maifest)
 function Get-ModulePackage {
@@ -136,28 +136,60 @@ function Get-ModulePackage {
          try {
             $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $mPath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
 
-            ## First load the package manifest (which has URLs in it)
-            $Manifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
+            ## First load the package metadata if there is one (that has URLs in it)
+            $Manifest = @($Package.GetRelationshipsByType( $PackageMetadataType ))[0]
+            $NugetManifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
+            $ModuleManifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
+
             if(!$Manifest -or !$Manifest.TargetUri) {
-               Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
-               return
+               $DownloadUri = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
+               $ManifestUri = @($Package.GetRelationshipsByType( $PackageManifestType ))[0]
+               if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUri -or !$DownloadUri.TargetUri)) {
+                  Write-Warning "This is not a full PoshCode Package, it has not specified the manifest nor a download Url"
+               }
+               $PackageManifest = @{}
+            } else {
+               $Part = $Package.GetPart( $Manifest.TargetUri )
+               if(!$Part) {
+                  Write-Warning "This file is not a valid PoshCode Package, the specified Package manifest is missing at $($Manifest.TargetUri)"
+                  $PackageManifest = @{}
+               } else {
+                  Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
+                  $PackageManifest = Import-ManifestStream ($Part.GetStream())
+               }
             }
-            $Part = $Package.GetPart( $Manifest.TargetUri )
-            if(!$Part) {
-               Write-Warning "This file is not a valid PoshCode Package, it has no manifest at $($Manifest.TargetUri)"
-               return
+
+            if(!$NugetManifest -or !$NugetManifest.TargetUri) {
+               Write-Warning "This is not a NuGet Package, it does not specify a nuget manifest"
+            } else {
+               $Part = $Package.GetPart( $NugetManifest.TargetUri )
+               if(!$Part) {
+                  Write-Warning "This file is not a valid NuGet Package, the specified nuget manifest is missing at $($NugetManifest.TargetUri)"
+               } else {
+                  Write-Verbose "Reading NuGet Manifest From Package: $($NugetManifest.TargetUri)"
+                  if($NuGetManifest = Import-NuGetStream ($Part.GetStream())) {
+                     $PackageManifest = Update-Dictionary $NuGetManifest $PackageManifest
+                  }
+               } 
             }
-            Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-            $PackageManifest = Import-ManifestStream ($Part.GetStream())
 
             ## Now load the module manifest (which has everything else in it)
-            $Manifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
-            if(!$Manifest -or !$Manifest.TargetUri) {
-               Write-Warning "This file is not a valid PoshCode Package, it has not specified the manifest"
-               return
+            if(!$ModuleManifest -or !$ModuleManifest.TargetUri) {
+               # Try finding it by name
+               if($Package.PackageProperties.Title) {
+                  $IdenfierModuleManifest = ($Package.PackageProperties.Title + $ModuleManifestExtension)
+               } else {
+                  $IdenfierModuleManifest = ($Package.PackageProperties.Identifier + $ModuleManifestExtension)
+               }
+               $Part = $Package.GetParts() | Where-Object { (Split-Path $_.Uri -Leaf) -eq $IdenfierModuleManifest } | Sort-Object {$_.Uri.ToString().Length} | Select-Object -First 1
+            } else {
+               $Part = $Package.GetPart( $ModuleManifest.TargetUri )
             }
-            if($Part = $Package.GetPart( $Manifest.TargetUri )) {
-               Write-Verbose "Reading Module Manifest From Package: $($Manifest.TargetUri)"
+
+            if(!$Part) {
+               Write-Warning "This package does not appear to be a PowerShell Module, can't find Module Manifest $IdenfierModuleManifest"
+            } else {
+               Write-Verbose "Reading Module Manifest From Package: $($ModuleManifest.TargetUri)"
                if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
                   ## If we got the module manifest, update the PackageManifest
                   $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
@@ -188,13 +220,14 @@ function Update-ModuleInfo {
       Write-Verbose "> Updating ModuleInfo $($ModuleInfo.GetType().Name)"
       # On PowerShell 2, Modules that aren't loaded have little information, and we need to Import-Metadata
       # Modules that aren't loaded have no SessionState. If their path points at a PSD1 file, load that
-      if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleInfoExtension) {
+      if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleManifestExtension) {
          $ExistingModuleInfo = $ModuleInfo
          $ModuleInfo = $ModuleInfo.Path
       }
 
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
          $ModuleManifestPath = Convert-Path $ModuleInfo
+
          try {
             if(!$ExistingModuleInfo) {
                $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
@@ -219,11 +252,24 @@ function Update-ModuleInfo {
       }
 
       if($ModuleInfo) {
-         $PackageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) "Package.psd1"
          $ModuleBase = Split-Path $ModuleInfo.Path
-         $ModuleManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf).psd1"
+         $PackageInfoPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$PackageInfoExtension"
+         $ModuleManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$ModuleManifestExtension"
+         $NugetManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$NuSpecManifestExtension"
 
-         ## This is the PoshCode metadata file: Package.psd1
+         if(Test-Path $NugetManifestPath) {
+            try {
+               $reader = [IO.File]::Open($NugetManifestPath, "Open", "Read", "Read")
+               $NugetInfo = Import-NugetStream -Stream $reader
+               $ModuleInfo = Update-Dictionary $ModuleInfo $NugetInfo
+            } catch {
+               $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Nuget Manifest", "InvalidResult", $_) )
+            } finally {
+               $reader.close()
+            }
+         }
+
+         ## This is the PoshCode metadata file: ModuleName.packageInfo
          # Since we're not using anything else, we won't add the aliases...
          if(Test-Path $PackageInfoPath) {
             Write-Verbose "Loading package info from $PackageInfoPath"
@@ -263,6 +309,9 @@ function Add-SimpleNames {
             if($rm.ModuleVersion -and !$rm.Version) {
                $rm.Version = $rm.ModuleVersion
             }
+            if($rm.RootModule -and !$rm.ModuleToProcess) {
+               $rm.ModuleToProcess = $rm.RootModule
+            }
          }
       } else {
          foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
@@ -271,6 +320,9 @@ function Add-SimpleNames {
             }
             if($rm.ModuleVersion -and !$rm.Version) {
                Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
+            }
+            if($rm.RootModule -and !$rm.ModuleToProcess) {
+               Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -ErrorAction SilentlyContinue
             }
          }
       }
@@ -307,8 +359,8 @@ function Update-Dictionary {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
                Write-Verbose "Module Requires: $($rmNames -join ',')"
-               # The only reason to bother with RequiredModules is if they have a PackageManifestUri
-               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageManifestUri })) {
+               # The only reason to bother with RequiredModules is if they have a PackageInfoUri
+               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageInfoUri })) {
                   $name = $depInfo.Name
                   Write-Verbose "Additional Requires: $name"
                   # If this Required Module is already listed, then just add the uri
@@ -318,15 +370,15 @@ function Update-Dictionary {
                         if(($required -is [string]) -and ($required -eq $name)) {
                            $Authoritative.RequiredModules[([Array]::IndexOf($Authoritative.RequiredModules,$required))] = $depInfo
                         } elseif($required.Name -eq $name) {
-                           Write-Verbose "Authoritative also Requires $name - adding PackageManifestUri ($($depInfo.PackageManifestUri))"
+                           Write-Verbose "Authoritative also Requires $name - adding PackageInfoUri ($($depInfo.PackageInfoUri))"
                            if($required -is [System.Collections.IDictionary]) {
-                              Write-Verbose "Required is a Hashtable, adding PackageManifestUri: $($depInfo.PackageManifestUri)"
-                              if(!$required.Contains("PackageManifestUri")) {
-                                 $required.Add("PackageManifestUri", $depInfo.PackageManifestUri)
+                              Write-Verbose "Required is a Hashtable, adding PackageInfoUri: $($depInfo.PackageInfoUri)"
+                              if(!$required.Contains("PackageInfoUri")) {
+                                 $required.Add("PackageInfoUri", $depInfo.PackageInfoUri)
                               }
                            } else {
-                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageManifestUri" -Value $depInfo.PackageManifestUri -ErrorAction SilentlyContinue
-                              Write-Verbose "Required is an object, added PackageManifestUri: $($required | FL * | Out-String | % TrimEnd )"
+                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageInfoUri" -Value $depInfo.PackageInfoUri -ErrorAction SilentlyContinue
+                              Write-Verbose "Required is an object, added PackageInfoUri: $($required | FL * | Out-String | % TrimEnd )"
                            }
                         }
                      }
@@ -352,6 +404,86 @@ function Update-Dictionary {
       $Authoritative | Add-SimpleNames
    }
 }
+
+function ConvertTo-Hashtable {
+    #.Synopsis
+    #   Converts an object to a hashtable (with the specified properties), optionally discarding empty properties
+    #.Example
+    #   $Hash = Get-Module PoshCode | ConvertTo-Hashtable -IgnoreEmptyProperties
+    #   New-ModuleManifest -Path .\PoshCode.psd1 @Hash
+    #
+    #   Demonstrates the most common reason for converting an object to a hashtable: splatting
+    #.Example
+    #   Get-Module PoshCode | ConvertTo-Hashtable -IgnoreEmpty | %{ New-ModuleManifest -Path .\PoshCode.psd1 @_ }
+    #
+    #   Demonstrates the most common reason for converting an object to a hashtable: splatting
+    param(
+        # The input object to convert to a hashtable 
+        [Parameter(ValueFromPipeline=$true)]
+        $InputObject,
+
+        # The properties to convert (a list, or wildcards). Defaults to all properties
+        [Parameter(Position=0)]
+        [String[]]$Property = "*",
+
+        # If set, all selected properties are included. By default, empty properties are discarded
+        [Switch]$IgnoreEmptyProperties
+    )
+    begin   { $Output=@{} } 
+    end     { $Output } 
+    process {
+        $Property = Get-Member $Property -Input $InputObject -Type Properties | % { $_.Name }
+        foreach($Name in $Property) {
+            if(!$IgnoreEmptyProperties -or (($InputObject.$Name -ne $null) -and (@($InputObject.$Name).Count -gt 0) -and ($InputObject.$Name -ne ""))) {
+                $Output.$Name = $InputObject.$Name 
+            }
+        }
+    }
+}
+
+function Import-NugetStream {
+   param(
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
+      [System.IO.Stream]$stream,
+
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
+   )
+   try {
+      $reader = New-Object System.IO.StreamReader $stream
+      # This gets the package info
+      $ManifestContent = $reader.ReadToEnd()
+   } catch [Exception] {
+      $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
+   } finally {
+      if($reader) {
+         $reader.Close()
+         $reader.Dispose()
+      }
+      if($stream) {
+         $stream.Close()
+         $stream.Dispose()
+      }
+   }
+   $NugetManifest = ([Xml]$ManifestContent).package.metadata
+   $NugetData = @{}
+   if($NugetManifest.id)         { $NugetData.ModuleName    = $NugetManifest.id }
+   if($NugetManifest.version)    { $NugetData.ModuleVersion = $NugetManifest.version }
+   if($NugetManifest.authors)    { $NugetData.Author        = $NugetManifest.authors }
+   if($NugetManifest.owners)     { $NugetData.CompanyName   = $NugetManifest.owners }
+   if($NugetManifest.description){ $NugetData.Description   = $NugetManifest.description }
+   if($NugetManifest.copyright)  { $NugetData.Copyright     = $NugetManifest.copyright }
+   if($NugetManifest.licenseUrl) { $NugetData.LicenseUri    = $NugetManifest.licenseUrl }
+   if($NugetManifest.projectUrl) { $NugetData.ModuleInfoUri = $NugetManifest.projectUrl }
+   if($NugetManifest.tags)       { $NugetData.Keywords      = $NugetManifest.tags -split ',' }
+
+   if($AsObject) {
+      New-Object PSObject -Property $NugetData
+   } else {
+      $NugetData
+   }
+}
+
 
 # Internal Function for parsing Module and Package Manifest Streams from Get-ModulePackage
 # This is called twice from within Get-ModulePackage (and from nowhere else)
@@ -463,7 +595,7 @@ function Import-Metadata {
       if(Test-Path $Path) {
          Write-Verbose "Importing Metadata file from `$Path: $Path"
          if(!(Test-Path $Path -PathType Leaf)) {
-            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleInfoExtension)
+            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleManifestExtension)
          }
       }
 
@@ -474,18 +606,23 @@ function Import-Metadata {
       }
 
       if($ModuleInfo -and $AsObject) {
-         $ModuleInfo | % { 
-            $_.RequiredModules = $_.RequiredModules | % { 
-               New-Object PSObject -Property $_ } | % {
-                  $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-                  $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-                  $_
-               }
+         foreach($Info in $ModuleInfo) {
+            if($Info.RequiredModules) {
+                $Info.RequiredModules = foreach($Module in @($Info.RequiredModules)) {
+                    if($Module -is [String]) { $Module = @{ModuleName=$Module} }
 
-            New-Object PSObject -Property $_ } | % {
-            $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-            $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-            $_
+                    New-Object PSObject -Property $Module | % {
+                       $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                       $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                       $_
+                    }
+                }
+            }
+            New-Object PSObject -Property $Info | % {
+                $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                $_
+            }
          }
       } else {
          Write-Output $ModuleInfo
@@ -537,7 +674,8 @@ function Export-Metadata {
 # Private Functions (which could be exported)
 
 function ConvertFrom-Metadata {
-   [CmdletBinding()]param(
+   [CmdletBinding()]
+   param(
       [Parameter(ValueFromPipelineByPropertyName="True", Position=0)]
       [Alias("PSPath")]
       $InputObject,
@@ -552,9 +690,14 @@ function ConvertFrom-Metadata {
       $Tokens = $Null; $ParseErrors = $Null
 
       if($PSVersionTable.PSVersion -lt "3.0") {
+         Write-Verbose "$InputObject"
          if(!(Test-Path $InputObject -ErrorAction SilentlyContinue)) {
-            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(),"psd1")
+            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
             Set-Content -Path $Path $InputObject
+            $InputObject = $Path
+         } elseif(!"$InputObject".EndsWith($ModuleManifestExtension)) {
+            $Path = [IO.path]::ChangeExtension([IO.Path]::GetTempFileName(), $ModuleManifestExtension)
+            Copy-Item "$InputObject" "$Path"
             $InputObject = $Path
          }
          $Result = $null
@@ -573,7 +716,9 @@ function ConvertFrom-Metadata {
       }
 
       if($ParseErrors -ne $null) {
-         $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord "Parse error reading metadata", "Parse Error", "InvalidData", $ParseErrors) )
+         Write-Host (Get-PSCallStack | Out-String) -ForegroundColor Cyan
+         $ParseException = New-Object System.Management.Automation.ParseException (,[System.Management.Automation.Language.ParseError[]]$ParseErrors)
+         $PSCmdlet.ThrowTerminatingError((New-Object System.Management.Automation.ErrorRecord $ParseException, "Metadata Error", "ParserError", $InputObject))
       }
 
       if($scriptroots = @($Tokens | Where-Object { ("Variable" -eq $_.Kind) -and ($_.Name -eq "PSScriptRoot") } | ForEach-Object { $_.Extent } )) {
@@ -613,8 +758,7 @@ function ConvertTo-Metadata {
          $InputObject -is [Int64] -or 
          $InputObject -is [Double] -or 
          $InputObject -is [Decimal] -or 
-         $InputObject -is [Byte] -or
-         $InputObject -is [Version] ) { 
+         $InputObject -is [Byte] ) { 
          # Write-Verbose "Numbers"
          "$InputObject" 
       }
@@ -630,7 +774,8 @@ function ConvertTo-Metadata {
          # Write-Verbose "DateTime"
          "DateTimeOffset '{0}'" -f $InputObject.ToString('o')
       }
-      elseif($InputObject -is [String])  {
+      elseif($InputObject -is [String] -or
+             $InputObject -is [Version])  {
          # Write-Verbose "String"
          "'$InputObject'" 
       }
@@ -676,4 +821,4 @@ function ConvertTo-Metadata {
    }
 }
 
-Export-ModuleMember -Function Read-Module, Update-ModuleInfo, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata
+Export-ModuleMember -Function Read-Module, Update-ModuleInfo, Import-Metadata, Export-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata, ConvertTo-Hashtable
