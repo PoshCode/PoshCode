@@ -163,9 +163,10 @@ function Compress-Module {
 
             # Create the package
             $Package = [System.IO.Packaging.Package]::Open( $OutputPackagePath, [IO.FileMode]::Create )
-            Set-PackageProperties $Package $Module
 
             try {
+               Set-PackageProperties $Package $Module
+
                # Now pack up all the files we've found:
                $Target = $FileList.Count
                $Count = 0
