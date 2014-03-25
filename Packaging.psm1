@@ -113,7 +113,7 @@ function Compress-Module {
 
             if(!(Test-Path $packageInfoPath) -and !(Test-Path $NuSpecPath))
             {
-               $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't find the a package manifest: ${PackageInfoExtension} or ${NuSpecManifestExtension}"), "Manifest Not Found", "ObjectNotFound", $_) )
+               $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't find a package manifest: ${PackageInfoExtension} or ${NuSpecManifestExtension}"), "Manifest Not Found", "ObjectNotFound", $_) )
             } else {
                Copy-Item $packageInfoPath $OutputPackageInfoPath -ErrorVariable CantWrite
                if($CantWrite) {

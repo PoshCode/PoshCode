@@ -195,7 +195,7 @@ function Get-ModulePackage {
                   $PackageInfo = Update-Dictionary $ModuleManifest $PackageInfo
                }
             }
-            New-Object PSObject -Property $PackageInfo
+            ConvertTo-PSModuleInfo $PackageInfo
          } catch [Exception] {
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
          } finally {
@@ -247,8 +247,6 @@ function Update-ModuleInfo {
             $ModuleInfo = $null
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Module Manifest", "InvalidResult", $_) )
          }
-      } else {
-         $ModuleInfo = Add-SimpleNames $ModuleInfo
       }
 
       if($ModuleInfo) {
@@ -258,14 +256,15 @@ function Update-ModuleInfo {
          $NugetManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$NuSpecManifestExtension"
 
          if(Test-Path $NugetManifestPath) {
+            Write-Verbose "Loading package info from $NugetManifestPath"
             try {
-               $reader = [IO.File]::Open($NugetManifestPath, "Open", "Read", "Read")
-               $NugetInfo = Import-NugetStream -Stream $reader
-               $ModuleInfo = Update-Dictionary $ModuleInfo $NugetInfo
+               $NugetInfo = ConvertFrom-NugetSpec $NugetManifestPath
             } catch {
                $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Nuget Manifest", "InvalidResult", $_) )
-            } finally {
-               $reader.close()
+            }
+            if($NugetInfo){
+               Write-Verbose "Update Dictionary with NugetInfo"
+               $ModuleInfo = Update-Dictionary $ModuleInfo $NugetInfo
             }
          }
 
@@ -281,13 +280,13 @@ function Update-ModuleInfo {
             if($PackageInfo) {
                Write-Verbose "Update Dictionary with PackageInfo"
                $PackageInfo.ModuleManifestPath = $ModuleManifestPath
-               Update-Dictionary $ModuleInfo $PackageInfo
+               Update-Dictionary $ModuleInfo $PackageInfo | ConvertTo-PSModuleInfo
             } else {
                Write-Verbose "Add ModuleManifestPath (Package Manifest not found)."
-               Update-Dictionary $ModuleInfo @{ModuleManifestPath = $ModuleManifestPath}
+               Update-Dictionary $ModuleInfo @{ModuleManifestPath = $ModuleManifestPath} | ConvertTo-PSModuleInfo
             }
          } else {
-            $ModuleInfo
+            ConvertTo-PSModuleInfo $ModuleInfo
          }
       }
    }
@@ -384,6 +383,7 @@ function Update-Dictionary {
                      }
                   } else {
                      Write-Warning "Mismatch in RequiredModules: Package manifest specifies $name"
+                     Write-Debug (Get-PSCallStack |Out-String)
                   }
                }
             }
@@ -401,7 +401,7 @@ function Update-Dictionary {
             }
          }
       }
-      $Authoritative | Add-SimpleNames
+      $Authoritative
    }
 }
 
@@ -442,17 +442,19 @@ function ConvertTo-Hashtable {
 }
 
 function Import-NugetStream {
+   #  .Synopsis
+   #  Import a manifest from an IO Stream
    param(
       [Parameter(ValueFromPipeline=$true, Mandatory=$true)]
       [System.IO.Stream]$stream,
 
       # Convert a top-level hashtable to an object before outputting it
       [switch]$AsObject
-   )
+   )   
    try {
       $reader = New-Object System.IO.StreamReader $stream
-      # This gets the package info
-      $ManifestContent = $reader.ReadToEnd()
+      # This gets the ModuleInfo
+      $NugetContent = $reader.ReadToEnd()
    } catch [Exception] {
       $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
    } finally {
@@ -465,34 +467,114 @@ function Import-NugetStream {
          $stream.Dispose()
       }
    }
-   $NugetManifest = ([Xml]$ManifestContent).package.metadata
-   $NugetData = @{}
-   if($NugetManifest.id)         { $NugetData.ModuleName    = $NugetManifest.id }
-   if($NugetManifest.version)    { $NugetData.ModuleVersion = $NugetManifest.version }
-   if($NugetManifest.authors)    { $NugetData.Author        = $NugetManifest.authors }
-   if($NugetManifest.owners)     { $NugetData.CompanyName   = $NugetManifest.owners }
-   if($NugetManifest.description){ $NugetData.Description   = $NugetManifest.description }
-   if($NugetManifest.copyright)  { $NugetData.Copyright     = $NugetManifest.copyright }
-   if($NugetManifest.licenseUrl) { $NugetData.LicenseUri    = $NugetManifest.licenseUrl }
-   if($NugetManifest.projectUrl) { $NugetData.ModuleInfoUri = $NugetManifest.projectUrl }
-   if($NugetManifest.tags)       { $NugetData.Keywords      = $NugetManifest.tags -split ',' }
-   
-   if($NugetManifest.dependencies) {
-      $NugetData.RequiredModules = foreach($dep in $NugetManifest.dependencies.dependency) {
-         New-Object PSObject -Property @{ 
-            ModuleName = $dep.id
-            ModuleVersion = $dep.version } | % {
+   Import-NugetSpec $NugetContent -AsObject:$AsObject
+}
+
+function Import-NugetSpec {
+   <#
+      .Synopsis
+         Creates a data object from the items in a nuget spec file
+   #>
+   [CmdletBinding()]
+   param(
+      [Parameter(ValueFromPipeline=$true, Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+      [Alias("PSPath")]
+      [string]$Path,
+
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
+   )
+
+   process {
+      $ModuleInfo = $null
+      if(Test-Path $Path) {
+         Write-Verbose "Importing nuget spec from `$Path: $Path"
+         if(!(Test-Path $Path -PathType Leaf)) {
+            $Path = Join-Path $Path ((Split-Path $Path -Leaf) + $ModuleManifestExtension)
+         }
+      }
+
+      try {
+         ConvertFrom-NugetSpec $Path -AsObject:$AsObject
+      } catch {
+         $PSCmdlet.ThrowTerminatingError( $_ )
+      }
+   }
+}
+
+function ConvertTo-PSModuleInfo {
+   #.Synopsis
+   #  Internal function for objectifying ModuleInfo data (and RequiredModule values)
+   [CmdletBinding()]
+   param(
+      [Parameter(ValueFromPipeline=$true,Position=0,Mandatory=$true)]
+      $ModuleInfo,
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
+   )
+   process {
+      $ModuleInfo = $ModuleInfo | Add-SimpleNames
+      if($AsObject -and ($ModuleInfo -is [Collections.IDictionary])) {
+         if($ModuleInfo.RequiredModules) {
+            $ModuleInfo.RequiredModules = @(foreach($Module in @($ModuleInfo.RequiredModules)) {
+               if($Module -is [String]) { $Module = @{ModuleName=$Module} }
+
+               New-Object PSObject -Property $Module | % {
+                  $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                  $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                  $_
+               }
+            })
+         }
+
+         New-Object PSObject -Property $ModuleInfo | % {
                $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
                $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
                $_
-            }
+         }
+      } else {
+         $ModuleInfo
       }
    }
+}
 
-   if($AsObject) {
-      New-Object PSObject -Property $NugetData
-   } else {
-      $NugetData
+
+function ConvertFrom-NugetSpec {
+   param(
+      [Parameter(ValueFromPipelineByPropertyName="True", Position=0)]
+      [Alias("PSPath")]
+      $InputObject,
+      
+      # Convert a top-level hashtable to an object before outputting it
+      [switch]$AsObject
+   )
+   process {
+      if(Test-Path $InputObject -ErrorAction SilentlyContinue) {
+         $Xml = New-Object System.Xml.XmlDocument
+         $Xml.Load($InputObject)
+         $NugetManifest = $Xml.package.metadata
+      } else {
+         $NugetManifest = ([Xml]$InputObject).package.metadata
+      }
+
+      $NugetData = @{}
+      if($NugetManifest.id)         { $NugetData.ModuleName    = $NugetManifest.id }
+      if($NugetManifest.version)    { $NugetData.ModuleVersion = $NugetManifest.version }
+      if($NugetManifest.authors)    { $NugetData.Author        = $NugetManifest.authors }
+      if($NugetManifest.owners)     { $NugetData.CompanyName   = $NugetManifest.owners }
+      if($NugetManifest.description){ $NugetData.Description   = $NugetManifest.description }
+      if($NugetManifest.copyright)  { $NugetData.Copyright     = $NugetManifest.copyright }
+      if($NugetManifest.licenseUrl) { $NugetData.LicenseUri    = $NugetManifest.licenseUrl }
+      if($NugetManifest.projectUrl) { $NugetData.ModuleInfoUri = $NugetManifest.projectUrl }
+      if($NugetManifest.tags)       { $NugetData.Keywords      = $NugetManifest.tags -split ',' }
+   
+      if($NugetManifest.dependencies) {
+         $NugetData.RequiredModules = foreach($dep in $NugetManifest.dependencies.dependency) {
+            @{ ModuleName = $dep.id; ModuleVersion = $dep.version }
+         }
+      }
+
+      $NugetData | ConvertTo-PSModuleInfo -AsObject:$AsObject
    }
 }
 
@@ -612,32 +694,9 @@ function Import-Metadata {
       }
 
       try {
-         $ModuleInfo = ConvertFrom-Metadata $Path | Add-SimpleNames
+         ConvertFrom-Metadata $Path -AsObject:$AsObject
       } catch {
          $PSCmdlet.ThrowTerminatingError( $_ )
-      }
-
-      if($ModuleInfo -and $AsObject) {
-         foreach($Info in $ModuleInfo) {
-            if($Info.RequiredModules) {
-                $Info.RequiredModules = foreach($Module in @($Info.RequiredModules)) {
-                    if($Module -is [String]) { $Module = @{ModuleName=$Module} }
-
-                    New-Object PSObject -Property $Module | % {
-                       $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-                       $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-                       $_
-                    }
-                }
-            }
-            New-Object PSObject -Property $Info | % {
-                $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-                $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-                $_
-            }
-         }
-      } else {
-         Write-Output $ModuleInfo
       }
    }
 }
@@ -691,7 +750,8 @@ function ConvertFrom-Metadata {
       [Parameter(ValueFromPipelineByPropertyName="True", Position=0)]
       [Alias("PSPath")]
       $InputObject,
-      $ScriptRoot = '$PSScriptRoot'
+      $ScriptRoot = '$PSScriptRoot',
+      [Switch]$AsObject
    )
    begin {
       [string[]]$ValidCommands = "PSObject", "GUID", "DateTime", "DateTimeOffset", "ConvertFrom-StringData", "Join-Path"
@@ -714,7 +774,7 @@ function ConvertFrom-Metadata {
          }
          $Result = $null
          Import-LocalizedData -BindingVariable Result -BaseDirectory (Split-Path $InputObject) -FileName (Split-Path $InputObject -Leaf) -SupportedCommand $ValidCommands
-         return $Result
+         return $Result | ConvertTo-PSModuleInfo -AsObject:$AsObject
       }
 
       if(Test-Path $InputObject -ErrorAction SilentlyContinue) {
@@ -747,7 +807,7 @@ function ConvertFrom-Metadata {
       $Mode, $ExecutionContext.SessionState.LanguageMode = $ExecutionContext.SessionState.LanguageMode, "RestrictedLanguage"
 
       try {
-         $Script.InvokeReturnAsIs(@())
+         $Script.InvokeReturnAsIs(@()) | ConvertTo-PSModuleInfo -AsObject:$AsObject
       }
       finally {    
          $ErrorActionPreference = $EAP
