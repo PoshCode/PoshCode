@@ -129,7 +129,7 @@ function Update-Module {
             } else {
                $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $PackageInfoExtension )
                if( $WebResponse.Content -is [Byte[]] ) {
-                  Set-Content $FileName $WebResponse.Content -Encoding Byte
+                  Set-Content $FileName $WebResponse.Content -Encoding Byte -Confirm:$false
                   [string]$content = Get-Content $FileName -Delimiter ([char]0)
                   Write-Debug "Buffered $($content.GetType().Name) response to $FileName as bytes: $((Get-Item $FileName).Length)`n$content"
                   Remove-Item $FileName 

@@ -123,7 +123,7 @@ end {{
 
   if($PoshCodeModule.GUID -eq '88c6579a-27b2-41c8-86c6-cd23acb791e9' -and $PoshCodeModule.Version -gt '4.0') {{
     $PoshCodeModule = Import-Module PoshCode -Passthru -ErrorAction Stop
-    Update-Module PoshCode -Confirm
+    Update-Module PoshCode
   }} else {{
     Write-Progress -Activity "Installing Module" -Status "Installing PoshCode Module" -Id 0
 
