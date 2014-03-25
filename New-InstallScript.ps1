@@ -194,7 +194,7 @@ begin {{
 
 Sign $InstallScript -WA 0 -EA 0
 if($Package) {
-   (Get-Module PoshCode).FileList | Get-Item | Where { ".psd1",".psm1",".ps1",".ps1xml",".dll",".packageInfo",".nuspec" -contains $_.Extension } | Sign
+   (Get-Module PoshCode).FileList | Get-Item | Where { ".psm1",".ps1",".ps1xml",".dll" -contains $_.Extension } | Sign
 
    Write-Host
    if($PSBoundParameters.ContainsKey("Version") -or $PSBoundParameters.ContainsKey("Increment")) {
