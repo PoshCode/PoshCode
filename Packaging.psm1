@@ -95,6 +95,8 @@ function Compress-Module {
       if(Test-Path $OutputPath -ErrorAction Stop) {
          $OutputPackagePath = Join-Path $OutputPath "${PackageName}.${PackageVersion}${ModulePackageExtension}"
          $OutputPackageInfoPath = Join-Path $OutputPath "${PackageName}${PackageInfoExtension}"
+      } else {
+         throw "Specified OutputPath doesn't exist: $OutputPath"
       }
 
       Write-Verbose "Creating Module in $OutputPath"
@@ -127,26 +129,34 @@ function Compress-Module {
                Select-Object -Expand FullName
 
             # Warn about discrepacies between the Module.FileList and actual files
+            $ModuleFileList = @($Module.FileList)
+            Write-Verbose "`nFILELIST: $FileList  `n`nMODULELIST: $ModuleFileList"
             # $Module.FileList | Resolve-Path 
-            if($Module.FileList.Count -gt 0) {
-               foreach($mf in $Module.FileList){
+            if($ModuleFileList.Length -gt 0) {
+               foreach($mf in $ModuleFileList){
                   if($FileList -notcontains $mf) {
                      Write-Warning "Missing File (specified in Module FileList): $mf"
                   }
                }
                foreach($f in $FileList){
-                  if($Module.FileList -notcontains $mf) {
-                     Write-Warning "File in module folder not specified in Module FileList: $mf"
+                  if($ModuleFileList -notcontains $f) {
+                     if($f -like "*\${PackageName}${PackageInfoExtension}" -or 
+                        $f -like "*\${PackageName}${NuSpecManifestExtension}" -or 
+                        $f -like "*\${PackageName}${ModuleManifestExtension}") {
+                        Write-Warning "File in module folder not specified in Module FileList (but included anyway): $f"
+                        $ModuleFileList += $f
+                     } else {
+                        Write-Warning "File in module folder not specified in Module FileList: $f"
+                     }
                   }
                }
                # Now that we've warned you about missing files, let's not try to pack them:
-               $FileList = Get-ChildItem $Module.FileList | 
+               $FileList = Get-ChildItem $ModuleFileList | 
                   Where-Object {-not $_.PSIsContainer} | 
-                  Select-Object -Expand FullName
+                  Select-Object -Expand FullName -Unique
                if(($FileList -notcontains $ModuleInfoPath) -and (Test-Path $ModuleInfoPath)) {
                   $FileList += $ModuleInfoPath
                }
-
             } else {
                Write-Warning "FileList not set in module metadata (${ModuleManifestExtension}) file. Packing all files from path: $($Module.ModuleBase)"
             }
@@ -328,7 +338,7 @@ function Set-PackageProperties {
     if(Test-Path $NuSpecF) {
        Set-Content $NuSpecF -Value ($ModuleInfo | Get-NuspecContent)
     } else {
-    Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
+       Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
     }
 
     ## NuGet does the WRONG thing here, assuming the package name is unique
