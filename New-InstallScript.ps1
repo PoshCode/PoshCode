@@ -27,7 +27,6 @@ if(!$Version) {
 if($Version -le "0.0") { throw "Can't calculate a version!" }
 
 ## TODO: Increment the version number in the psd1 file(s) when asked
-Write-Verbose "Setting Version $Version"
 if($Increment) {
   if($Version.Revision -ge 0) {
     $Version = New-Object Version $Version.Major, $Version.Minor, $Version.Build, ($Version.Revision + 1)
@@ -36,7 +35,6 @@ if($Increment) {
   } elseif($Version.Minor -ge 0) {
     $Version = New-Object Version $Version.Major, ($Version.Minor + 1)
   }
-  Write-Warning "Incremented version to $Version in the install.ps1 but not in the package."
 }
 
 # Note: in the install script we strip the export command, as well as the signature if it's there, and anything delimited by BEGIN FULL / END FULL 
@@ -176,6 +174,8 @@ begin {{
     New-Module -Name PoshCodeTemp {{
 
 ###############################################################################
+{0}
+###############################################################################
 {1}
 ###############################################################################
 {2}
@@ -184,14 +184,12 @@ begin {{
 ###############################################################################
 {4}
 ###############################################################################
-{5}
-###############################################################################
 
     }} | Import-Module
   }}
 }}
 '@
-) -f $Version, $Constants, $ModuleInfo, $Configuration, $InvokeWeb, $Installation)
+) -f $Constants, $ModuleInfo, $Configuration, $InvokeWeb, $Installation)
 
 
 Sign $InstallScript -WA 0 -EA 0
@@ -199,9 +197,11 @@ if($Package) {
    (Get-Module PoshCode).FileList | Get-Item | Where { ".psd1",".psm1",".ps1",".ps1xml",".dll",".packageInfo",".nuspec" -contains $_.Extension } | Sign
 
    Write-Host
-   # Update-ModuleInfo PoshCode -Version $Version
+   if($PSBoundParameters.ContainsKey("Version") -or $PSBoundParameters.ContainsKey("Increment")) {
+      Write-Warning "Setting PoshCode version to $Version ..."
+      Set-ModuleInfo PoshCode -Version $Version
+   }
    $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
-   $Files += $Files | Where-Object { $_.Name.EndsWith($ModulePackageExtension) } | Copy-Item -Destination (Join-Path $OutputPath PoshCode.nupkg) -Passthru
    @(Get-Item $InstallScript) + @($Files) | Out-Default
 
 }
