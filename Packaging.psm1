@@ -169,7 +169,7 @@ function Compress-Module {
                   $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
                }
                if($Module.PackageInfoUri) {
-                  $null = $Package.CreateRelationship( $Module.PackageInfoUri, "External", $PackageManifestType )
+                  $null = $Package.CreateRelationship( $Module.PackageInfoUri, "External", $PackageInfoType )
                }
                if($Module.LicenseUri) {
                   $null = $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )

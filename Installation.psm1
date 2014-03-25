@@ -541,7 +541,7 @@ function Install-Module {
                $SearchResults | Install-Module
             }
          } elseif(@($SearchResults).Count -gt 1) {
-            Write-Warning "Multiple matching modules found, please call Install-Module with the right PackageManifestUrl below:"
+            Write-Warning "Multiple matching modules found, please call Install-Module with the right PackageInfoUri below:"
             $SearchResults
          } else {
             Write-Error "Can't find module package $Package"

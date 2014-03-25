@@ -27,7 +27,7 @@ $ModuleLicenseType       = "http://schemas.poshcode.org/package/license"
 # Relationships for the project and download and manifest links (these MUST be external)
 $ModuleProjectType       = "http://schemas.poshcode.org/package/project"
 $PackageDownloadType     = "http://schemas.poshcode.org/package/release"
-$PackageManifestType     = "http://schemas.poshcode.org/package/manifest"
+$PackageInfoType         = "http://schemas.poshcode.org/package/manifest"
 
 $PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
 if(!$PoshCodeModuleRoot) {

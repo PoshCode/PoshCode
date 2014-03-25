@@ -143,19 +143,19 @@ function Get-ModulePackage {
 
             if(!$Manifest -or !$Manifest.TargetUri) {
                $DownloadUri = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
-               $ManifestUri = @($Package.GetRelationshipsByType( $PackageManifestType ))[0]
+               $ManifestUri = @($Package.GetRelationshipsByType( $PackageInfoType ))[0]
                if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUri -or !$DownloadUri.TargetUri)) {
                   Write-Warning "This is not a full PoshCode Package, it has not specified the manifest nor a download Url"
                }
-               $PackageManifest = @{}
+               $PackageInfo = @{}
             } else {
                $Part = $Package.GetPart( $Manifest.TargetUri )
                if(!$Part) {
                   Write-Warning "This file is not a valid PoshCode Package, the specified Package manifest is missing at $($Manifest.TargetUri)"
-                  $PackageManifest = @{}
+                  $PackageInfo = @{}
                } else {
                   Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-                  $PackageManifest = Import-ManifestStream ($Part.GetStream())
+                  $PackageInfo = Import-ManifestStream ($Part.GetStream())
                }
             }
 
@@ -168,7 +168,7 @@ function Get-ModulePackage {
                } else {
                   Write-Verbose "Reading NuGet Manifest From Package: $($NugetManifest.TargetUri)"
                   if($NuGetManifest = Import-NuGetStream ($Part.GetStream())) {
-                     $PackageManifest = Update-Dictionary $NuGetManifest $PackageManifest
+                     $PackageInfo = Update-Dictionary $NuGetManifest $PackageInfo
                   }
                } 
             }
@@ -191,11 +191,11 @@ function Get-ModulePackage {
             } else {
                Write-Verbose "Reading Module Manifest From Package: $($ModuleManifest.TargetUri)"
                if($ModuleManifest = Import-ManifestStream ($Part.GetStream())) {
-                  ## If we got the module manifest, update the PackageManifest
-                  $PackageManifest = Update-Dictionary $ModuleManifest $PackageManifest
+                  ## If we got the module manifest, update the PackageInfo
+                  $PackageInfo = Update-Dictionary $ModuleManifest $PackageInfo
                }
             }
-            New-Object PSObject -Property $PackageManifest
+            New-Object PSObject -Property $PackageInfo
          } catch [Exception] {
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
          } finally {
