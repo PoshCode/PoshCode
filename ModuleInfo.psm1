@@ -476,6 +476,18 @@ function Import-NugetStream {
    if($NugetManifest.licenseUrl) { $NugetData.LicenseUri    = $NugetManifest.licenseUrl }
    if($NugetManifest.projectUrl) { $NugetData.ModuleInfoUri = $NugetManifest.projectUrl }
    if($NugetManifest.tags)       { $NugetData.Keywords      = $NugetManifest.tags -split ',' }
+   
+   if($NugetManifest.dependencies) {
+      $NugetData.RequiredModules = foreach($dep in $NugetManifest.dependencies.dependency) {
+         New-Object PSObject -Property @{ 
+            ModuleName = $dep.id
+            ModuleVersion = $dep.version } | % {
+               $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+               $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+               $_
+            }
+      }
+   }
 
    if($AsObject) {
       New-Object PSObject -Property $NugetData

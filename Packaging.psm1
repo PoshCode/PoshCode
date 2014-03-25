@@ -324,7 +324,12 @@ function Set-PackageProperties {
        Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false 
     }
 
+    $NuSpecF = Join-Path $ModuleInfo.ModuleBase ($ModuleInfo.Name + $NuSpecManifestExtension)
+    if(Test-Path $NuSpecF) {
+       Set-Content $NuSpecF -Value ($ModuleInfo | Get-NuspecContent)
+    } else {
     Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
+    }
 
     ## NuGet does the WRONG thing here, assuming the package name is unique
     ## And  pretending there's only one repo, and no need for unique identifiers
