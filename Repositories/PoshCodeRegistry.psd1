@@ -7,12 +7,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/PSAINT.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/PSAINT.packageInfo'
       LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
       ModuleInfoUri = 'http://huddledmasses.org/arrange-act-assert-intuitive-testing/'
       RequiredModules = @(@{
         Name = 'Reflection'
-        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.psd1'
+        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.packageInfo'
       })
     }
     "PoshCode" = @{
@@ -21,7 +21,7 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/PoshCode.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/PoshCode.packageInfo'
       LicenseUri = 'http://opensource.org/licenses/ms-pl'
       ModuleInfoUri = 'https://github.com/Jaykul/poshcode'
     }
@@ -31,12 +31,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/Reflection.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/Reflection.packageInfo'
       ModuleInfoUri = 'http://huddledmasses.org/'
       LicenseUri = 'license.txt'
       RequiredModules = @(@{
         Name = 'Autoload'
-        PackageInfoUri = 'http://PoshCode.org/Modules/Autoload.psd1'
+        PackageInfoUri = 'http://PoshCode.org/Modules/Autoload.packageInfo'
       })
     }
     "Autoload" = @{
@@ -45,7 +45,7 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/Autoload.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/Autoload.packageInfo'
       LicenseUri = 'license.txt'
       ModuleInfoUri = 'http://huddledmasses.org/'
     }
@@ -55,32 +55,32 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/WASP.psd1'
+      PackageInfoUri = 'http://poshcode.org/Modules/WASP.packageInfo'
       ModuleInfoUri = 'https://wasp.codeplex.com/'
       LicenseUri = 'https://wasp.codeplex.com/license'
       RequiredModules = @(@{
         Name = 'Reflection'
-        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.psd1'
+        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.packageInfo'
       })
     }
-    "VisioAutomation" = @{
-      Name = "VisioAutomation"
-      Description = "PowerShell Visio Automation"
-      Author = 'Justin Rich'
+    #"VisioAutomation" = @{
+    #  Name = "VisioAutomation"
+    #  Description = "PowerShell Visio Automation"
+    #  Author = 'Justin Rich'
 
-      PackageInfoUri="https://raw.github.com/jrich523/PSVA/master/VisioAutomation/package.psd1"
-      ModuleInfoUri="https://github.com/jrich523/PSVA"
-      LicenseUri="http://opensource.org/licenses/ms-pl"
-    }
-    "NimblePowerShell" =  @{
-      Name = "NimblePowerShell"
-      Description = "Nimble Storage Module"
-      Author = 'Justin Rich'
+    #  PackageInfoUri="https://raw.github.com/jrich523/PSVA/master/VisioAutomation/VisioAutomation.packageInfo"
+    #  ModuleInfoUri="https://github.com/jrich523/PSVA"
+    #  LicenseUri="http://opensource.org/licenses/ms-pl"
+    #}
+    #"NimblePowerShell" =  @{
+    #  Name = "NimblePowerShell"
+    #  Description = "Nimble Storage Module"
+    #  Author = 'Justin Rich'
 
-      PackageInfoUri="https://raw.github.com/jrich523/NimblePowerShell/master/package.psd1"
-      ModuleInfoUri="https://github.com/jrich523/NimblePowerShell"
-      LicenseUri="http://opensource.org/licenses/ms-pl"
-    }
+    #  PackageInfoUri="https://raw.github.com/jrich523/NimblePowerShell/master/Nimble.packageInfo"
+    #  ModuleInfoUri="https://github.com/jrich523/NimblePowerShell"
+    #  LicenseUri="http://opensource.org/licenses/ms-pl"
+    #}
     "PSReadLine" = @{
       Name = 'PSReadLine'
       Description = 'Great command line editing in the PowerShell console host'
