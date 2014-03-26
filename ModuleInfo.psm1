@@ -221,7 +221,8 @@ function Update-ModuleInfo {
       # On PowerShell 2, Modules that aren't loaded have little information, and we need to Import-Metadata
       # Modules that aren't loaded have no SessionState. If their path points at a PSD1 file, load that
       if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleManifestExtension) {
-         $ExistingModuleInfo = $ModuleInfo
+         $ExistingModuleInfo = $ModuleInfo | ConvertTo-Hashtable
+         $ExistingModuleInfo.RequiredModules = $ExistingModuleInfo.RequiredModules | ConvertTo-Hashtable Name, Version
          $ModuleInfo = $ModuleInfo.Path
       }
 
@@ -230,19 +231,24 @@ function Update-ModuleInfo {
 
          try {
             if(!$ExistingModuleInfo) {
-               $ModuleInfo = Import-Metadata $ModuleManifestPath -AsObject
+               $ModuleInfo = Import-Metadata $ModuleManifestPath
             } else {
                $ModuleInfo = Import-Metadata $ModuleManifestPath
-               Write-Verbose "Update-ModuleInfo merging manually-loaded metadata to existing ModuleInfo:`n$($ExistingModuleInfo | Format-List | Out-String)"
+               Write-Verbose "Update-ModuleInfo merging manually-loaded metadata to existing ModuleInfo:`n$($ExistingModuleInfo | Format-List * | Out-String)"
+               Write-Verbose "Module Manifest ModuleInfo:`n$($ModuleInfo | Format-List * | Out-String)"
+               # Because the module wasn't already loaded, we can't trust it's RequiredModules
+               if(!$ExistingModuleInfo.RequiredModules -and $ModuleInfo.RequiredModules) {
+                  $ExistingModuleInfo.RequiredModules = $ModuleInfo.RequiredModules
+               }
                $ModuleInfo = Update-Dictionary $ExistingModuleInfo $ModuleInfo
-               Write-Verbose "Result of merge:`n$($ModuleInfo | Format-List | Out-String)"
+               Write-Verbose "Result of merge:`n$($ModuleInfo | Format-List * | Out-String)"
             }
-            $ModuleInfo = $ModuleInfo | Add-Member NoteProperty Path $ModuleManifestPath -Passthru -Force
-            $ModuleInfo = $ModuleInfo | Add-Member NoteProperty ModuleManifestPath $ModuleManifestPath -Passthru -Force
+            $ModuleInfo.Path = $ModuleManifestPath
+            $ModuleInfo.ModuleManifestPath = $ModuleManifestPath
             if(!$ModuleInfo.ModuleBase) {
-               $ModuleInfo = $ModuleInfo | Add-Member NoteProperty ModuleBase (Split-Path $ModuleManifestPath) -Passthru -Force
+               $ModuleInfo.ModuleBase = (Split-Path $ModuleManifestPath)
             }
-            $ModuleInfo = $ModuleInfo | Add-Member NoteProperty PSPath ("{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath) -Passthru -Force
+            $ModuleInfo.PSPath = "{0}::{1}" -f $ModuleManifestPath.Provider, $ModuleManifestPath.ProviderPath
          } catch {
             $ModuleInfo = $null
             $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unable to parse Module Manifest", "InvalidResult", $_) )
@@ -254,6 +260,22 @@ function Update-ModuleInfo {
          $PackageInfoPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$PackageInfoExtension"
          $ModuleManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$ModuleManifestExtension"
          $NugetManifestPath = Join-Path $ModuleBase "$(Split-Path $ModuleBase -Leaf)$NuSpecManifestExtension"
+
+         # Modules that are actually loaded have the info of the current module as the "RequiredModule"
+         # Which means the VERSION is whatever version happens to be AVAILABLE and LOADED on the box.
+         # Instead of the REQUIREMENT that's documented in the module manifest
+         if($ModuleInfo -isnot [Hashtable] -and $ModuleInfo.RequiredModules) {
+            $RequiredManifestsWithVersions = (Import-Metadata $ModuleManifestPath).RequiredModules | Where { $_.ModuleVersion }
+
+            for($i=0; $i -lt @($ModuleInfo.RequiredModules).Length; $i++) {
+               $ReqMod = @($ModuleInfo.RequiredModules)[$i]
+               foreach($RMV in $RequiredManifestsWithVersions) {
+                  if($ReqMod.Name -eq $RMV.Name) {
+                     Add-Member -InputObject ($ModuleInfo.RequiredModules[$i]) -Type NoteProperty -Name "Version" -Value $RMV.ModuleVersion -Force
+                  }
+               }
+            }
+         }
 
          if(Test-Path $NugetManifestPath) {
             Write-Verbose "Loading package info from $NugetManifestPath"
@@ -280,13 +302,13 @@ function Update-ModuleInfo {
             if($PackageInfo) {
                Write-Verbose "Update Dictionary with PackageInfo"
                $PackageInfo.ModuleManifestPath = $ModuleManifestPath
-               Update-Dictionary $ModuleInfo $PackageInfo | ConvertTo-PSModuleInfo
+               Update-Dictionary $ModuleInfo $PackageInfo | ConvertTo-PSModuleInfo -AsObject
             } else {
                Write-Verbose "Add ModuleManifestPath (Package Manifest not found)."
-               Update-Dictionary $ModuleInfo @{ModuleManifestPath = $ModuleManifestPath} | ConvertTo-PSModuleInfo
+               Update-Dictionary $ModuleInfo @{ModuleManifestPath = $ModuleManifestPath} | ConvertTo-PSModuleInfo -AsObject
             }
          } else {
-            ConvertTo-PSModuleInfo $ModuleInfo
+            ConvertTo-PSModuleInfo $ModuleInfo -AsObject 
          }
       }
    }
@@ -336,8 +358,7 @@ function Add-SimpleNames {
 function Update-Dictionary {
    param(
       $Authoritative,
-      $Additional,
-      [string[]]$KeyName = @("Name","ModuleName")
+      $Additional
    )
    process {
       ## TODO: Rewrite this generically to deal with arrays of hashtables based on a $KeyField parameter
@@ -358,7 +379,7 @@ function Update-Dictionary {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
                Write-Verbose "Module Requires: $($rmNames -join ',')"
-               # The only reason to bother with RequiredModules is if they have a PackageInfoUri
+               # Here, we only need to update the PackageInfoUri if we can find one
                foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageInfoUri })) {
                   $name = $depInfo.Name
                   Write-Verbose "Additional Requires: $name"
@@ -519,10 +540,15 @@ function ConvertTo-PSModuleInfo {
             $ModuleInfo.RequiredModules = @(foreach($Module in @($ModuleInfo.RequiredModules)) {
                if($Module -is [String]) { $Module = @{ModuleName=$Module} }
 
+               if($Module -is [Hashtable] -and $Module.Count -gt 0) {
+                  Write-Debug ($Module | Format-List * | Out-String)
                New-Object PSObject -Property $Module | % {
                   $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
                   $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
                   $_
+               }
+               } else {
+                  $Module
                }
             })
          }
@@ -551,7 +577,7 @@ function ConvertFrom-NugetSpec {
    process {
       if(Test-Path $InputObject -ErrorAction SilentlyContinue) {
          $Xml = New-Object System.Xml.XmlDocument
-         $Xml.Load($InputObject)
+         $Xml.Load((Convert-Path $InputObject))
          $NugetManifest = $Xml.package.metadata
       } else {
          $NugetManifest = ([Xml]$InputObject).package.metadata

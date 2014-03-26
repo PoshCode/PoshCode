@@ -332,11 +332,12 @@ function Set-PackageProperties {
 
     # Sanity check: you can't require license acceptance unless you specify the license...
     if(!$ModuleInfo.LicenseUri) {
-       Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false 
+       Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false -Force
     }
 
     $NuSpecF = Join-Path $ModuleInfo.ModuleBase ($ModuleInfo.Name + $NuSpecManifestExtension)
     if(Test-Path $NuSpecF) {
+       Write-Debug $($ModuleInfo | Format-List * | Out-String)
        Set-Content $NuSpecF -Value ($ModuleInfo | Get-NuspecContent)
     } else {
        Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
@@ -660,7 +661,10 @@ function Set-ModuleInfo {
             $PInfoPath = [IO.Path]::ChangeExtension($Path, $PackageInfoExtension)
             if(Test-Path $PInfoPath) {
                 $Info = Import-Metadata $PInfoPath
-                $PoshCodeProperties = ($PoshCodeProperties + $Info.Keys) | Select -Unique
+                # I want to bring in any extra keys EXCEPT "Name" and "Version"
+                $Keys = $Info.Keys -notmatch '^(?:Name|Version)$'
+                Write-Debug "Adding $($Keys -join ',')"
+                $PoshCodeProperties = ($PoshCodeProperties + $Keys) | Select -Unique
             }
             $ErrorActionPreference = "Stop"
         } else {
