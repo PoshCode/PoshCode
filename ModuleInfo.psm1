@@ -136,6 +136,11 @@ function Get-ModulePackage {
          try {
             $Package = [System.IO.Packaging.Package]::Open( (Convert-Path $mPath), [IO.FileMode]::Open, [System.IO.FileAccess]::Read )
 
+            if(!@($Package.GetParts())) {
+               Write-Warning "File is not a valid Package, but may be a valid module zip. $mPath"
+               return
+            }
+
             ## First load the package metadata if there is one (that has URLs in it)
             $Manifest = @($Package.GetRelationshipsByType( $PackageMetadataType ))[0]
             $NugetManifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
@@ -451,7 +456,7 @@ function ConvertTo-Hashtable {
         [Switch]$IgnoreEmptyProperties
     )
     begin   { $Output=@{} } 
-    end     { $Output } 
+    end     { if($Output.Count){ $Output } } 
     process {
         $Property = Get-Member $Property -Input $InputObject -Type Properties | % { $_.Name }
         foreach($Name in $Property) {
@@ -814,7 +819,6 @@ function ConvertFrom-Metadata {
       }
 
       if($ParseErrors -ne $null) {
-         Write-Host (Get-PSCallStack | Out-String) -ForegroundColor Cyan
          $ParseException = New-Object System.Management.Automation.ParseException (,[System.Management.Automation.Language.ParseError[]]$ParseErrors)
          $PSCmdlet.ThrowTerminatingError((New-Object System.Management.Automation.ErrorRecord $ParseException, "Metadata Error", "ParserError", $InputObject))
       }

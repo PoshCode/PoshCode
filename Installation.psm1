@@ -598,7 +598,7 @@ function Install-Module {
       if(!$Manifest) {
          Write-Verbose "Read-Module $($ModuleFolder.Name) -ListAvailable"
          $Manifest = Read-Module $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
-         Write-Verbose "Module Manifest loaded by Read-Module:`n$($Manifest |out-default)"
+         Write-Verbose "Module Manifest loaded by Read-Module:`n$($Manifest | out-string)"
       }
 
       # Now verify the RequiredModules are available, and try installing them.
@@ -727,8 +727,8 @@ function Expand-Package {
             $Package.Dispose()
             $Package = $null
 
-            $Output = Expand-ZipFile -FilePath $PackagePath -OutputPath $InstallPath -ZipFolder:$ZipFolder -Force:$Force
-            if($Passthru) { $Output }
+            $ModuleResult = Expand-ZipFile -FilePath $PackagePath -OutputPath $InstallPath -ZipFolder:$ZipFolder -Force:$Force
+            Write-Output $ModuleResult
             return
          }
 
