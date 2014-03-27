@@ -30,18 +30,9 @@ function Read-Module {
       [string[]]
       ${Name},
 
-      [Parameter(ParameterSetName='Available')]
-      [Parameter(ParameterSetName='Loaded')]
-      [switch]
-      ${All},
-
       [Parameter(ParameterSetName='Available', Mandatory=$true)]
       [switch]
-      ${ListAvailable},
-
-      [Parameter(ParameterSetName='Available')]
-      [switch]
-      ${Refresh}
+      ${ListAvailable}
    )
    begin
    {
