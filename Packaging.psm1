@@ -471,7 +471,7 @@ function Set-ModuleInfo {
       .Description
          Creates a package manifest with the mandatory and optional properties
     #>   
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
         # The name of the module to create a new package manifest(s) for
         [Parameter(Mandatory=$true, Position=0)]
@@ -625,12 +625,20 @@ function Set-ModuleInfo {
         # a web URL for a bug tracker or support forum, or a mailto: address for the author/support team.
         [String]$SupportUri,
 
-        [Switch]$AutoIncrementBuildNumber
+        # Automatically increment the module version number
+        [Switch]$IncrementVersionNumber,
+
+        # If set, overwrite existing files without prompting
+        [Switch]$Force
     )
     begin {
         $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
         $PoshCodeProperties = 'ModuleName','ModuleVersion','DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
+        if(!(Test-Path variable:RejectAllOverwriteOnModuleInfo)){
+            $RejectAllOverwriteOnModuleInfo = $false
+            $ConfirmAllOverwriteOnModuleInfo = $false
+        }
     }
     end {
         $ErrorActionPreference = "Stop"
@@ -762,26 +770,52 @@ function Set-ModuleInfo {
 
         Write-Debug ("Exporting $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
 
-        # All the parameters, except "Path"
-        $ModuleManifest = $Manifest | ConvertTo-Hashtable $ModuleManifestProperties -IgnoreEmptyProperties
-        # Fix the Required Modules for New-ModuleManifest
-        if( $ModuleManifest.RequiredModules ) {
-            $ModuleManifest.RequiredModules = $ModuleManifest.RequiredModules | % { 
-               $null = $_.Remove("PackageInfoUrl"); 
-               if(!$_.ContainsKey("ModuleVersion")) {  $_.ModuleName } else { $_ }
+
+        $ModuleManifestPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)
+        $PackageInfoPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension)
+        $NuSpecPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $NuSpecManifestExtension)
+
+
+
+        if($PSCmdlet.ShouldProcess("Generating module manifest $ModuleManifestPath", "Generate .psd1 ($ModuleManifestPath)?", "Generating module manifest for $($Manifest.Name) v$($Manifest.Version)" )) {
+            if($Force -Or !(Test-Path $ModuleManifestPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The manifest '$ModuleManifestPath' already exists, do you want to wipe and replace it?", "Generating manifest for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
+                # All the parameters, except "Path"
+                $ModuleManifest = $Manifest | ConvertTo-Hashtable $ModuleManifestProperties -IgnoreEmptyProperties
+                # Fix the Required Modules for New-ModuleManifest
+                if( $ModuleManifest.RequiredModules ) {
+                    $ModuleManifest.RequiredModules = $ModuleManifest.RequiredModules | % { 
+                        $null = $_.Remove("PackageInfoUrl"); 
+                        if(!$_.ContainsKey("ModuleVersion")) {  $_.ModuleName } else { $_ }
+                    }
+                }
+            
+                if($NewModuleManifest) {
+                    New-ModuleManifest -Path $ModuleManifestPath @ModuleManifest
+                    # Force manifests to be compatible with PowerShell 2
+                    $Content = Get-Content $ModuleManifestPath -Delimiter ([char]0)
+                    $Content = $Content -replace "(?m)^RootModule = ","ModuleToProcess = "
+                    Set-Content $ModuleManifestPath -Value $Content
+                } else {
+                    $ModuleManifest | Export-Metadata -Path $ModuleManifestPath
+                }
             }
         }
-        New-ModuleManifest -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)) @ModuleManifest
 
+        if($PSCmdlet.ShouldProcess("Generating package info $PackageInfoPath", "Generate .packageInfo ($PackageInfoPath)?", "Generating package info for $($Manifest.Name) v$($Manifest.Version)" )) {
+            if($Force -Or !(Test-Path $PackageInfoPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The packageInfo '$PackageInfoPath' already exists, do you want to wipe and replace it?", "Generating packageInfo for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
+                Write-Verbose "Exporting PackageInfo file: $PackageInfoPath"
+                $PoshCode = $Manifest | ConvertTo-Hashtable $PoshCodeProperties -IgnoreEmptyProperties
+                Write-Debug ("Exporting $Name Info " + (($PoshCode | Format-Table | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
+                $PoshCode | Export-Metadata -Path $PackageInfoPath
+            }
+        }
 
-        $PoshCode = $Manifest | ConvertTo-Hashtable $PoshCodeProperties -IgnoreEmptyProperties
-        Write-Debug ("Exporting $Name Info " + (($PoshCode | Format-Table | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
-
-        $PoshCode | Export-Metadata -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension))
-
-
-        #$NuGetSpec = $Manifest | Get-Member $NuGetProperties -Type Properties | ForEach-Object {$H=@{}}{ $H.($_.Name) = $Manifest.($_.Name) }{$H}
-
-        Set-Content -Path (Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $NuSpecManifestExtension)) -Value ($Manifest | Get-NuspecContent)
+        if($PSCmdlet.ShouldProcess("Generating nuget spec file $NuSpecPath", "Generate .nuspec ($NuSpecPath)?", "Generating nuget spec for $($Manifest.Name) v$($Manifest.Version)" )) {
+            if($Force -Or !(Test-Path $NuSpecPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The nuspec '$NuSpecPath' already exists, do you want to wipe and replace it?", "Generating nuspec for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
+                #$NuGetSpec = $Manifest | Get-Member $NuGetProperties -Type Properties | ForEach-Object {$H=@{}}{ $H.($_.Name) = $Manifest.($_.Name) }{$H}
+                Write-Verbose "Exporting NuSpec file: $NuSpecPath"
+                Set-Content -Path $NuSpecPath -Value ($Manifest | Get-NuspecContent)
+            }
+        }
     }
 }
