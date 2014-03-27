@@ -19,10 +19,13 @@
     SearchByDefault = $true
   },@{
     Type = 'FileSystem'
-    Root = '\\PoshCode.org\Modules'
+    Root = '\\PoshCode.org\DavWWWRoot\Modules'
     Name = 'PoshCode.org'
   },@{
     Type = 'GitHub'
     Root = 'https://api.github.com/search/code'
+  },@{
+    Type = 'NuGet'
+    Root = 'https://www.nuget.org/api/v2/Packages'
   })
 }

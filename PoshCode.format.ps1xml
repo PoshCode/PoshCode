@@ -25,14 +25,17 @@
             <Width>12</Width>
           </TableColumnHeader>          
           <TableColumnHeader>
-            <Label>PackageManifestUri</Label>
+            <Label>PackageInfoUri</Label>
           </TableColumnHeader>
         </TableHeaders>
         <TableRowEntries>
           <TableRowEntry>
             <TableColumnItems>
               <TableColumnItem>
-                <ScriptBlock>$_.Repository.Values</ScriptBlock>
+                <ScriptBlock>
+                  $Repo = $_.Repository
+                  $Repo.Keys | %{ "{0} {1}" -f $_, ($Repo.$_ -replace "^https?://") }
+                </ScriptBlock>
               </TableColumnItem>
               <TableColumnItem>
                 <PropertyName>Name</PropertyName>
@@ -44,7 +47,7 @@
                 <PropertyName>Author</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>PackageManifestUri</PropertyName>
+                <PropertyName>PackageInfoUri</PropertyName>
               </TableColumnItem>
             </TableColumnItems>
           </TableRowEntry>
@@ -97,7 +100,7 @@
                 <PropertyName>Author</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>PackageManifestUri</PropertyName>
+                <PropertyName>PackageInfoUri</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
                 <PropertyName>PSModulePath</PropertyName>

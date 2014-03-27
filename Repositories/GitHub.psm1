@@ -12,8 +12,11 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
          [string]$Author,
 
          # Search for a specific module.
-         [Parameter(Mandatory=$true)]
+         [Parameter(Mandatory=$false)]
          [string]$ModuleName,
+
+         # Search for a specific version (NOT SUPPORTED)
+         [string]$Version,
 
          $Root = "https://api.github.com/search/code"
       )
@@ -21,31 +24,20 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
 
       if($Author -and $ModuleName) # SAM,AM
       {
-         $search = "$SearchTerm @$Author/$ModuleName "
+         $search = "$SearchTerm packageInfo in:path repo:$Author/$ModuleName"
       }
       elseif($Author) # A,AS
       {
-         $search = "$SearchTerm @$Author "
-      }
-      elseif($ModuleName) #M,MS
-      {
-         $search = "$SearchTerm $ModuleName "
-      }
-      elseif($SearchTerm) # S
-      {
-         $search = "$SearchTerm "
-      }
-      else 
-      {
-         $search = ""
+         $search = "$SearchTerm packageInfo in:path user:$Author"
       }
     
-      Write-Verbose "q=${search}path:*${PackageInfoExtension}"
+      Write-Verbose "q=${search}"
       
       Add-Type -AssemblyName System.Web.Extensions
 
       # Note: while in preview, the GitHub api requires an "Accept" header as acknowledgement of it's beta status.
-      $wr = Invoke-WebRequest $Root -Body @{q="$search path:*${PackageInfoExtension}"} -Headers @{Accept='application/vnd.github.preview'}
+      # -Headers @{Accept='application/vnd.github.preview'}
+      $wr = Invoke-WebRequest $Root -Body @{q="${search}"} 
       # Read the data using the right character set, because Invoke-WebRequest doesn't
       try {
          $null = $wr.RawContentStream.Seek(0,"Begin")

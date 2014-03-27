@@ -50,6 +50,10 @@ function Find-Module {
       [Parameter(ValueFromPipelineByPropertyName=$true)]
       [string]$ModuleName,
 
+      # Search for a specific version. Not all repositories support versions
+      [Parameter(ValueFromPipelineByPropertyName=$true)]
+      [string]$Version,
+
       # The path of a configured repository (allows wildcards), or a hashtable of @{RepositoryType=@("RepositoryRootUri")}
       [Parameter(ValueFromPipelineByPropertyName=$true)]
       $Repository,

@@ -17,6 +17,9 @@ function FindModule {
       # Search for a specific module.
       [string]$ModuleName,
 
+      # Search for a specific version (NOT SUPPORTED)
+      [string]$Version,
+
       [Parameter(Mandatory=$true)]
       $Root
    )

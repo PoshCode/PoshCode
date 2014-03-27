@@ -49,6 +49,7 @@
     <Compile Include="README.md" />
     <Compile Include="Repositories\FileSystem.psm1" />
     <Compile Include="Repositories\GitHub.psm1" />
+    <Compile Include="Repositories\NuGet.psm1" />
     <Compile Include="Repositories\PoshCodeRegistry.psd1" />
     <Compile Include="Repository.psm1" />
     <Compile Include="Scripts.psm1" />
