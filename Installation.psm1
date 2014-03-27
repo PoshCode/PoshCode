@@ -339,7 +339,7 @@ function Expand-ZipFile {
          Write-Verbose "Test: $Destination\$BaseName${ModuleManifestExtension}"
          if(Test-Path (Join-Path $Destination "${BaseName}${ModuleManifestExtension}")) {
             Write-Verbose "Rename-Item $Destination $BaseName"
-            $Destination = Rename-Item $Destination $BaseName
+            $Destination = Rename-Item $Destination $BaseName -PassThru 
          } else {
             Write-Warning "Module manifest not found in $Destination"
          }
