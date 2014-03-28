@@ -35,9 +35,10 @@ function FindModule {
             $ModuleName = $ModuleName.ToLowerInvariant()
             $filters += "tolower(Id) eq '$ModuleName'"
             Write-Verbose "Filtering by ModuleName: $ModuleName"
-        } else {
+        } elseif($SearchTerm) {
+            # Currently, we don't "search" we just 
             $SearchTerm = $SearchTerm.ToLowerInvariant()
-            $filters += "tolower(Id) eq '$SearchTerm'"
+            $filters += "indexof(tolower(Id),'$SearchTerm') ge 0"
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
         }
         if($Author)
@@ -47,8 +48,10 @@ function FindModule {
         }
         if($Version)
         {
-            $Version = $Version.ToLowerInvariant()
-            $filters += "tolower(Version) eq '$Version'"
+            if($Version -ne '*'){
+                $Version = $Version.ToLowerInvariant()
+                $filters += "tolower(Version) eq '$Version'"
+            }
         } else {
             $filters += "IsLatestVersion"
         }
@@ -60,9 +63,9 @@ function FindModule {
 
        #$search = "{1}Packages()?`$filter=tolower(Id)+eq+'{0}'&`$orderby=Id" -f $NuGetPackageId.ToLower(), $Source
     
-        Write-Verbose "`$filter=${search}&`$orderby=LastEdited"
+        Write-Verbose "`$orderby=LastUpdated&`$filter=${filter}"
       
-        $wr = Invoke-WebRequest $Root -Body @{'$filter'=$filter; '$orderby'='LastEdited' } 
+        $wr = Invoke-WebRequest $Root -Body @{'$filter'=$filter; '$orderby'='Published desc' } 
         # Read the data using the right character set, because Invoke-WebRequest doesn't
         try {
             $null = $wr.RawContentStream.Seek(0,"Begin")
@@ -92,6 +95,12 @@ function FindModule {
                 $_.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
                 $_.pstypenames.Insert(0,'PoshCode.Search.NuGet.ModuleInfo')
                 Write-Output $_
+            } | Sort {
+               $N,$V=$_.Version -split '-'; $N=$N -split '\.'
+
+               @(for($i=0;$i-lt4;$i++){ 
+                  "{0:d9}" -f $( if($N.Length -eq $i) {0} else { try{[int]$N[$i]}catch{0} })
+               }) +@( if($V){ $V } else { "z"*9 } ) -join "."
             }
         }
     }

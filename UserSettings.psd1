@@ -27,5 +27,11 @@
   },@{
     Type = 'NuGet'
     Root = 'https://www.nuget.org/api/v2/Packages'
+    Name = 'NuGet'
+  },@{
+    Type = 'NuGet'
+    Root = 'https://chocolatey.org/api/v2/Packages'
+    Name = 'Chocolatey'
+    IncludePrerelease = $True
   })
 }
