@@ -338,9 +338,9 @@ function Set-PackageProperties {
     $NuSpecF = Join-Path $ModuleInfo.ModuleBase ($ModuleInfo.Name + $NuSpecManifestExtension)
     if(Test-Path $NuSpecF) {
        Write-Debug $($ModuleInfo | Format-List * | Out-String)
-       Set-Content $NuSpecF -Value ($ModuleInfo | Get-NuspecContent)
+       Set-Content $NuSpecF -Value ($ModuleInfo | New-Nuspec)
     } else {
-       Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | Get-NuspecContent)
+       Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | New-Nuspec)
     }
 
     ## NuGet does the WRONG thing here, assuming the package name is unique
@@ -367,7 +367,7 @@ function Set-PackageProperties {
 }
 
 
-function Get-NuspecContent {
+function New-Nuspec {
     [CmdletBinding()]
     param(
         [Parameter(ValueFromPipelineByPropertyName=$True)]
@@ -386,11 +386,9 @@ function Get-NuspecContent {
         [String]$CompanyName,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
-        [Alias("LicenseUrl")]
         [String]$LicenseUrl,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
-        [Alias("ProjectUrl")]
         [String]$ProjectUrl,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
@@ -416,53 +414,171 @@ function Get-NuspecContent {
         [Parameter(ValueFromPipelineByPropertyName=$True)]
         [Array]$RequiredModules
     )
+    process {
+        # Generate a nuget manifest
+        [xml]$doc = "<?xml version='1.0'?>
+        <package xmlns='$NuGetNamespace'>
+          <metadata>
+            <id>$([System.Security.SecurityElement]::Escape($Name))</id>
+            <version>$([System.Security.SecurityElement]::Escape($Version))</version>
+            <authors>$([System.Security.SecurityElement]::Escape($Author))</authors>
+            <owners>$([System.Security.SecurityElement]::Escape($CompanyName))</owners>
+            <licenseUrl>$([System.Security.SecurityElement]::Escape($LicenseUrl))</licenseUrl>
+            <projectUrl>$([System.Security.SecurityElement]::Escape($ProjectUrl))</projectUrl>
+            <iconUrl>$([System.Security.SecurityElement]::Escape($ModuleIconUri))</iconUrl>
+            <requireLicenseAcceptance>$(([bool]$RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>
+            <description>$([System.Security.SecurityElement]::Escape($Description))</description>
+            <releaseNotes>$([System.Security.SecurityElement]::Escape($ReleaseNotes))</releaseNotes>
+            <copyright>$([System.Security.SecurityElement]::Escape($Copyright))</copyright>
+            <tags>$([System.Security.SecurityElement]::Escape($Keywords -join ' '))</tags>
+          </metadata>
+        </package>"
 
-    # Add a nuget manifest
-    [xml]$doc = "<?xml version='1.0'?>
-    <package xmlns='$NuGetNamespace'>
-      <metadata>
-        <id>$([System.Security.SecurityElement]::Escape($Name))</id>
-        <version>$([System.Security.SecurityElement]::Escape($Version))</version>
-        <authors>$([System.Security.SecurityElement]::Escape($Author))</authors>
-        <owners>$([System.Security.SecurityElement]::Escape($CompanyName))</owners>
-        <licenseUrl>$([System.Security.SecurityElement]::Escape($LicenseUrl))</licenseUrl>
-        <projectUrl>$([System.Security.SecurityElement]::Escape($ProjectUrl))</projectUrl>
-        <iconUrl>$([System.Security.SecurityElement]::Escape($ModuleIconUri))</iconUrl>
-        <requireLicenseAcceptance>$(([bool]$RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>
-        <description>$([System.Security.SecurityElement]::Escape($Description))</description>
-        <releaseNotes>$([System.Security.SecurityElement]::Escape($ReleaseNotes))</releaseNotes>
-        <copyright>$([System.Security.SecurityElement]::Escape($Copyright))</copyright>
-        <tags>$([System.Security.SecurityElement]::Escape($Keywords -join ' '))</tags>
-      </metadata>
-    </package>"
-
-    # Remove nodes without values (this is to clean up the "Url" nodes that aren't set)
-    $($doc.package.metadata.GetElementsByTagName("*")) | 
-       Where-Object { $_."#text" -eq $null } | 
-       ForEach-Object { $null = $doc.package.metadata.RemoveChild( $_ ) }
+        # Remove nodes without values (this is to clean up the "Url" nodes that aren't set)
+        $($doc.package.metadata.GetElementsByTagName("*")) | 
+           Where-Object { $_."#text" -eq $null } | 
+           ForEach-Object { $null = $doc.package.metadata.RemoveChild( $_ ) }
     
-    if( $ModuleInfo.RequiredModules ) {
-       $dependencies = $doc.package.metadata.AppendChild( $doc.CreateElement("dependencies", $NuGetNamespace) )
-       foreach($req in $RequiredModules) {
-          $dependency = $dependencies.AppendChild( $doc.CreateElement("dependency", $NuGetNamespace) )
-          if($req.Name) { $dependency.SetAttribute("id", $req.Name) }
-          if($req.ModuleName) { $dependency.SetAttribute("id", $req.ModuleName) }
-          if($req.Version) { $dependency.SetAttribute("version", $req.Version) }
-          if($req.ModuleVersion) { $dependency.SetAttribute("version", $req.ModuleVersion) }
-       }
-    }
+        if( $ModuleInfo.RequiredModules ) {
+           $dependencies = $doc.package.metadata.AppendChild( $doc.CreateElement("dependencies", $NuGetNamespace) )
+           foreach($req in $RequiredModules) {
+              $dependency = $dependencies.AppendChild( $doc.CreateElement("dependency", $NuGetNamespace) )
+              if($req.Name) { $dependency.SetAttribute("id", $req.Name) }
+              if($req.ModuleName) { $dependency.SetAttribute("id", $req.ModuleName) }
+              if($req.Version) { $dependency.SetAttribute("version", $req.Version) }
+              if($req.ModuleVersion) { $dependency.SetAttribute("version", $req.ModuleVersion) }
+           }
+        }
 
-    $StringWriter = New-Object System.IO.StringWriter
-    $XmlWriter = New-Object System.Xml.XmlTextWriter $StringWriter
-    $xmlWriter.Formatting = "indented"
-    $xmlWriter.Indentation = $Indent
-    $xmlWriter.IndentChar = $Character
-    $doc.WriteContentTo($XmlWriter)
-    $XmlWriter.Flush()
-    $StringWriter.Flush()
-    Write-Output $StringWriter.ToString()
+        $StringWriter = New-Object System.IO.StringWriter
+        $XmlWriter = New-Object System.Xml.XmlTextWriter $StringWriter
+        $xmlWriter.Formatting = "indented"
+        $xmlWriter.Indentation = $Indent
+        $xmlWriter.IndentChar = $Character
+        $doc.WriteContentTo($XmlWriter)
+        $XmlWriter.Flush()
+        $StringWriter.Flush()
+        Write-Output $StringWriter.ToString()
+    }
 }
 
+
+function New-PackageFeed {
+    #.Synopsis
+    #   Generate a Module Version feed with the latest package info in it
+    [CmdletBinding(DefaultParameterSetName="Hosted")]
+    param(
+        # The name of the module to add to the feed
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [Alias("ModuleName")]
+        [String]$Name,
+
+        # The version to add to the feed
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [Alias("ModuleVersion")]
+        [String]$Version,
+
+        # The Author to put in the feed
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        $Author=$Env:USERNAME,
+
+        # The Description of the module to put in the feed
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        $Description,
+
+        # The Project website for the module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        $ProjectUrl,
+
+        # Searchable keywords to associate with this module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [string[]]$Keywords,
+
+        # The URL where this module package info feed will be hosted (may contain a single entry, or an entry per version)
+        [Parameter(Mandatory=$True, ValueFromPipelineByPropertyName=$true, ParameterSetName="Hosted", HelpMessage="The url where the .packageInfo file will be hosted.")]
+        $PackageInfoUrl,
+        # The URL where the .nupkg package file will be hosted for downloading
+        [Parameter(Mandatory=$True, ValueFromPipelineByPropertyName=$true, ParameterSetName="Hosted", HelpMessage="The url where the .nupkg package file will be hosted.")]
+        $DownloadUrl,
+        # The URL for the NuGet repository
+        [Parameter(ValueFromPipelineByPropertyName=$true, ParameterSetName="NuGet")]
+        $RepositoryUrl,
+
+        # The copyright statement for this module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        $Copyright,
+
+        # The license URL for this module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        $LicenseUrl,
+
+        # An icon URL for this module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Alias("IconUrl")]
+        $ModuleIconUrl,
+
+        # If set, the end user should be required to agree to the license before install (may not be enforced by unattended or console installs)
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [switch]$RequireLicenseAcceptance,
+
+        # A list of required modules
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Array]$RequiredModules,
+
+        # If set, the package is a pre-release (beta) version of the module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [switch]$IsPrerelease
+    )
+    process {
+
+        $PackageInfoUrl = $( if($PackageInfoUrl){"$PackageInfoUrl"}else{"$RepositoryUrl/GetUpdates"} )
+
+        # Generate a (partial) nuget package info entry:
+        [xml]$doc = "<?xml version='1.0'?>
+        <feed $(if($RepositoryUrl){"xml:base='$([uri]::EscapeUriString($RepositoryUrl))'"})
+               xmlns='http://www.w3.org/2005/Atom' 
+               xmlns:d='http://schemas.microsoft.com/ado/2007/08/dataservices' 
+               xmlns:m='http://schemas.microsoft.com/ado/2007/08/dataservices/metadata'>
+
+            <id>$([System.Security.SecurityElement]::Escape($PackageInfoUrl))</id>
+            <title type='text'>Module Updates</title>
+            <updated>$((Get-Date).ToUniversalTime().ToString('o'))</updated>
+
+            <entry 
+               xmlns='http://www.w3.org/2005/Atom' 
+               xmlns:d='http://schemas.microsoft.com/ado/2007/08/dataservices' 
+               xmlns:m='http://schemas.microsoft.com/ado/2007/08/dataservices/metadata'>
+                <id>$([System.Security.SecurityElement]::Escape($PackageInfoUrl))</id>
+                <title type='text'>$([System.Security.SecurityElement]::Escape($Name))</title>
+                <summary type='text'>$([System.Security.SecurityElement]::Escape($Description))</summary>
+                <author><name>$([System.Security.SecurityElement]::Escape($Author))</name></author>
+                <content type='application/zip' src='$([uri]::EscapeUriString($DownloadUrl))' />
+                <m:properties>
+                    <d:Version>$([System.Security.SecurityElement]::Escape($Version))</d:Version>
+                    <d:Dependencies>$([System.Security.SecurityElement]::Escape($(foreach($D in $RequiredModules){ $D.ModuleName + ':'+ $D.ModuleVersion }) -join ':|'))</d:Dependencies>
+                    <!-- These are RECOMMENDED: -->
+                    <d:IconUrl>$([System.Security.SecurityElement]::Escape($ModuleIconUrl))</d:IconUrl>
+                    <d:ProjectUrl>$([System.Security.SecurityElement]::Escape($ProjectUrl))</d:ProjectUrl>
+                    <d:Copyright>$([System.Security.SecurityElement]::Escape($Copyright))</d:Copyright>
+                    <d:RequireLicenseAcceptance m:type='Edm.Boolean'>$(([bool]$RequireLicenseAcceptance).ToString().ToLower())</d:RequireLicenseAcceptance>
+                    <d:LicenseUrl>$([System.Security.SecurityElement]::Escape($LicenseUrl))</d:LicenseUrl>
+                    <d:Tags>$([System.Security.SecurityElement]::Escape(($Keywords -join ' ')))</d:Tags>
+                    <d:IsPrerelease m:type='Edm.Boolean'>$(([bool]$IsPrerelease).ToString().ToLower())</d:IsPrerelease>
+                </m:properties>
+            </entry>
+        </feed>"
+
+        $StringWriter = New-Object System.IO.StringWriter
+        $XmlWriter = New-Object System.Xml.XmlTextWriter $StringWriter
+        $xmlWriter.Formatting = "indented"
+        $xmlWriter.Indentation = $Indent
+        $xmlWriter.IndentChar = $Character
+        $doc.WriteContentTo($XmlWriter)
+        $XmlWriter.Flush()
+        $StringWriter.Flush()
+        Write-Output $StringWriter.ToString()
+    }
+}
 
 function Set-ModuleInfo {
     <#
@@ -633,7 +749,7 @@ function Set-ModuleInfo {
     )
     begin {
         $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
-        $PoshCodeProperties = 'ModuleName','ModuleVersion','DownloadUrl','PackageInfoUrl','LicenseUrl','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ProjectUrl','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
+        $PoshCodeProperties = 'ModuleName','ModuleVersion','Author','Description','ProjectUrl','ModuleIconUri','Keywords','PackageInfoUrl','DownloadUrl','RepositoryUrl','LicenseUrl','RequireLicenseAcceptance','RequiredModules','IsPrerelease'
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUrl','ProjectUrl','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
         if(!(Test-Path variable:RejectAllOverwriteOnModuleInfo)){
             $RejectAllOverwriteOnModuleInfo = $false
@@ -664,17 +780,17 @@ function Set-ModuleInfo {
         if(Test-Path $Path) {
             $Manifest = Update-ModuleInfo $Path
 
-            ## NOTE: this is here to preserve "extra" metadata to the moduleInfo file
-            $ErrorActionPreference = "SilentlyContinue"
-            $PInfoPath = [IO.Path]::ChangeExtension($Path, $PackageInfoExtension)
-            if(Test-Path $PInfoPath) {
-                $Info = Import-Metadata $PInfoPath
-                # I want to bring in any extra keys EXCEPT "Name" and "Version"
-                $Keys = $Info.Keys -notmatch '^(?:Name|Version)$'
-                Write-Debug "Adding $($Keys -join ',')"
-                $PoshCodeProperties = ($PoshCodeProperties + $Keys) | Select -Unique
-            }
-            $ErrorActionPreference = "Stop"
+            ### NOTE: this is here to preserve "extra" metadata to the moduleInfo file
+            #$ErrorActionPreference = "SilentlyContinue"
+            #$PInfoPath = [IO.Path]::ChangeExtension($Path, $PackageInfoExtension)
+            #if(Test-Path $PInfoPath) {
+            #    $Info = Import-Metadata $PInfoPath
+            #    # I want to bring in any extra keys EXCEPT "Name" and "Version"
+            #    $Keys = $Info.Keys -notmatch '^(?:Name|Version)$'
+            #    Write-Debug "Adding $($Keys -join ',')"
+            #    $PoshCodeProperties = ($PoshCodeProperties + $Keys) | Select -Unique
+            #}
+            #$ErrorActionPreference = "Stop"
         } else {
             Write-Warning "No Manifest file: $Path"
 
@@ -806,7 +922,7 @@ function Set-ModuleInfo {
                 Write-Verbose "Exporting PackageInfo file: $PackageInfoPath"
                 $PoshCode = $Manifest | ConvertTo-Hashtable $PoshCodeProperties -IgnoreEmptyProperties
                 Write-Debug ("Exporting $Name Info " + (($PoshCode | Format-Table | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
-                $PoshCode | Export-Metadata -Path $PackageInfoPath
+                New-PackageFeed @PoshCode| Set-Content -Path $PackageInfoPath
             }
         }
 
@@ -814,7 +930,7 @@ function Set-ModuleInfo {
             if($Force -Or !(Test-Path $NuSpecPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The nuspec '$NuSpecPath' already exists, do you want to wipe and replace it?", "Generating nuspec for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
                 #$NuGetSpec = $Manifest | Get-Member $NuGetProperties -Type Properties | ForEach-Object {$H=@{}}{ $H.($_.Name) = $Manifest.($_.Name) }{$H}
                 Write-Verbose "Exporting NuSpec file: $NuSpecPath"
-                Set-Content -Path $NuSpecPath -Value ($Manifest | Get-NuspecContent)
+                $Manifest | New-Nuspec | Set-Content -Path $NuSpecPath
             }
         }
     }
