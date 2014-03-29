@@ -7,12 +7,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/PSAINT.packageInfo'
-      LicenseUri = 'http://www.apache.org/licenses/LICENSE-2.0'
-      ModuleInfoUri = 'http://huddledmasses.org/arrange-act-assert-intuitive-testing/'
+      PackageInfoUrl = 'http://poshcode.org/Modules/PSAINT.packageInfo'
+      LicenseUrl = 'http://www.apache.org/licenses/LICENSE-2.0'
+      ProjectUrl = 'http://huddledmasses.org/arrange-act-assert-intuitive-testing/'
       RequiredModules = @(@{
         Name = 'Reflection'
-        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.packageInfo'
+        PackageInfoUrl = 'http://PoshCode.org/Modules/Reflection.packageInfo'
       })
     }
     "PoshCode" = @{
@@ -21,9 +21,9 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/PoshCode.packageInfo'
-      LicenseUri = 'http://opensource.org/licenses/ms-pl'
-      ModuleInfoUri = 'https://github.com/Jaykul/poshcode'
+      PackageInfoUrl = 'http://poshcode.org/Modules/PoshCode.packageInfo'
+      LicenseUrl = 'http://opensource.org/licenses/ms-pl'
+      ProjectUrl = 'https://github.com/Jaykul/poshcode'
     }
     "Reflection" = @{
       Name = 'Reflection'
@@ -31,12 +31,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/Reflection.packageInfo'
-      ModuleInfoUri = 'http://huddledmasses.org/'
-      LicenseUri = 'license.txt'
+      PackageInfoUrl = 'http://poshcode.org/Modules/Reflection.packageInfo'
+      ProjectUrl = 'http://huddledmasses.org/'
+      LicenseUrl = 'license.txt'
       RequiredModules = @(@{
         Name = 'Autoload'
-        PackageInfoUri = 'http://PoshCode.org/Modules/Autoload.packageInfo'
+        PackageInfoUrl = 'http://PoshCode.org/Modules/Autoload.packageInfo'
       })
     }
     "Autoload" = @{
@@ -45,9 +45,9 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/Autoload.packageInfo'
-      LicenseUri = 'license.txt'
-      ModuleInfoUri = 'http://huddledmasses.org/'
+      PackageInfoUrl = 'http://poshcode.org/Modules/Autoload.packageInfo'
+      LicenseUrl = 'license.txt'
+      ProjectUrl = 'http://huddledmasses.org/'
     }
     "WASP" = @{
       Name = 'Wasp'
@@ -55,12 +55,12 @@
       Author = 'Joel Bennett'
       AuthorEmail = 'Jaykul@HuddledMasses.org'
 
-      PackageInfoUri = 'http://poshcode.org/Modules/WASP.packageInfo'
-      ModuleInfoUri = 'https://wasp.codeplex.com/'
-      LicenseUri = 'https://wasp.codeplex.com/license'
+      PackageInfoUrl = 'http://poshcode.org/Modules/WASP.packageInfo'
+      ProjectUrl = 'https://wasp.codeplex.com/'
+      LicenseUrl = 'https://wasp.codeplex.com/license'
       RequiredModules = @(@{
         Name = 'Reflection'
-        PackageInfoUri = 'http://PoshCode.org/Modules/Reflection.packageInfo'
+        PackageInfoUrl = 'http://PoshCode.org/Modules/Reflection.packageInfo'
       })
     }
     #"VisioAutomation" = @{
@@ -68,28 +68,28 @@
     #  Description = "PowerShell Visio Automation"
     #  Author = 'Justin Rich'
 
-    #  PackageInfoUri="https://raw.github.com/jrich523/PSVA/master/VisioAutomation/VisioAutomation.packageInfo"
-    #  ModuleInfoUri="https://github.com/jrich523/PSVA"
-    #  LicenseUri="http://opensource.org/licenses/ms-pl"
+    #  PackageInfoUrl="https://raw.github.com/jrich523/PSVA/master/VisioAutomation/VisioAutomation.packageInfo"
+    #  ProjectUrl="https://github.com/jrich523/PSVA"
+    #  LicenseUrl="http://opensource.org/licenses/ms-pl"
     #}
     #"NimblePowerShell" =  @{
     #  Name = "NimblePowerShell"
     #  Description = "Nimble Storage Module"
     #  Author = 'Justin Rich'
 
-    #  PackageInfoUri="https://raw.github.com/jrich523/NimblePowerShell/master/Nimble.packageInfo"
-    #  ModuleInfoUri="https://github.com/jrich523/NimblePowerShell"
-    #  LicenseUri="http://opensource.org/licenses/ms-pl"
+    #  PackageInfoUrl="https://raw.github.com/jrich523/NimblePowerShell/master/Nimble.packageInfo"
+    #  ProjectUrl="https://github.com/jrich523/NimblePowerShell"
+    #  LicenseUrl="http://opensource.org/licenses/ms-pl"
     #}
     "PSReadLine" = @{
       Name = 'PSReadLine'
       Description = 'Great command line editing in the PowerShell console host'
       Author = 'Jason Shirk'
 
-      DownloadUri = 'https://github.com/lzybkr/PSReadLine/blob/master/PSReadline.zip'
+      DownloadUrl = 'https://github.com/lzybkr/PSReadLine/blob/master/PSReadline.zip'
       ZipFolder = '*\PSReadLine'
-      LicenseUri = 'https://raw.github.com/lzybkr/PSReadLine/master/License.txt'
-      ModuleInfoUri = 'https://github.com/lzybkr/PSReadLine'
+      LicenseUrl = 'https://raw.github.com/lzybkr/PSReadLine/master/License.txt'
+      ProjectUrl = 'https://github.com/lzybkr/PSReadLine'
     }
   }
 }

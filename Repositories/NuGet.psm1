@@ -83,11 +83,11 @@ function FindModule {
                 'Name'=$m.title.innertext
                 'Version' = $m.properties.Version
                 'Description'=$m.summary.innertext
-                # The PackageInfoUri doesn't exist for NuGet, you have to call GetUpdates():
-                'PackageInfoUri'="https://www.nuget.org/api/v2/GetUpdates()?packageIds='$($m.title.innertext)'&versions='0.0'&includePrerelease=false&includeAllVersions=false"
-                'DownloadUri'=$m.content.src
-                'ModuleInfoUri'=$m.properties.ProjectUrl
-                'LicenseUri'=$m.properties.LicenseUrl
+                # The PackageInfoUrl doesn't exist for NuGet, you have to call GetUpdates():
+                'PackageInfoUrl'="https://www.nuget.org/api/v2/GetUpdates()?packageIds='$($m.title.innertext)'&versions='0.0'&includePrerelease=false&includeAllVersions=false"
+                'DownloadUrl'=$m.content.src
+                'ProjectUrl'=$m.properties.ProjectUrl
+                'LicenseUrl'=$m.properties.LicenseUrl
                
                 'Repository' = @{ NuGet = $Root }
             } | % {

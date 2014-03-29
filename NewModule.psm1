@@ -269,16 +269,16 @@ function New-Module {
                "   ModuleVersion  = `"${ModuleVersion}`"" +
                '   ' +
                '   # The address for a website about this module (or your website, as author)' +
-               '   ModuleInfoUri   = ""' +
+               '   ProjectUrl   = ""' +
                '   ' +
                '   # A relative path to a license file, or the url to a license, like http://opensource.org/licenses/MIT' +
-               '   LicenseUri    = ""' +
+               '   LicenseUrl    = ""' +
                '   ' +
                '   # The web address where this packageInfo file will be uploaded' +
-               '   PackageInfoUri = ""' +
+               '   PackageInfoUrl = ""' +
                '   ' +
                '   # The web address where the package file will be uploaded' +
-               '   DownloadUri    = ""' +
+               '   DownloadUrl    = ""' +
                '   ' +
                '   # This version number is here so users can check for the latest version' +
                '   # It should be incremented with each package, and should match the one in your module psd1.' +

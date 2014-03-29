@@ -138,9 +138,9 @@ function Get-ModulePackage {
             $ModuleManifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
 
             if(!$Manifest -or !$Manifest.TargetUri) {
-               $DownloadUri = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
+               $DownloadUrl = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
                $ManifestUri = @($Package.GetRelationshipsByType( $PackageInfoType ))[0]
-               if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUri -or !$DownloadUri.TargetUri)) {
+               if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUrl -or !$DownloadUrl.TargetUri)) {
                   Write-Warning "This is not a full PoshCode Package, it has not specified the manifest nor a download Url"
                }
                $PackageInfo = @{}
@@ -375,8 +375,8 @@ function Update-Dictionary {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
                Write-Verbose "Module Requires: $($rmNames -join ',')"
-               # Here, we only need to update the PackageInfoUri if we can find one
-               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageInfoUri })) {
+               # Here, we only need to update the PackageInfoUrl if we can find one
+               foreach($depInfo in @($Additional.RequiredModules | Where-Object { $_.PackageInfoUrl })) {
                   $name = $depInfo.Name
                   Write-Verbose "Additional Requires: $name"
                   # If this Required Module is already listed, then just add the uri
@@ -386,15 +386,15 @@ function Update-Dictionary {
                         if(($required -is [string]) -and ($required -eq $name)) {
                            $Authoritative.RequiredModules[([Array]::IndexOf($Authoritative.RequiredModules,$required))] = $depInfo
                         } elseif($required.Name -eq $name) {
-                           Write-Verbose "Authoritative also Requires $name - adding PackageInfoUri ($($depInfo.PackageInfoUri))"
+                           Write-Verbose "Authoritative also Requires $name - adding PackageInfoUrl ($($depInfo.PackageInfoUrl))"
                            if($required -is [System.Collections.IDictionary]) {
-                              Write-Verbose "Required is a Hashtable, adding PackageInfoUri: $($depInfo.PackageInfoUri)"
-                              if(!$required.Contains("PackageInfoUri")) {
-                                 $required.Add("PackageInfoUri", $depInfo.PackageInfoUri)
+                              Write-Verbose "Required is a Hashtable, adding PackageInfoUrl: $($depInfo.PackageInfoUrl)"
+                              if(!$required.Contains("PackageInfoUrl")) {
+                                 $required.Add("PackageInfoUrl", $depInfo.PackageInfoUrl)
                               }
                            } else {
-                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageInfoUri" -Value $depInfo.PackageInfoUri -ErrorAction SilentlyContinue
-                              Write-Verbose "Required is an object, added PackageInfoUri: $($required | FL * | Out-String | % TrimEnd )"
+                              Add-Member -InputObject $required -Type NoteProperty -Name "PackageInfoUrl" -Value $depInfo.PackageInfoUrl -ErrorAction SilentlyContinue
+                              Write-Verbose "Required is an object, added PackageInfoUrl: $($required | FL * | Out-String | % TrimEnd )"
                            }
                         }
                      }
@@ -586,8 +586,8 @@ function ConvertFrom-NugetSpec {
       if($NugetManifest.owners)     { $NugetData.CompanyName   = $NugetManifest.owners }
       if($NugetManifest.description){ $NugetData.Description   = $NugetManifest.description }
       if($NugetManifest.copyright)  { $NugetData.Copyright     = $NugetManifest.copyright }
-      if($NugetManifest.licenseUrl) { $NugetData.LicenseUri    = $NugetManifest.licenseUrl }
-      if($NugetManifest.projectUrl) { $NugetData.ModuleInfoUri = $NugetManifest.projectUrl }
+      if($NugetManifest.licenseUrl) { $NugetData.LicenseUrl    = $NugetManifest.licenseUrl }
+      if($NugetManifest.projectUrl) { $NugetData.ProjectUrl = $NugetManifest.projectUrl }
       if($NugetManifest.tags)       { $NugetData.Keywords      = $NugetManifest.tags -split ',' }
    
       if($NugetManifest.dependencies) {

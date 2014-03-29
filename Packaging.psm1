@@ -179,17 +179,17 @@ function Compress-Module {
                if($Module.HelpInfoUri) {
                   $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
                }
-               if($Module.PackageInfoUri) {
-                  $null = $Package.CreateRelationship( $Module.PackageInfoUri, "External", $PackageInfoType )
+               if($Module.PackageInfoUrl) {
+                  $null = $Package.CreateRelationship( $Module.PackageInfoUrl, "External", $PackageInfoType )
                }
-               if($Module.LicenseUri) {
-                  $null = $Package.CreateRelationship( $Module.LicenseUri, "External", $ModuleLicenseType )
+               if($Module.LicenseUrl) {
+                  $null = $Package.CreateRelationship( $Module.LicenseUrl, "External", $ModuleLicenseType )
                }
-               if($Module.DownloadUri) {
-                  $null = $Package.CreateRelationship( $Module.DownloadUri, "External", $PackageDownloadType )
+               if($Module.DownloadUrl) {
+                  $null = $Package.CreateRelationship( $Module.DownloadUrl, "External", $PackageDownloadType )
                }
-               if($Module.ModuleInfoUri) {
-                  $null = $Package.CreateRelationship( $Module.ModuleInfoUri, "External", $ModuleProjectType )
+               if($Module.ProjectUrl) {
+                  $null = $Package.CreateRelationship( $Module.ProjectUrl, "External", $ModuleProjectType )
                }
 
                
@@ -209,7 +209,7 @@ function Compress-Module {
             Get-Item $OutputPackagePath
 
             # TODO: once the URLs are mandatory, print the full URL here
-            Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageInfoUri and DownloadUri"  
+            Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageInfoUrl and DownloadUrl"  
          }
       }
    }
@@ -331,7 +331,7 @@ function Set-PackageProperties {
     $PackageProperties = $Package.PackageProperties
 
     # Sanity check: you can't require license acceptance unless you specify the license...
-    if(!$ModuleInfo.LicenseUri) {
+    if(!$ModuleInfo.LicenseUrl) {
        Add-Member NoteProperty -InputObject $ModuleInfo -Name RequireLicenseAcceptance -Value $false -Force
     }
 
@@ -360,7 +360,7 @@ function Set-PackageProperties {
     if($ModuleInfo.Keywords) {
       $PackageProperties.Keywords = @(@($ModuleInfo.Keywords) + $ModulePackageKeyword | Sort-Object -Unique) -join ' '
     }
-    if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ModuleInfoUri) { $ModuleInfo.ModuleInfoUri } elseif($ModuleInfo.DownloadUri) { $ModuleInfo.DownloadUri }) {
+    if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ProjectUrl) { $ModuleInfo.ProjectUrl } elseif($ModuleInfo.DownloadUrl) { $ModuleInfo.DownloadUrl }) {
       $PackageProperties.Subject = $anyUrl
     }
   }
@@ -387,11 +387,11 @@ function Get-NuspecContent {
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
         [Alias("LicenseUrl")]
-        [String]$LicenseUri,
+        [String]$LicenseUrl,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
         [Alias("ProjectUrl")]
-        [String]$ModuleInfoUri,
+        [String]$ProjectUrl,
 
         [Parameter(ValueFromPipelineByPropertyName=$True)]
         [Alias("IconUrl")]
@@ -425,8 +425,8 @@ function Get-NuspecContent {
         <version>$([System.Security.SecurityElement]::Escape($Version))</version>
         <authors>$([System.Security.SecurityElement]::Escape($Author))</authors>
         <owners>$([System.Security.SecurityElement]::Escape($CompanyName))</owners>
-        <licenseUrl>$([System.Security.SecurityElement]::Escape($LicenseUri))</licenseUrl>
-        <projectUrl>$([System.Security.SecurityElement]::Escape($ModuleInfoUri))</projectUrl>
+        <licenseUrl>$([System.Security.SecurityElement]::Escape($LicenseUrl))</licenseUrl>
+        <projectUrl>$([System.Security.SecurityElement]::Escape($ProjectUrl))</projectUrl>
         <iconUrl>$([System.Security.SecurityElement]::Escape($ModuleIconUri))</iconUrl>
         <requireLicenseAcceptance>$(([bool]$RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>
         <description>$([System.Security.SecurityElement]::Escape($Description))</description>
@@ -529,7 +529,7 @@ function Set-ModuleInfo {
         [version]
         ${PowerShellHostVersion},
 
-        # The Required modules is a hashtable of ModuleName=PackageInfoUri, or an array of module names, etc
+        # The Required modules is a hashtable of ModuleName=PackageInfoUrl, or an array of module names, etc
         [System.Object[]]
         ${RequiredModules},
 
@@ -589,13 +589,13 @@ function Set-ModuleInfo {
         ${DefaultCommandPrefix},
 
         # The url where the module package will be uploaded
-        [String]$DownloadUri,
+        [String]$DownloadUrl,
       
         # The url where the module's package manifest will be uploaded (defaults to the download URI modified to ModuleName.psd1)
-        [String]$PackageInfoUri,
+        [String]$PackageInfoUrl,
 
         # The url to a license
-        [String]$LicenseUri,
+        [String]$LicenseUrl,
 
         # If set, require the license to be accepted during installation (not supported yet)
         [Switch]$RequireLicenseAcceptance,
@@ -617,7 +617,7 @@ function Set-ModuleInfo {
         [String]$CompanyIconUri,
 
         # a URL or relative path to a web page about this module
-        [String]$ModuleInfoUri,
+        [String]$ProjectUrl,
 
         # a URL or relative path to an icon for the module in gif/jpg/png form
         [String]$ModuleIconUri,
@@ -633,8 +633,8 @@ function Set-ModuleInfo {
     )
     begin {
         $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
-        $PoshCodeProperties = 'ModuleName','ModuleVersion','DownloadUri','PackageInfoUri','LicenseUri','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ModuleInfoUri','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
-        $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUri','ModuleInfoUri','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
+        $PoshCodeProperties = 'ModuleName','ModuleVersion','DownloadUrl','PackageInfoUrl','LicenseUrl','RequireLicenseAcceptance','Category','Keywords','AuthorAvatarUri','CompanyUri','CompanyIconUri','ProjectUrl','ModuleIconUri','SupportUri','AutoIncrementBuildNumber','RequiredModules'
+        $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUrl','ProjectUrl','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Keywords','RequiredModules'
         if(!(Test-Path variable:RejectAllOverwriteOnModuleInfo)){
             $RejectAllOverwriteOnModuleInfo = $false
             $ConfirmAllOverwriteOnModuleInfo = $false
