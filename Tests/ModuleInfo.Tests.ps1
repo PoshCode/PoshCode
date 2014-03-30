@@ -4,9 +4,9 @@ Import-Module PSAINT # http://poshcode.org/Modules/PSAINT.psd1
 
 Import-Module "$PSScriptRoot\..\ModuleInfo.psm1" -ErrorAction Stop
 
-test "Read-Module Adds Simple Names" {
+test "Get-ModuleInfo Adds Simple Names" {
    arrange {
-      $ModuleInfo = Read-Module PSAINT
+      $ModuleInfo = Get-ModuleInfo PSAINT
    }
    act {
       $RequiredModules = $ModuleInfo.RequiredModules | Select -First 1
@@ -17,10 +17,10 @@ test "Read-Module Adds Simple Names" {
 } -Category AddSimpleNames
 
 
-# test "Update-ModuleInfo Adds Simple Names" {
+# test "ImportModuleInfo Adds Simple Names" {
 #    arrange {
-#       $ModuleInfo = Read-Module PSAINT | Select -First 1
-#       $ModuleManifest = Update-ModuleInfo $ModuleInfo.Path
+#       $ModuleInfo = Get-ModuleInfo PSAINT | Select -First 1
+#       $ModuleManifest = ImportModuleInfo $ModuleInfo.Path
 #    }
 #    act {
 #       $RequiredModules = $ModuleManifest.RequiredModules | Select -First 1
@@ -31,10 +31,10 @@ test "Read-Module Adds Simple Names" {
 # } -Category AddSimpleNames
 #
 #
-# test "Update-ModuleInfo Imports Package Manifest" {
+# test "ImportModuleInfo Imports Package Manifest" {
 #    arrange {
-#       $ModuleInfo = Read-Module PSAINT | Select -First 1
-#       $ModuleManifest = Update-ModuleInfo $ModuleInfo.Path
+#       $ModuleInfo = Get-ModuleInfo PSAINT | Select -First 1
+#       $ModuleManifest = ImportModuleInfo $ModuleInfo.Path
 #    }
 #    act {
 #       $RequiredModules = $ModuleManifest.RequiredModules | Select -First 1
@@ -49,7 +49,7 @@ test "Read-Module Adds Simple Names" {
 
 
 
-test "Read-Module Supports Packages Includes Both Manifest" {
+test "Get-ModuleInfo Supports Packages Includes Both Manifest" {
    arrange {
       $ModulePackage = "~\Documents\WindowsPowerShell\Modules\WASP.nupkg"
       
@@ -58,7 +58,7 @@ test "Read-Module Supports Packages Includes Both Manifest" {
       }
    }
    act {
-      $ModuleManifest = Read-Module $ModulePackage
+      $ModuleManifest = Get-ModuleInfo $ModulePackage
       $RequiredModules = $ModuleManifest.RequiredModules | Select -First 1
    }
    assert {
@@ -70,14 +70,14 @@ test "Read-Module Supports Packages Includes Both Manifest" {
 
 
 
-test "Read-Module As Object" {
+test "Get-ModuleInfo As Object" {
    arrange {
       $ModulePackage = "~\Documents\WindowsPowerShell\Modules\WASP.nupkg"
       
       if(!(Test-Path $ModulePackage)) {
          $null = Invoke-WebRequest -Uri "http://poshcode.org/Modules/WASP-2.0.0.6.nupkg" -OutFile $ModulePackage
       }
-      $ModuleManifest = Read-Module $ModulePackage
+      $ModuleManifest = Get-ModuleInfo $ModulePackage
    }
    act {
       $RequiredModules = $ModuleManifest.RequiredModules | Select -First 1

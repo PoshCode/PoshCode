@@ -515,7 +515,7 @@ function Export-LocalStorage {
       elseif($Scope -eq "Module") 
       {
          $Module = Split-Path $Module -Leaf
-         $ModulePath = Read-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+         $ModulePath = Get-ModuleInfo $Module -ListAvailable | Select -Expand ModuleBase -First 1
       }
 
       # Scope -eq "User"
@@ -603,7 +603,7 @@ function Import-LocalStorage {
       elseif($Scope -eq "Module") 
       {
          $Module = Split-Path $Module -Leaf
-         $ModulePath = Read-Module $Module -ListAvailable | Select -Expand ModuleBase -First 1
+         $ModulePath = Get-ModuleInfo $Module -ListAvailable | Select -Expand ModuleBase -First 1
       }
 
       # Scope -eq "User"

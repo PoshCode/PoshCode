@@ -78,7 +78,7 @@ function Update-Module {
    )
    process {
       $ModuleInfo = $(
-         foreach($m in Read-Module $Module -ListAvailable) {
+         foreach($m in Get-ModuleInfo $Module -ListAvailable) {
             if($Force -or $m.PackageInfoUrl) {
                if($m -is [Hashtable]) {
                   $m.Add("Update","Unknown")
@@ -575,7 +575,7 @@ function Install-Module {
       # At this point $PackagePath is a local file, but it might be a .psmx, or .zip or .nupkg instead
       Write-Verbose "PackagePath: $PackagePath"
       Write-Verbose "InstallPath: $InstallPath"
-      $Manifest = Read-Module $PackagePath
+      $Manifest = Get-ModuleInfo $PackagePath
       # Expand the package
       $ModuleFolder = Expand-Package $PackagePath $InstallPath -Force:$Force -ZipFolder:$ZipFolder -ErrorAction Stop
 
@@ -592,13 +592,14 @@ function Install-Module {
       }
 
       if(!(Test-Path (Join-Path $ModuleFolder.FullName "*${ModuleManifestExtension}"))) {
+         # TODO: if we got this from a NuGet server, we know how to upgrade it anyway...
          Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the $PackageInfoExtension manifest)"
       }
 
       if(!$Manifest) {
-         Write-Verbose "Read-Module $($ModuleFolder.Name) -ListAvailable"
-         $Manifest = Read-Module $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
-         Write-Verbose "Module Manifest loaded by Read-Module:`n$($Manifest | out-string)"
+         Write-Verbose "Get-ModuleInfo $($ModuleFolder.Name) -ListAvailable"
+         $Manifest = Get-ModuleInfo $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
+         Write-Verbose "Module Manifest loaded by Get-ModuleInfo:`n$($Manifest | out-string)"
       }
 
       # Now verify the RequiredModules are available, and try installing them.
@@ -609,7 +610,7 @@ function Install-Module {
             $VPR = "SilentlyContinue"
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
 
-            if($Module = Read-Module -Name $RequiredModule.ModuleName -ListAvailable) {
+            if($Module = Get-ModuleInfo -Name $RequiredModule.ModuleName -ListAvailable) {
                $VPR, $VerbosePreference = $VerbosePreference, $VPR
                if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.ModuleVersion }) {
                   if($Import) {
@@ -629,7 +630,7 @@ function Install-Module {
             if(($RequiredFile = Get-Item (Join-Path $Folder "$($RequiredModule.ModuleName)*$ModulePackageExtension") | 
                                   Sort-Object { [IO.Path]::GetFileNameWithoutExtension($_) } | 
                                   Select-Object -First 1) -and
-               (Read-Module $RequiredFile).Version -ge $RequiredModule.ModuleVersion)
+               (Get-ModuleInfo $RequiredFile).Version -ge $RequiredModule.ModuleVersion)
             {
                Write-Warning "Installing required module $($RequiredModule.ModuleName) from $RequiredFile"
                Install-Module $RequiredFile $InstallPath
@@ -660,8 +661,8 @@ function Install-Module {
          Write-Verbose "Import-Module Requested. Importing $($ModuleFolder.Name)"
          Import-Module $ModuleFolder.Name -Passthru:$Passthru
       } elseif($ModuleFolder) {
-         Write-Verbose "No Import. Read-Module: $($ModuleFolder.Name) -ListAvailable"
-         Read-Module $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
+         Write-Verbose "No Import. Get-ModuleInfo: $($ModuleFolder.Name) -ListAvailable"
+         Get-ModuleInfo $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
       }
    }
 }
