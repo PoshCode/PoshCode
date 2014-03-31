@@ -1,5 +1,5 @@
 # We're not using Requires because it just gets in the way on PSv2
-#!Requires -Version 2 -Modules "Configuration"
+#!Requires -Version 2 -Modules "Configuration", "Metadata"
 #!Requires -Version 2 -Modules "ModuleInfo"
 ###############################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
@@ -147,7 +147,7 @@ function Update-Module {
    
          # Get the metadata straight from the WebResponse:
          # Now lets find out what the latest version is:
-         $Mi = Import-Metadata $content
+         $Mi = ConvertFrom-AtomFeed $content -Count 1
    
          $M.Update = [Version]$Mi.ModuleVersion
          Write-Verbose "Current version of $($M.Name) is $($M.Update), you have $($M.Version)"
@@ -556,8 +556,8 @@ function Install-Module {
       ## Figure out the real package Uri and recurse so we can download it
       # TODO: Check the file contents instead (it's just testing extensions right now)
       if($PackageInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
-         Write-Verbose "The file '$PackagePath' is just a manifest, get DownloadUrl."
-         $MI = Import-Metadata $PackagePath -ErrorAction "SilentlyContinue"
+         Write-Verbose "The file '$PackagePath' is just a package entry (feed), get the DownloadUrl."
+         $MI = Import-AtomFeed $PackagePath -ErrorAction "SilentlyContinue" -Count 1
          Remove-Item $PackagePath
 
          if($Mi.DownloadUrl) {

@@ -215,7 +215,6 @@ function Compress-Module {
    }
 }
 
-
 function Add-File {
    [CmdletBinding(DefaultParameterSetName="FilePath")]
    param(
@@ -338,9 +337,9 @@ function Set-PackageProperties {
     $NuSpecF = Join-Path $ModuleInfo.ModuleBase ($ModuleInfo.Name + $NuSpecManifestExtension)
     if(Test-Path $NuSpecF) {
        Write-Debug $($ModuleInfo | Format-List * | Out-String)
-       Set-Content $NuSpecF -Value ($ModuleInfo | New-Nuspec)
+       Export-Nuspec $NuSpecF -InputObject $ModuleInfo
     } else {
-       Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | New-Nuspec)
+       Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | ConvertTo-Nuspec)
     }
 
     ## NuGet does the WRONG thing here, assuming the package name is unique
@@ -357,8 +356,8 @@ function Set-PackageProperties {
     $PackageProperties.LastModifiedBy = $UserAgent
     $PackageProperties.Category = $ModuleInfo.Category
 
-    if($ModuleInfo.Keywords) {
-      $PackageProperties.Keywords = @(@($ModuleInfo.Keywords) + $ModulePackageKeyword | Sort-Object -Unique) -join ' '
+    if($ModuleInfo.Tags) {
+      $PackageProperties.Tags = @(@($ModuleInfo.Tags) + $ModulePackageKeyword | Sort-Object -Unique) -join ' '
     }
     if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ProjectUrl) { $ModuleInfo.ProjectUrl } elseif($ModuleInfo.DownloadUrl) { $ModuleInfo.DownloadUrl }) {
       $PackageProperties.Subject = $anyUrl

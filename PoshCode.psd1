@@ -24,12 +24,6 @@ Copyright = 'Copyright (c) 2013 by Joel Bennett, all rights reserved.'
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '2.0'
 
-# Name of the Windows PowerShell host required by this module
-# PowerShellHostName = ''
-
-# Minimum version of the Windows PowerShell host required by this module
-# PowerShellHostVersion = ''
-
 # Minimum version of the .NET Framework required by this module
 DotNetFrameworkVersion = '2.0'
 
@@ -55,14 +49,14 @@ TypesToProcess = @('PoshCode.types.ps1xml')
 FormatsToProcess = @('PoshCode.format.ps1xml')
 
 # List of all modules packaged with this module.
-ModuleList = @('ModuleInfo', 'Configuration', 'Installation', 'InvokeWeb', 'Packaging', 'Scripts', 'Repository')
+ModuleList = @('Metadata', 'Atom', 'ModuleInfo', 'Configuration', 'Installation', 'InvokeWeb', 'Packaging', 'Scripts', 'Repository')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 # Note: We do not specify InvokeWeb -- That should only be imported if the test in the Installation module fails
-NestedModules = @('ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 'Repository.psm1')
+NestedModules = @('Metadata.psm1', 'Atom.psm1', 'ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Scripts.psm1', 'Repository.psm1')
 
 # List of all files packaged with this module
-FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1',
+FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1', 'Metadata.psm1', 'Atom.psm1', 
            'ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1',
            'InvokeWeb.psm1', 'UserSettings.psd1',
            # Repository Modules
@@ -73,29 +67,13 @@ FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1',
            'README.md'
 
 # Functions to export from this module
-FunctionsToExport = 'Read-Module', 'Install-Module', 'Compress-Module', 'Set-ModuleInfo', 'Update-Module', 'Import-Metadata', 'Export-Metadata',
-                    'Get-ConfigData', 'Set-ConfigData', 'Get-SpecialFolder', # 'Test-ExecutionPolicy', 
-                    'Get-PoshCode', 'Send-PoshCode','Find-Module'
-
-
-# Cmdlets to export from this module
-# CmdletsToExport = '*'
-
-# Variables to export from this module
-# VariablesToExport = '*'
+FunctionsToExport = 'Install-Module', 'Find-Module', 'Update-Module',
+                    'Compress-Module', 'Set-ModuleInfo', 'Get-ModuleInfo', 
+                    # 'Import-Metadata', 'Export-Metadata', # 'Test-ExecutionPolicy', 
+                    'Get-ConfigData', 'Set-ConfigData', 'Get-SpecialFolder', 
+                    'Get-PoshCode', 'Send-PoshCode'
 
 # Aliases to export from this module
 AliasesToExport = '*'
-
-           
-
-# Private data to pass to the module specified in RootModule/ModuleToProcess
-# PrivateData = ''
-
-# HelpInfo URI of this module
-# HelpInfoURI = ''
-
-# Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
-# DefaultCommandPrefix = ''
 
 }

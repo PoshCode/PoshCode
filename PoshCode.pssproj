@@ -61,6 +61,10 @@
     <Compile Include="Tests\ThingsWeShouldTest.ps1" />
     <Compile Include="UserSettings.psd1" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Atom.psm1" />
+    <Content Include="Metadata.psm1" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Target Name="Build" />
 </Project>

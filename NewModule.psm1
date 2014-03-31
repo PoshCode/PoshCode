@@ -1,4 +1,7 @@
-## Copyright (c) 2013 by Joel Bennett, all rights reserved.
+# We're not using Requires because it just gets in the way on PSv2
+#!Requires -Version 2 -Modules "Metadata"
+###############################################################################
+## Copyright (c) 2013, 2014 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
 ###############################################################################
 ## NewModule.psm1 defines the New-Module command for generating ModuleManifests

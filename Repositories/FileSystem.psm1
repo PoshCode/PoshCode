@@ -1,3 +1,6 @@
+# We're not using Requires because it just gets in the way on PSv2
+#!Requires -Version 2 -Modules "Metadata"
+
 # FULL # BEGIN FULL: Don't include this in the installer script
 $PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
 if(!$PoshCodeModuleRoot) {

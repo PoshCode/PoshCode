@@ -1,3 +1,5 @@
+#Requires -Version 2 -Modules "Metadata"
+
 #.Synopsis
 #   Generate the PoshCode Install script 
 [CmdletBinding(DefaultParameterSetName="InstallerOnly")]
