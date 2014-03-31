@@ -1,5 +1,3 @@
-#Requires -Version 2 -Modules "Metadata"
-
 #.Synopsis
 #   Generate the PoshCode Install script 
 [CmdletBinding(DefaultParameterSetName="InstallerOnly")]
@@ -19,6 +17,10 @@ param(
   # The path to save the package to
   $OutputPath = "${PSScriptRoot}\Releases\"
 )
+
+#!Requires -Version 2 -Modules "Metadata"
+Import-Module PoshCode\Metadata
+
 
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
 
