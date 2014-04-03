@@ -1,5 +1,3 @@
-# We're not using Requires because it just gets in the way on PSv2
-#!Requires -Version 2 -Modules "Configuration"
 ###############################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
@@ -49,7 +47,7 @@ function Import-Metadata {
 }
 
 function Export-Metadata {
-   <#
+    <#
       .Synopsis
          A metadata export function that works like json
       .Description
@@ -59,29 +57,35 @@ function Export-Metadata {
          The only things exportable are Strings and Numbers, and Arrays or Hashtables where the values are all strings or numbers.
          NOTE: Hashtable keys must be simple strings or numbers
          NOTE: Simple dynamic objects can also be exported (they come back as PSObject)
-   #>
-   [CmdletBinding()]
-   param(
-      # Specifies the path to the PSD1 output file.
-      [Parameter(Mandatory=$true, Position=0)]
-      $Path,
+    #>
+    [CmdletBinding()]
+    param(
+        # Specifies the path to the PSD1 output file.
+        [Parameter(Mandatory=$true, Position=0)]
+        $Path,
 
-      # comments to place on the top of the file (to explain it's settings)
-      [string[]]$CommentHeader,
+        # comments to place on the top of the file (to explain it's settings)
+        [string[]]$CommentHeader,
 
-      # Specifies the objects to export as metadata structures.
-      # Enter a variable that contains the objects or type a command or expression that gets the objects.
-      # You can also pipe objects to Export-Metadata.
-      [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
-      $InputObject
-   )
-   begin { $data = @() }
-   process { $data += @($InputObject) }
-   end {
-      # Avoid arrays when they're not needed:
-      if($data.Count -eq 1) { $data = $data[0] }
-      Set-Content -Path $Path -Value ((@($CommentHeader) + @(ConvertTo-Metadata $data)) -Join "`n")
-   }
+        # Specifies the objects to export as metadata structures.
+        # Enter a variable that contains the objects or type a command or expression that gets the objects.
+        # You can also pipe objects to Export-Metadata.
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        $InputObject,
+
+        # If set, output the nuspec file
+        [Switch]$Passthru
+    )
+    begin { $data = @() }
+    process { $data += @($InputObject) }
+    end {
+        # Avoid arrays when they're not needed:
+        if($data.Count -eq 1) { $data = $data[0] }
+        Set-Content -Path $Path -Value ((@($CommentHeader) + @(ConvertTo-Metadata $data)) -Join "`n")
+        if($Passthru) {
+            Get-Item $Path
+        }
+    }
 }
 
 # At this time there's not a lot of value in exporting the ConvertFrom/ConvertTo functions
@@ -364,4 +368,5 @@ function ConvertTo-PSModuleInfo {
     }
 }
 
-Export-ModuleMember -Function Export-Metadata, Import-Metadata, ConvertTo-PSModuleInfo #, ConvertFrom-Metadata, ConvertTo-Metadata
+Export-ModuleMember -Function Export-Metadata, Import-Metadata, ConvertTo-PSModuleInfo, ConvertFrom-Metadata, ConvertTo-Metadata
+

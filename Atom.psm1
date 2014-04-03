@@ -1,5 +1,3 @@
-# We're not using Requires because it just gets in the way on PSv2
-#!Requires -Version 2 -Modules "Configuration"
 ###############################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
@@ -20,21 +18,29 @@ if(!$PoshCodeModuleRoot) {
 
 # Code for generating Atom feed xml files
 function Export-AtomFeed {
-   [CmdletBinding()]
-   param(
-      # Specifies the path to save the feed to.
-      [Parameter(Mandatory=$true, Position=0)]
-      $Path,
+    [CmdletBinding()]
+    param(
+        # Specifies the path to save the feed to.
+        [Parameter(Mandatory=$true, Position=0)]
+        $Path,
 
-      # Specifies the module info objects to export to the feed.
-      # Enter a variable that contains the objects or type a command or expression that gets the objects.
-      # You can also pipe objects to Export-Metadata.
-      [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
-      $InputObject
-   )
-   begin { $data = @() }
-   process { $data += @($InputObject) }
-   end { Set-Content $Path $($InputObject | ConvertTo-AtomFeed) }
+        # Specifies the module info objects to export to the feed.
+        # Enter a variable that contains the objects or type a command or expression that gets the objects.
+        # You can also pipe objects to Export-Metadata.
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        $InputObject,
+
+        # If set, output the atom file
+        [Switch]$Passthru
+    )
+    begin { $data = @() }
+    process { $data += @($InputObject) }
+    end { 
+        Set-Content $Path $($InputObject | ConvertTo-AtomFeed) 
+        if($Passthru) {
+            Get-Item $Path
+        }
+    }
 }
 
 function ConvertTo-AtomFeed {
@@ -86,14 +92,15 @@ function ConvertTo-AtomFeed {
                 } elseif($InputObject.IconUrl) {
                     "<d:IconUrl>$([System.Security.SecurityElement]::Escape($InputObject.IconUrl))</d:IconUrl>"
                 })
-                <d:ProjectUrl>$([System.Security.SecurityElement]::Escape($InputObject.ProjectUrl))</d:ProjectUrl>
+                $(if($InputObject.LicenseUrl){
+                    "<d:ProjectUrl>$([System.Security.SecurityElement]::Escape($InputObject.ProjectUrl))</d:ProjectUrl>"
+                })
                 $(if($InputObject.LicenseUrl){
                     "<d:RequireLicenseAcceptance m:type='Edm.Boolean'>$(($InputObject.RequireLicenseAcceptance -eq "true").ToString().ToLower())</d:RequireLicenseAcceptance>
                     <d:LicenseUrl>$([System.Security.SecurityElement]::Escape($InputObject.LicenseUrl))</d:LicenseUrl>"
                  })
                 <d:Tags>$([System.Security.SecurityElement]::Escape(($InputObject.Tags -join ' ')))</d:Tags>
                 $(
-                Write-Host "IsPrerelease: '$($InputObject.IsPrerelease)'" -ForegroundColor magenta
                 if($InputObject.IsPrerelease -ne $null){
                     "<d:IsPrerelease m:type='Edm.Boolean'>$(($InputObject.IsPrerelease -eq "true").ToString().ToLower())</d:IsPrerelease>"
                 })
@@ -340,21 +347,29 @@ function New-PackageFeed {
 #>
 
 function Export-Nuspec {
-   [CmdletBinding()]
-   param(
-      # Specifies the path to save the feed to.
-      [Parameter(Mandatory=$true, Position=0)]
-      $Path,
+    [CmdletBinding()]
+    param(
+        # Specifies the path to save the feed to.
+        [Parameter(Mandatory=$true, Position=0)]
+        $Path,
 
-      # Specifies the module info objects to export to the feed.
-      # Enter a variable that contains the objects or type a command or expression that gets the objects.
-      # You can also pipe objects to Export-Metadata.
-      [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
-      $InputObject
-   )
-   begin { $data = @() }
-   process { $data += @($InputObject) }
-   end { Set-Content $Path $($InputObject |ConvertTo-Nuspec) }
+        # Specifies the module info objects to export to the feed.
+        # Enter a variable that contains the objects or type a command or expression that gets the objects.
+        # You can also pipe objects to Export-Metadata.
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        $InputObject,
+
+        # If set, output the nuspec file
+        [Switch]$Passthru
+    )
+    begin { $data = @() }
+    process { $data += @($InputObject) }
+    end { 
+        Set-Content $Path $($InputObject |ConvertTo-Nuspec) 
+        if($Passthru) {
+            Get-Item $Path
+        }
+   }
 }
 
 function ConvertTo-Nuspec {
@@ -464,23 +479,22 @@ function ConvertFrom-Nuspec {
       $NugetManifest = ([Xml]$InputObject).package.metadata
 
       $NugetData = @{}
-      if($NugetManifest.id)         { $NugetData.ModuleName    = $NugetManifest.id }
-      if($NugetManifest.version)    { $NugetData.ModuleVersion = $NugetManifest.version }
-      if($NugetManifest.authors)    { $NugetData.Author        = $NugetManifest.authors }
-      if($NugetManifest.owners)     { $NugetData.CompanyName   = $NugetManifest.owners }
-      if($NugetManifest.description){ $NugetData.Description   = $NugetManifest.description }
-      if($NugetManifest.copyright)  { $NugetData.Copyright     = $NugetManifest.copyright }
-      if($NugetManifest.projectUrl) { $NugetData.ProjectUrl    = $NugetManifest.projectUrl }
-      if($NugetManifest.tags)       { $NugetData.Tags          = $NugetManifest.tags -split ',' }
+      if($NugetManifest.id)           { $NugetData.ModuleName    = $NugetManifest.id }
+      if($NugetManifest.version)      { $NugetData.ModuleVersion = $NugetManifest.version }
+      if($NugetManifest.authors)      { $NugetData.Author        = $NugetManifest.authors }
+      if($NugetManifest.owners)       { $NugetData.CompanyName   = $NugetManifest.owners }
+      if($NugetManifest.description)  { $NugetData.Description   = $NugetManifest.description }
+      if($NugetManifest.copyright)    { $NugetData.Copyright     = $NugetManifest.copyright }
+      if($NugetManifest.projectUrl)   { $NugetData.ProjectUrl    = $NugetManifest.projectUrl }
+      if($NugetManifest.tags)         { $NugetData.Tags          = $NugetManifest.tags -split '[ ,]+' }
+      if($NugetManifest.iconUrl)      { $NugetData.iconUrl       = $NugetManifest.iconUrl }
+      if($NugetManifest.releaseNotes) { $NugetData.ReleaseNotes  = $NugetManifest.releaseNotes }
 
-      if($NugetManifest.iconUrl) { $NugetData.iconUrl    = $NugetManifest.iconUrl }
-      if($NugetManifest.licenseUrl) { 
-        $NugetData.LicenseUrl    = $NugetManifest.licenseUrl 
-        $NugetData.RequireLicenseAcceptance    = $NugetManifest.requireLicenseAcceptance -eq "True"
+      if($NugetManifest.licenseUrl)   {
+         $NugetData.LicenseUrl               = $NugetManifest.licenseUrl 
+         $NugetData.RequireLicenseAcceptance = $NugetManifest.requireLicenseAcceptance -eq "True"
       }
-
-      if($NugetManifest.releaseNotes)  { $NugetData.ReleaseNotes     = $NugetManifest.releaseNotes }
-   
+  
       if($NugetManifest.dependencies) {
          $NugetData.RequiredModules = foreach($dep in $NugetManifest.dependencies.dependency) {
             @{ ModuleName = $dep.id; ModuleVersion = $dep.version }
@@ -494,3 +508,4 @@ function ConvertFrom-Nuspec {
 # Export-ModuleMember -Function Export-AtomFeed, ConvertTo-AtomFeed, 
 #                               Import-AtomFeed, ConvertFrom-AtomFeed, 
 #                               Import-Nuspec, ConvertFrom-Nuspec
+

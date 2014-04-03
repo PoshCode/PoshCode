@@ -1,6 +1,3 @@
-# We're not using Requires because it just gets in the way on PSv2
-#!Requires -Version 2 -Modules "Configuration", "Metadata"
-#!Requires -Version 2 -Modules "ModuleInfo"
 ###############################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
 ## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
@@ -16,6 +13,11 @@ if(!$PoshCodeModuleRoot) {
   $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
 }
 . $PoshCodeModuleRoot\Constants.ps1
+
+# We're not using Requires because it just gets in the way on PSv2
+#!Requires -Version 2 -Modules "Configuration", "Metadata"
+#!Requires -Version 2 -Modules "ModuleInfo"
+
 
 if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
   Import-Module $PoshCodeModuleRoot\InvokeWeb
@@ -49,7 +51,7 @@ function Update-Module {
       #  Specifies the client certificate that is used for a secure web request. Enter a variable that contains a certificate or a command or expression that gets the certificate.
       #  To find a certificate, use Get-PfxCertificate or use the Get-ChildItem cmdlet in the Certificate (Cert:) drive. If the certificate is not valid or does not have sufficient authority, the command fails.
       [System.Security.Cryptography.X509Certificates.X509Certificate[]]
-      $ClientCertificate,
+      $Certificate,
    
       #  Pass the default credentials
       [switch]$UseDefaultCredentials,
@@ -391,7 +393,7 @@ function Install-Module {
       #  Specifies the client certificate that is used for a secure web request. Enter a variable that contains a certificate or a command or expression that gets the certificate.
       #  To find a certificate, use Get-PfxCertificate or use the Get-ChildItem cmdlet in the Certificate (Cert:) drive. If the certificate is not valid or does not have sufficient authority, the command fails.
       [System.Security.Cryptography.X509Certificates.X509Certificate[]]
-      $ClientCertificate,
+      $Certificate,
    
       #  Pass the default credentials
       [switch]$UseDefaultCredentials,

@@ -34,6 +34,7 @@ function Compress-Module {
       # The name of the module to package
       [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
       [ValidateNotNullOrEmpty()]
+      [ValidateScript({if($_ -is [array]) { throw "Compress-Module can only handle one module at a time. If you want to compress more than one, please pipe them in (see examples in help)."} else { return $true }})]
       $Module,
       
       # The folder where packages should be placed (defaults to the current FileSystem working directory)
@@ -60,13 +61,9 @@ function Compress-Module {
          if($PSVersionTable.PSVersion -lt "3.0") {
             $Module = Import-Module $ModuleName -PassThru  | Get-ModuleInfo
          } else {
-            if(Get-Module $ModuleName) {
-               $Module = Get-Module $ModuleName
-            } else {   
-               $Module = Get-Module $ModuleName -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+            if(!($Module = Get-ModuleInfo $ModuleName)) {
+               $Module = Get-ModuleInfo $ModuleName -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
             }
-            Write-Verbose "$($Module  | % FileList | Out-String)"
-            $Module = $Module | Get-ModuleInfo
          }
 
          Pop-Location
@@ -111,15 +108,16 @@ function Compress-Module {
             $NuSpecPath = Join-Path (Split-Path $Module.Path) ($PackageName + $NuSpecManifestExtension)
             $ModuleInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $ModuleManifestExtension)
 
-            if(!(Test-Path $packageInfoPath) -and !(Test-Path $NuSpecPath))
+            if(!(Test-Path $packageInfoPath) -or !(Test-Path $NuSpecPath) -or !(Test-Path $ModuleInfoPath))
             {
-               $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't find a package manifest: ${PackageInfoExtension} or ${NuSpecManifestExtension}"), "Manifest Not Found", "ObjectNotFound", $_) )
-            } else {
-               Copy-Item $packageInfoPath $OutputPackageInfoPath -ErrorVariable CantWrite
-               if($CantWrite) {
-                  $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
-               }
+               Set-ModuleInfo $PackageName -NewOnly -PassThru | % { Write-Warning "Generated $($_.Name) in $PackageName" }
+            } 
+            
+            Copy-Item $packageInfoPath $OutputPackageInfoPath -ErrorVariable CantWrite
+            if($CantWrite) {
+                $PSCmdlet.ThrowTerminatingError( $CantWrite[0] )
             }
+            
             Get-Item $OutputPackageInfoPath
 
             Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Preparing File List" -Id 0    
@@ -356,8 +354,8 @@ function Set-PackageProperties {
     $PackageProperties.LastModifiedBy = $UserAgent
     $PackageProperties.Category = $ModuleInfo.Category
 
-    if($ModuleInfo.Tags) {
-      $PackageProperties.Tags = @(@($ModuleInfo.Tags) + $ModulePackageKeyword | Sort-Object -Unique) -join ' '
+    $PackageProperties.Keywords = if(!$ModuleInfo.Tags) { $ModulePackageKeyword } else {
+       @(@($ModuleInfo.Tags) + $ModulePackageKeyword | Select-Object -Unique) -join ' '
     }
     if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ProjectUrl) { $ModuleInfo.ProjectUrl } elseif($ModuleInfo.DownloadUrl) { $ModuleInfo.DownloadUrl }) {
       $PackageProperties.Subject = $anyUrl

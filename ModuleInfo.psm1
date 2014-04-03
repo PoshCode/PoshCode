@@ -189,10 +189,12 @@ function Set-ModuleInfo {
         [Switch]$IncrementVersionNumber,
 
         # If set, overwrite existing files without prompting
-        [Switch]$Force
+        [Switch]$Force,
+
+        [Switch]$NewOnly
     )
     begin {
-        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
+        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport', 'Passthru'
         $PoshCodeProperties = 'ModuleName','ModuleVersion','Author','Copyright','Description','ProjectUrl','ModuleIconUri','Tags','PackageInfoUrl','DownloadUrl','RepositoryUrl','LicenseUrl','RequireLicenseAcceptance','RequiredModules','IsPrerelease'
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUrl','ProjectUrl','ModuleIconUri','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Tags','RequiredModules'
         if(!(Test-Path variable:RejectAllOverwriteOnModuleInfo)){
@@ -266,6 +268,20 @@ function Set-ModuleInfo {
         if($AutoIncrementBuildNumber) {
             $PackageVersion.Build = $PackageVersion.Build + 1
         }
+
+        ## TODO: Increment the version number in the psd1 file(s) when asked
+        if($IncrementVersionNumber) {
+          if($PackageVersion.Revision -ge 0) {
+            $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, $PackageVersion.Build, ($PackageVersion.Revision + 1)
+          } elseif($PackageVersion.Build -ge 0) {
+            $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, ($PackageVersion.Build + 1)
+          } elseif($PackageVersion.Minor -ge 0) {
+            $PackageVersion = New-Object Version $PackageVersion.Major, ($PackageVersion.Minor + 1)
+          } else {
+            $PackageVersion = New-Object Version ($PackageVersion.Major + 1), 0
+          }
+        }
+
         # TODO: Figure out a way to get rid of one of these throughout PoshCode stuff
         $PSBoundParameters["ModuleVersion"] = $PackageVersion
         $PSBoundParameters["Version"] = $PackageVersion
@@ -293,7 +309,6 @@ function Set-ModuleInfo {
                         $M.ModuleName = $Module.Name
                     } else {
                         Write-Warning ("RequiredModules is a " + $RequiredModules.GetType().FullName + " and this Module is a " + $Module.GetType().FullName)
-                        Write-Debug (($Module | Format-List * -Force | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n")
                         Write-Debug (($Module | Get-Member | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n")
                         throw "The RequiredModules must be an array of module names or an array of ModuleInfo hashtables or objects (which must have a ModuleName key and optionally a ModuleVersion and PackageInfoUrl)"
                     }
@@ -323,8 +338,10 @@ function Set-ModuleInfo {
         }
 
         foreach($Key in $PSBoundParameters.Keys) {
-            if($Manifest.$Key -ne $PSBoundParameters.$Key) {
-               $Manifest = Add-Member -InputObject $Manifest -Name $Key -MemberType NoteProperty -Value $PSBoundParameters.$Key -Force -PassThru 
+            Write-Debug "Should update from parameter ${Key}: $($Manifest.$Key) = $($PSBoundParameters.$Key)?"
+            if(($PSBoundParameters.$Key -is [Array]) -or $Manifest.$Key -ne $PSBoundParameters.$Key) {
+                Write-Verbose "Update Module Manifest ${Key}: $($Manifest.$Key)"
+                $Manifest = Add-Member -InputObject $Manifest -Name $Key -MemberType NoteProperty -Value $PSBoundParameters.$Key -Force -PassThru 
             }
         }
 
@@ -335,7 +352,7 @@ function Set-ModuleInfo {
         $NuSpecPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $NuSpecManifestExtension)
 
         if($PSCmdlet.ShouldProcess("Generating module manifest $ModuleManifestPath", "Generate .psd1 ($ModuleManifestPath)?", "Generating module manifest for $($Manifest.Name) v$($Manifest.Version)" )) {
-            if($Force -Or !(Test-Path $ModuleManifestPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The manifest '$ModuleManifestPath' already exists, do you want to wipe and replace it?", "Generating manifest for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
+            if($Force -Or !(Test-Path $ModuleManifestPath -ErrorAction SilentlyContinue) -Or (!$NewOnly -and $PSCmdlet.ShouldContinue("The manifest '$ModuleManifestPath' already exists, do you want to wipe and replace it?", "Generating manifest for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo))) {
                 # All the parameters, except "Path"
                 $ModuleManifest = $Manifest | ConvertToHashtable $ModuleManifestProperties -IgnoreEmptyProperties
                 # Fix the Required Modules for New-ModuleManifest
@@ -359,21 +376,21 @@ function Set-ModuleInfo {
         }
 
         if($PSCmdlet.ShouldProcess("Generating package info $PackageInfoPath", "Generate .packageInfo ($PackageInfoPath)?", "Generating package info for $($Manifest.Name) v$($Manifest.Version)" )) {
-            if($Force -Or !(Test-Path $PackageInfoPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The packageInfo '$PackageInfoPath' already exists, do you want to wipe and replace it?", "Generating packageInfo for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
+            if($Force -Or !(Test-Path $PackageInfoPath -ErrorAction SilentlyContinue) -Or (!$NewOnly -and $PSCmdlet.ShouldContinue("The packageInfo '$PackageInfoPath' already exists, do you want to wipe and replace it?", "Generating packageInfo for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo))) {
                 Write-Verbose "Exporting PackageInfo file: $PackageInfoPath"
                 $PoshCode = $Manifest | ConvertToHashtable $PoshCodeProperties
                 Write-Debug $($PoshCodeProperties -join ', ')
                 Write-Debug ("Exporting $Name Info " + (($PoshCode | Format-Table | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
                 # TODO: Export-AtomFeed
-                $PoshCode | Export-AtomFeed -Path $PackageInfoPath
+                $PoshCode | Export-AtomFeed -Path $PackageInfoPath -Passthru:$Passthru
             }
         }
 
         if($PSCmdlet.ShouldProcess("Generating nuget spec file $NuSpecPath", "Generate .nuspec ($NuSpecPath)?", "Generating nuget spec for $($Manifest.Name) v$($Manifest.Version)" )) {
-            if($Force -Or !(Test-Path $NuSpecPath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The nuspec '$NuSpecPath' already exists, do you want to wipe and replace it?", "Generating nuspec for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo)) {
+            if($Force -Or !(Test-Path $NuSpecPath -ErrorAction SilentlyContinue) -Or (!$NewOnly -and $PSCmdlet.ShouldContinue("The nuspec '$NuSpecPath' already exists, do you want to wipe and replace it?", "Generating nuspec for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo))) {
                 #$NuGetSpec = $Manifest | Get-Member $NuGetProperties -Type Properties | ForEach-Object {$H=@{}}{ $H.($_.Name) = $Manifest.($_.Name) }{$H}
                 Write-Verbose "Exporting NuSpec file: $NuSpecPath"
-                $Manifest | Export-Nuspec -Path $NuSpecPath
+                $Manifest | Export-Nuspec -Path $NuSpecPath -Passthru:$Passthru
             }
         }
     }
@@ -393,8 +410,8 @@ function Get-ModuleInfo {
       # Wildcards are permitted. You can also pipe the names to Get-ModuleInfo. 
       # You can also specify the path to a module or package.
       [Parameter(ParameterSetName='Available', Position=0, ValueFromPipeline=$true)]
-      [Parameter(ParameterSetName='Loaded', Position=0, ValueFromPipeline=$true)]
-      [string[]]
+      [Parameter(ParameterSetName='Loaded', Position=0, ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+      [Alias("ModuleName")][string[]]
       ${Name},
 
       # Gets all installed modules. Get-ModuleInfo works just like Get-Module, it gets the modules in paths listed in the PSModulePath environment variable.
@@ -419,7 +436,7 @@ function Get-ModuleInfo {
          if ($PSBoundParameters.TryGetValue('Name', [ref]$moduleName))
          {
             $PSBoundParameters['Name'] = @($moduleName | Where-Object { $_ -and !$_.EndsWith($ModulePackageExtension) })
-            $moduleName | Where-Object { $_ -and $_.EndsWith($ModulePackageExtension) } | ReadModulePackageInfo 
+            $moduleName | Where-Object { $_ -and $_.EndsWith($ModulePackageExtension) } | ReadModulePackageInfo
 
             # If they passed (just) the name to a package, we need to set a fake name that couldn't possibly be a real module name
             if(($moduleName.Count -gt 0) -and ($PSBoundParameters['Name'].Count -eq 0)) {
@@ -515,7 +532,7 @@ function ReadModulePackageInfo {
                         $PackageInfo = @{}
                     } else {
                         Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-                        $PackageInfo = ImportManifestStream ($Part.GetStream())
+                        $PackageInfo = ImportNugetStream ($Part.GetStream())
                     }
                 }
 
@@ -597,7 +614,7 @@ function ReadModulePackageInfo {
                  $stream.Dispose()
               }
            }
-           Import-Metadata $ManifestContent | ConvertTo-PSModuleInfo -AsObject:$AsObject
+           ConvertFrom-Metadata $ManifestContent | ConvertTo-PSModuleInfo -AsObject:$AsObject
         }
 
         # This is called once from within ReadModulePackageInfo (and from nowhere else)
@@ -627,7 +644,7 @@ function ReadModulePackageInfo {
                  $stream.Dispose()
               }
            }
-           Import-Nuspec $NugetContent | ConvertTo-PSModuleInfo -AsObject:$AsObject
+           ConvertFrom-Nuspec $NugetContent | ConvertTo-PSModuleInfo -AsObject:$AsObject
         }
 
 # Internal function for loading the package manifests
