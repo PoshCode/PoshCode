@@ -1,9 +1,9 @@
-# FULL # BEGIN FULL: Don't include this in the installer script
-$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { Split-Path $_.Value -Parent }
 if(!$PoshCodeModuleRoot) {
-  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+  $PoshCodeModuleRoot = Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent
 }
-# FULL # END FULL
+
+Import-Module $PoshCodeModuleRoot\Atom.psm1
 
 function FindModule {
     [CmdletBinding()]
@@ -89,3 +89,4 @@ function FindModule {
     }
 }
 
+Export-ModuleMember -Function FindModule

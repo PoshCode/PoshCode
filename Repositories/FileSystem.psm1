@@ -2,9 +2,9 @@
 #!Requires -Version 2 -Modules "Metadata"
 
 # FULL # BEGIN FULL: Don't include this in the installer script
-$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
-if(!$PoshCodeModuleRoot) {
-  $PoshCodeModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+$RepositoryModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.Value }
+if(!$RepositoryModuleRoot) {
+  $RepositoryModuleRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
 }
 # FULL # END FULL
 
@@ -29,8 +29,8 @@ function FindModule {
    process {
       $(
          $RepositoryRoot = $Root
-         if((Test-Path $RepositoryRoot -Type Leaf) -or (Test-Path (Join-Path $PoshCodeModuleRoot $RepositoryRoot) -Type Leaf) -or (Test-Path (Join-Path $PoshCodeModuleRoot "$RepositoryRoot.psd1") -Type Leaf)) {
-            if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = Join-Path $PoshCodeModuleRoot $RepositoryRoot }
+         if((Test-Path $RepositoryRoot -Type Leaf) -or (Test-Path (Join-Path $RepositoryModuleRoot $RepositoryRoot) -Type Leaf) -or (Test-Path (Join-Path $RepositoryModuleRoot "$RepositoryRoot.psd1") -Type Leaf)) {
+            if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = Join-Path $RepositoryModuleRoot $RepositoryRoot }
             if(!(Test-Path $RepositoryRoot -Type Leaf)) { $RepositoryRoot = "$RepositoryRoot.psd1" }
 
             Write-Verbose "File Repository $RepositoryRoot"
