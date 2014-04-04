@@ -429,7 +429,7 @@ function Get-LocalStoragePath {
    #   Appends Company\Module to the LocalApplicationData, and ensures that the folder exists.
    param(
       # The name of the module you want to access storage for (defaults to SplunkStanzaName)
-      [Parameter(Position=0)]
+      [Parameter(Position=0, Mandatory=$true)]
       [ValidateScript({ 
          $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
          if($invalid -eq -1){ 
@@ -438,9 +438,9 @@ function Get-LocalStoragePath {
             throw "Invalid character in Module Name '$_' at $invalid"
          }
       })]         
-      [string]$Module = $SplunkStanzaName,
+      [string]$Module,
 
-      # The name of a "company" to use in the storage path (defaults to "PowerShell Package Manager")
+      # The name of a "company" to use in the storage path (defaults to "PoshCode")
       [Parameter(Position=1)]
       [ValidateScript({ 
          $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
@@ -450,7 +450,7 @@ function Get-LocalStoragePath {
             throw "Invalid character in Company Name '$_' at $invalid"
          }
       })]         
-      [string]$Company = "PowerShell Package Manager"      
+      [string]$Company = "PoshCode"
 
    )
    end {

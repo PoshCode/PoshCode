@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-16"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Configuration>
   <ViewDefinitions>
     <View>
@@ -25,7 +25,7 @@
             <Width>12</Width>
           </TableColumnHeader>          
           <TableColumnHeader>
-            <Label>PackageInfoUri</Label>
+            <Label>Url</Label>
           </TableColumnHeader>
         </TableHeaders>
         <TableRowEntries>
@@ -47,7 +47,9 @@
                 <PropertyName>Author</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>PackageInfoUri</PropertyName>
+                 <ScriptBlock>
+                    if($_.DownloadUrl) { $_.DownloadUrl } else {$_.PackageInfoUrl}
+                 </ScriptBlock>
               </TableColumnItem>
             </TableColumnItems>
           </TableRowEntry>

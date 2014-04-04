@@ -142,10 +142,12 @@ function Import-AtomFeed {
 
         [int]$Count,
 
-        [Switch]$Sortable
+        [Switch]$Sortable,
+
+        [Hashtable]$AdditionalData = @{}
     )
     process {
-        ConvertFrom-AtomFeed -Input (Get-Content $Path -Delimiter ([char]0)) -Count:$Count -Sortable:$Sortable
+        ConvertFrom-AtomFeed -Input (Get-Content $Path -Delimiter ([char]0)) -Count:$Count -Sortable:$Sortable -AdditionalData:$AdditionalData
     }
 }
 
@@ -187,6 +189,7 @@ function ConvertFrom-AtomFeed {
                 'Name'=if($m.title){$m.title.innertext}else{''}
                 'Description'=if($m.summary){$m.summary.innertext}else{''}
                 'DownloadUrl'=if($m.content -and $m.content.src){$m.content.src}else{$null}
+                'PackageType' = if($m.content -and $m.content.type){$m.content.type}else{$null}
 
                 'PackageInfoUrl'= $(if(!$FeedBase) { $m.id } else {
                     # The PackageInfoUrl doesn't exist for NuGet, you have to call GetUpdates():
@@ -196,7 +199,6 @@ function ConvertFrom-AtomFeed {
                 'RequiredModules'=if(!$m.Dependencies) {$null} else {
                     @($m.Dependencies -split '\|' | % { $N,$V,$Null = $_ -split ':'; @{ModuleName=$N; ModuleVersion=$V} })
                 }
-
                 'Version' = $p.Version
                 'ProjectUrl'=$p.ProjectUrl
                 'Copyright'=$p.Copyright

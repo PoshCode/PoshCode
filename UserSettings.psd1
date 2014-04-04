@@ -13,13 +13,14 @@
     UserPath = '{Personal}\WindowsPowerShell\Modules'
   }
   Repositories = @(@{
-    Type = 'FileSystem'
-    Root = 'PoshCodeRegistry'
-    Name = 'Registry'
+    Type = 'File'
+    Root = 'https://github.com/psget/psget/raw/master/Directory.xml'
+    Name = 'PSGet'
+    CacheTimeSeconds = 900
   },@{
-    Type = 'FileSystem'
+    Type = 'Folder'
     Root = '\\PoshCode.org\DavWWWRoot\Modules'
-    Name = 'PoshCode.org'
+    Name = 'PoshCode'
   },@{
     Type = 'GitHub'
     Root = 'https://api.github.com/search/code'

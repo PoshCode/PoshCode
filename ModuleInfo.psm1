@@ -863,4 +863,83 @@ function ConvertToHashtable {
     }
 }
 
-Export-ModuleMember -Function Get-ModuleInfo, Set-ModuleInfo
+function ConvertTo-PSModuleInfo {
+    #.Synopsis
+    #  Internal function for objectifying ModuleInfo data (and RequiredModule values)
+    [CmdletBinding(DefaultParameterSetName="Hashtable")]
+    param(
+        [Parameter(ValueFromPipeline=$true, Position=0, Mandatory=$true)]
+        $ModuleInfo,
+
+        # Convert a top-level hashtable to an object before outputting it
+        [Parameter(ParameterSetName="AsObject", Mandatory=$true)]
+        [switch]$AsObject,
+
+        [Parameter(ParameterSetName="AsObject")]
+        [string[]]$PSTypeNames = $("System.Management.Automation.PSModuleInfo", "PoshCode.ModuleInfo.PSModuleInfo")
+    )
+    process {
+        $ModuleInfo = $ModuleInfo | & { param([Parameter(ValueFromPipeline=$true)]$ModuleInfo)
+            process {
+                Write-Verbose ">> Adding Simple Names"
+
+                if($ModuleInfo -is [Hashtable]) {
+                    foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
+                        if($rm.ModuleName -and !$rm.Name) {
+                            $rm.Name = $rm.ModuleName
+                        }
+                        if($rm.ModuleVersion -and !$rm.Version) {
+                            $rm.Version = $rm.ModuleVersion
+                        }
+                        if($rm.RootModule -and !$rm.ModuleToProcess) {
+                            $rm.ModuleToProcess = $rm.RootModule
+                        }
+                    }
+                } else {
+                    foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
+                        if($rm.ModuleName -and !$rm.Name) {
+                            Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
+                        }
+                        if($rm.ModuleVersion -and !$rm.Version) {
+                            Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
+                        }
+                        if($rm.RootModule -and !$rm.ModuleToProcess) {
+                            Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -ErrorAction SilentlyContinue
+                        }
+                    }
+                }
+                $ModuleInfo
+            }
+        }
+
+        if($AsObject -and ($ModuleInfo -is [Collections.IDictionary])) {
+            if($ModuleInfo.RequiredModules) {
+                $ModuleInfo.RequiredModules = @(foreach($Module in @($ModuleInfo.RequiredModules)) {
+                    if($Module -is [String]) { $Module = @{ModuleName=$Module} }
+
+                    if($Module -is [Hashtable] -and $Module.Count -gt 0) {
+                        Write-Debug ($Module | Format-List * | Out-String)
+                        New-Object PSObject -Property $Module | % {
+                            $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                            $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                            $_
+                        }
+                    } else {
+                        $Module
+                    }
+                })
+            }
+
+            foreach($mi in New-Object PSObject -Property $ModuleInfo){
+                foreach($type in $PSTypeNames) {
+                    $mi.PSTypeNames.Insert(0,$type)
+                }
+                $mi
+            }
+        } else {
+            $ModuleInfo
+        }
+    }
+}
+
+Export-ModuleMember -Function Get-ModuleInfo, Set-ModuleInfo, ConvertTo-PSModuleInfo
