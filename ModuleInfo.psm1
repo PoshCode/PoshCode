@@ -243,18 +243,18 @@ function Set-ModuleInfo {
             throw "Couldn't find module $Name"
         }
 
-        if($ModuleVersion -or $Manifest.Version -le "0.0" -or $IncrementVersionNumber) {
-            [Version]$OldVersion = $Manifest.Version
-            if($ModuleVersion) {
-                Write-Debug "Setting Module Version from parameter $ModuleVersion"
-                [Version]$PackageVersion = $ModuleVersion 
-            } elseif($Manifest.Version -gt "0.0") {
-                [Version]$PackageVersion = $Manifest.Version
-            } else {
-                Write-Warning "Module Version not specified properly, incrementing to 1.0"
-                [Version]$OldVersion = [Version]$PackageVersion = "0.0"
-            }
+        if($ModuleVersion) {
+            Write-Debug "Setting Module Version from parameter $ModuleVersion"
+            [Version]$PackageVersion = $ModuleVersion 
+        } elseif($Manifest.Version -gt "0.0") {
+            [Version]$PackageVersion = $Manifest.Version
+        } else {
+            Write-Warning "Module Version not specified properly, incrementing to 1.0"
+            [Version]$OldVersion = [Version]$PackageVersion = "0.0"
+        }
 
+        if($IncrementVersionNumber -or $ModuleVersion -or $Manifest.Version -le "0.0") {
+            [Version]$OldVersion = $Manifest.Version
             if($IncrementVersionNumber -or $PackageVersion -le "0.0") {
                 if($PackageVersion.Revision -ge 0) {
                     $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, $PackageVersion.Build, ($PackageVersion.Revision + 1)
@@ -416,7 +416,12 @@ function Get-ModuleInfo {
       # Without this parameter, Get-ModuleInfo gets only the modules that are both listed in the PSModulePath environment variable, and that are loaded in the current session. 
       [Parameter(ParameterSetName='Available', Mandatory=$true)]
       [switch]
-      ${ListAvailable}
+      ${ListAvailable},
+
+      # Force rereading the module manifest: 
+      # NOTE: this may result in information that's out of sync with an imported module.
+      # It's usually better to re-import the module with -Force
+      [Switch]${Force}
    )
    begin
    {
@@ -429,6 +434,10 @@ function Get-ModuleInfo {
          if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
          {
             $PSBoundParameters['OutBuffer'] = 1
+         }
+
+         if($PSBoundParameters.ContainsKey("Force")) {
+            $null = $PSBoundParameters.Remove("Force") 
          }
 
          if ($PSBoundParameters.TryGetValue('Name', [ref]$moduleName))
@@ -448,7 +457,7 @@ function Get-ModuleInfo {
 
          if($PSBoundParameters['Name'] -ne " ") {
             $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
-            $scriptCmd = {& $wrappedCmd @PSBoundParameters | ImportModuleInfo}
+            $scriptCmd = {& $wrappedCmd @PSBoundParameters | ImportModuleInfo -Force:$Force}
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
          }
@@ -650,16 +659,24 @@ function ImportModuleInfo {
    [CmdletBinding()]
    param(
        [Parameter(ValueFromPipeline=$true)]
-       $ModuleInfo
+       $ModuleInfo,
+       # Forces (re)loading the manifest even for imported modules.
+       # This is useful for when you change the manifest and then call Get-ModuleInfo without re-importing the module.
+       [Switch]$Force
    )
    process {
       Write-Verbose "> Updating ModuleInfo $($ModuleInfo.GetType().Name)"
       # On PowerShell 2, Modules that aren't loaded have little information, and we need to Import-Metadata
       # Modules that aren't loaded have no SessionState. If their path points at a PSD1 file, load that
-      if(($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleManifestExtension) {
+      if($Force -or (($ModuleInfo -is [System.Management.Automation.PSModuleInfo]) -and !$ModuleInfo.SessionState -and [IO.Path]::GetExtension($ModuleInfo.Path) -eq $ModuleManifestExtension)) {
          $ExistingModuleInfo = $ModuleInfo | ConvertToHashtable
          $ExistingModuleInfo.RequiredModules = $ExistingModuleInfo.RequiredModules | ConvertToHashtable Name, Version
-         $ModuleInfo = $ModuleInfo.Path
+
+         if($ExistingModuleInfo.ModuleManifestPath -and (Test-Path $ExistingModuleInfo.ModuleManifestPath)) {
+            $ModuleInfo = $ExistingModuleInfo.Path = $ExistingModuleInfo.ModuleManifestPath
+         } elseif(Test-Path ([IO.Path]::ChangeExtension($ModuleInfo.Path,$ModuleManifestExtension))) {
+            $ModuleInfo = $ExistingModuleInfo.Path = [IO.Path]::ChangeExtension($ModuleInfo.Path,$ModuleManifestExtension)
+         }
       }
 
       if(($ModuleInfo -is [string]) -and (Test-Path $ModuleInfo)) {
@@ -669,15 +686,18 @@ function ImportModuleInfo {
             if(!$ExistingModuleInfo) {
                $ModuleInfo = Import-Metadata $ModuleManifestPath | ConvertTo-PSModuleInfo
             } else {
+               Write-Verbose "ImportModuleInfo merging manually-loaded metadata from $ModuleManifestPath"
                $ModuleInfo = Import-Metadata $ModuleManifestPath | ConvertTo-PSModuleInfo
-               Write-Verbose "ImportModuleInfo merging manually-loaded metadata to existing ModuleInfo:`n$($ExistingModuleInfo | Format-List * | Out-String)"
-               Write-Verbose "Module Manifest ModuleInfo:`n$($ModuleInfo | Format-List * | Out-String)"
+               Write-Debug "Existing ModuleInfo:`n$($ExistingModuleInfo | Format-List * | Out-String)"
+               Write-Debug "Module Manifest ModuleInfo:`n$($ModuleInfo | Format-List * | Out-String)"
                # Because the module wasn't already loaded, we can't trust it's RequiredModules
                if(!$ExistingModuleInfo.RequiredModules -and $ModuleInfo.RequiredModules) {
                   $ExistingModuleInfo.RequiredModules = $ModuleInfo.RequiredModules
                }
-               $ModuleInfo = UpdateDictionary $ExistingModuleInfo $ModuleInfo
-               Write-Verbose "Result of merge:`n$($ModuleInfo | Format-List * | Out-String)"
+               $ModuleInfo = UpdateDictionary $ExistingModuleInfo $ModuleInfo -ForceProperties Version
+               Write-Debug "Result of merge:`n$($ModuleInfo | Format-List * | Out-String)"
+               
+
             }
             $ModuleInfo.Path = $ModuleManifestPath
             $ModuleInfo.ModuleManifestPath = $ModuleManifestPath
@@ -752,12 +772,13 @@ function ImportModuleInfo {
 
 # Internal function to updates dictionaries or ModuleInfo objects with extra metadata
 # This is the guts of ImportModuleInfo and ReadModulePackageInfo
-# It is currently hard-coded to handle the RequiredModules nested array of hashtables
-# But it ought to be extended to handle objects, hashtables, and arrays, with a specified key
+# It is currently hard-coded to handle a nested array of hashtables for RequiredModules 
+# But it ought to be extended to handle objects, hashtables, and arrays, and with a specified key
 function UpdateDictionary {
    param(
       $Authoritative,
-      $Additional
+      $Additional,
+      [string[]]$ForceProperties
    )
    process {
       ## TODO: Rewrite this generically to deal with arrays of hashtables based on a $KeyField parameter
@@ -810,11 +831,11 @@ function UpdateDictionary {
             default {
                ## We only add properties, never replace, so hide errors
                if($Authoritative -is [System.Collections.IDictionary]) {
-                  if(!$Authoritative.Contains($prop.Name)) {
-                     $Authoritative.Add($prop.Name, $prop.Value)
+                  if(!$Authoritative.Contains($prop.Name) -or $ForceProperties -contains $prop.Name) {
+                     $Authoritative.($prop.Name) = $prop.Value
                   }
                } else {
-                  if(!$Authoritative.($prop.Name) -or ($Authoritative.($prop.Name).Count -eq 0)) {
+                  if(!$Authoritative.($prop.Name) -or ($Authoritative.($prop.Name).Count -eq 0) -or $ForceProperties -contains $prop.Name) {
                      Add-Member -in $Authoritative -type NoteProperty -Name $prop.Name -Value $prop.Value -Force -ErrorAction SilentlyContinue
                   }
                }            
