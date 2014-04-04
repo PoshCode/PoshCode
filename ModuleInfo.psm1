@@ -879,65 +879,63 @@ function ConvertTo-PSModuleInfo {
         [string[]]$PSTypeNames = $("System.Management.Automation.PSModuleInfo", "PoshCode.ModuleInfo.PSModuleInfo")
     )
     process {
-        $ModuleInfo = $ModuleInfo | & { param([Parameter(ValueFromPipeline=$true)]$ModuleInfo)
-            process {
-                Write-Verbose ">> Adding Simple Names"
+        foreach($MI in @($ModuleInfo)) {
+            Write-Verbose ">> Adding Simple Names"
 
-                if($ModuleInfo -is [Hashtable]) {
-                    foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
-                        if($rm.ModuleName -and !$rm.Name) {
-                            $rm.Name = $rm.ModuleName
-                        }
-                        if($rm.ModuleVersion -and !$rm.Version) {
-                            $rm.Version = $rm.ModuleVersion
-                        }
-                        if($rm.RootModule -and !$rm.ModuleToProcess) {
-                            $rm.ModuleToProcess = $rm.RootModule
-                        }
+            if($MI -is [Hashtable]) {
+                foreach($rm in @($MI) + @($MI.RequiredModules)) {
+                    if($rm.ModuleName -and !$rm.Name) {
+                        $rm.Name = $rm.ModuleName
                     }
-                } else {
-                    foreach($rm in @($ModuleInfo) + @($ModuleInfo.RequiredModules)) {
-                        if($rm.ModuleName -and !$rm.Name) {
-                            Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
-                        }
-                        if($rm.ModuleVersion -and !$rm.Version) {
-                            Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
-                        }
-                        if($rm.RootModule -and !$rm.ModuleToProcess) {
-                            Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -ErrorAction SilentlyContinue
-                        }
+                    if($rm.ModuleVersion -and !$rm.Version) {
+                        $rm.Version = $rm.ModuleVersion
+                    }
+                    if($rm.RootModule -and !$rm.ModuleToProcess) {
+                        $rm.ModuleToProcess = $rm.RootModule
                     }
                 }
-                $ModuleInfo
-            }
-        }
-
-        if($AsObject -and ($ModuleInfo -is [Collections.IDictionary])) {
-            if($ModuleInfo.RequiredModules) {
-                $ModuleInfo.RequiredModules = @(foreach($Module in @($ModuleInfo.RequiredModules)) {
-                    if($Module -is [String]) { $Module = @{ModuleName=$Module} }
-
-                    if($Module -is [Hashtable] -and $Module.Count -gt 0) {
-                        Write-Debug ($Module | Format-List * | Out-String)
-                        New-Object PSObject -Property $Module | % {
-                            $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
-                            $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
-                            $_
-                        }
-                    } else {
-                        $Module
+            } else {
+                foreach($rm in @($MI) + @($MI.RequiredModules)) {
+                    if($rm.ModuleName -and !$rm.Name) {
+                        Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
                     }
-                })
-            }
-
-            foreach($mi in New-Object PSObject -Property $ModuleInfo){
-                foreach($type in $PSTypeNames) {
-                    $mi.PSTypeNames.Insert(0,$type)
+                    if($rm.ModuleVersion -and !$rm.Version) {
+                        Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
+                    }
+                    if($rm.RootModule -and !$rm.ModuleToProcess) {
+                        Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -ErrorAction SilentlyContinue
+                    }
                 }
-                $mi
             }
-        } else {
-            $ModuleInfo
+        
+
+            if($AsObject -and ($MI -is [Collections.IDictionary])) {
+                if($MI.RequiredModules) {
+                    $MI.RequiredModules = @(foreach($Module in @($MI.RequiredModules)) {
+                        if($Module -is [String]) { $Module = @{ModuleName=$Module} }
+
+                        if($Module -is [Hashtable] -and $Module.Count -gt 0) {
+                            Write-Debug ($Module | Format-List * | Out-String)
+                            New-Object PSObject -Property $Module | % {
+                                $_.PSTypeNames.Insert(0,"System.Management.Automation.PSModuleInfo")
+                                $_.PSTypeNames.Insert(0,"PoshCode.ModuleInfo.PSModuleInfo")
+                                $_
+                            }
+                        } else {
+                            $Module
+                        }
+                    })
+                }
+
+                foreach($output in New-Object PSObject -Property $MI){
+                    foreach($type in $PSTypeNames) {
+                        $output.PSTypeNames.Insert(0,$type)
+                    }
+                    $output
+                }
+            } else {
+                $MI
+            }
         }
     }
 }
