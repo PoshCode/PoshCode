@@ -4,7 +4,7 @@
 ModuleToProcess = 'Packaging.psm1'
 
 # Version number of this module.
-ModuleVersion = '4.0.1.5'
+ModuleVersion = '4.0.1.6'
 
 # ID used to uniquely identify the PoshCode module
 GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'
@@ -60,7 +60,7 @@ FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1', 'Metadata.p
            'ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1',
            'InvokeWeb.psm1', 'UserSettings.psd1',
            # Repository Modules
-           'Repositories\GitHub.psm1', 'Repositories\FileSystem.psm1', 'Repositories\NuGet.psm1', 'Repositories\PoshCodeRegistry.psd1',
+           'Repositories\GitHub.psm1', 'Repositories\Folder.psm1', 'Repositories\NuGet.psm1', 'Repositories\File.psm1',
            # Format and Type Files
            'PoshCode.format.ps1xml', 'PoshCode.types.ps1xml',
            # Docs

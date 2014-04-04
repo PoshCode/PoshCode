@@ -47,7 +47,7 @@
     <Compile Include="PoshCode.types.ps1xml" />
     <Compile Include="README.md" />
     <Compile Include="Repositories\File.psm1" />
-    <Compile Include="Repositories\FileSystem.psm1" />
+    <Compile Include="Repositories\Folder.psm1" />
     <Compile Include="Repositories\GitHub.psm1" />
     <Compile Include="Repositories\NuGet.psm1" />
     <Compile Include="Repositories\PoshCodeRegistry.psd1" />
