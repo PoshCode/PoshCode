@@ -67,7 +67,11 @@ function Compress-Module {
          }
 
          Pop-Location
+      } else {
+        $Module = Get-ModuleInfo $Module.Name
       }
+
+
       Write-Verbose "$($Module  | % { $_.FileList } | Out-String)"
       Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    
 
@@ -91,7 +95,7 @@ function Compress-Module {
       }
       if(Test-Path $OutputPath -ErrorAction Stop) {
          $OutputPackagePath = Join-Path $OutputPath "${PackageName}.${PackageVersion}${ModulePackageExtension}"
-         $OutputPackageInfoPath = Join-Path $OutputPath "${PackageName}${PackageInfoExtension}"
+         $OutputPackageInfoPath = Join-Path $OutputPath "${PackageName}.xml"
       } else {
          throw "Specified OutputPath doesn't exist: $OutputPath"
       }
@@ -207,7 +211,7 @@ function Compress-Module {
             Get-Item $OutputPackagePath
 
             # TODO: once the URLs are mandatory, print the full URL here
-            Write-Host "You should now copy the $PackageInfoExtension and $ModulePackageExtension files to the locations specified by the PackageInfoUrl and DownloadUrl"  
+            Write-Host "You should now copy the .xml version of the packageInfo file and the $ModulePackageExtension package to the locations specified by the PackageInfoUrl and DownloadUrl"  
          }
       }
    }

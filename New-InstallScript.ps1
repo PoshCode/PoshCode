@@ -135,7 +135,7 @@ end {{
       Write-Verbose ("Selected Module Path: " + $PSBoundParameters["InstallPath"])
     }}
 
-    $PSBoundParameters["Package"] = "http://PoshCode.org/Modules/PoshCode.packageInfo"
+    $PSBoundParameters["Package"] = "http://PoshCode.org/Modules/PoshCode.xml"
     Install-Module @PSBoundParameters
 
     # Ditch the temporary module and import the real one
