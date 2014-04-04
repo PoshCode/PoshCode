@@ -507,7 +507,3 @@ function ConvertFrom-Nuspec {
    }
 }
 
-# Export-ModuleMember -Function Export-AtomFeed, ConvertTo-AtomFeed, 
-#                               Import-AtomFeed, ConvertFrom-AtomFeed, 
-#                               Import-Nuspec, ConvertFrom-Nuspec
-

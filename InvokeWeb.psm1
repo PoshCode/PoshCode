@@ -16,6 +16,8 @@ if(!$PoshCodeModuleRoot) {
 . $PoshCodeModuleRoot\Constants.ps1
 # FULL # END FULL
 
+Add-Type -AssemblyName "System.Web"
+
 function Format-Dictionary {
     param(
         [Parameter(Mandatory=$true)][ValidateNotNull()]

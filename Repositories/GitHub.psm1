@@ -1,4 +1,13 @@
-﻿add-type -AssemblyName system.runtime.serialization
+﻿$PoshCodeModuleRoot = Get-Variable PSScriptRoot -ErrorAction SilentlyContinue | ForEach-Object { Split-Path $_.Value -Parent }
+if(!$PoshCodeModuleRoot) {
+  $PoshCodeModuleRoot = Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent
+}
+
+if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
+  Import-Module $PoshCodeModuleRoot\InvokeWeb
+}
+
+add-type -AssemblyName system.runtime.serialization
 if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) { 
 
    function FindModule {
