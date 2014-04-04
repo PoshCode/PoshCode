@@ -225,18 +225,6 @@ function Set-ModuleInfo {
 
         if(Test-Path $Path) {
             $Manifest = ImportModuleInfo $Path
-
-            ### NOTE: this is here to preserve "extra" metadata to the moduleInfo file
-            #$ErrorActionPreference = "SilentlyContinue"
-            #$PInfoPath = [IO.Path]::ChangeExtension($Path, $PackageInfoExtension)
-            #if(Test-Path $PInfoPath) {
-            #    $Info = Import-AtomFeed $PInfoPath -Count 1
-            #    # I want to bring in any extra keys EXCEPT "Name" and "Version"
-            #    $Keys = $Info.Keys -notmatch '^(?:Name|Version)$'
-            #    Write-Debug "Adding $($Keys -join ',')"
-            #    $PoshCodeProperties = ($PoshCodeProperties + $Keys) | Select -Unique
-            #}
-            #$ErrorActionPreference = "Stop"
         } else {
             Write-Warning "No Manifest file: $Path"
 
@@ -255,32 +243,42 @@ function Set-ModuleInfo {
             throw "Couldn't find module $Name"
         }
 
-        if($ModuleVersion) {
-            Write-Debug "Setting Module Version from parameter $ModuleVersion"
-            [Version]$PackageVersion = $ModuleVersion 
-        } elseif($Manifest.Version -gt "0.0") {
-            [Version]$PackageVersion = $Manifest.Version
-        } else {
-            Write-Warning "Module Version not specified properly, using 1.0"
-            [Version]$PackageVersion = "1.0"
+        if($ModuleVersion -or $Manifest.Version -le "0.0" -or $IncrementVersionNumber) {
+            [Version]$OldVersion = $Manifest.Version
+            if($ModuleVersion) {
+                Write-Debug "Setting Module Version from parameter $ModuleVersion"
+                [Version]$PackageVersion = $ModuleVersion 
+            } elseif($Manifest.Version -gt "0.0") {
+                [Version]$PackageVersion = $Manifest.Version
+            } else {
+                Write-Warning "Module Version not specified properly, incrementing to 1.0"
+                [Version]$OldVersion = [Version]$PackageVersion = "0.0"
+            }
+
+            if($IncrementVersionNumber -or $PackageVersion -le "0.0") {
+                if($PackageVersion.Revision -ge 0) {
+                    $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, $PackageVersion.Build, ($PackageVersion.Revision + 1)
+                } elseif($PackageVersion.Build -ge 0) {
+                    $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, ($PackageVersion.Build + 1)
+                } elseif($PackageVersion.Minor -ge 0) {
+                    $PackageVersion = New-Object Version $PackageVersion.Major, ($PackageVersion.Minor + 1)
+                } else {
+                    $PackageVersion = New-Object Version ($PackageVersion.Major + 1), 0
+                }
+
+                # Fix Urls
+
+                $OldNameRegex = "${Name}\." + [regex]::escape($OldVersion) + "(?:\.0){0,2}"
+                $NewName = "${Name}.${PackageVersion}"
+                if($Manifest.DownloadUrl -and !$DownloadUrl) {
+                    $PSBoundParameters["DownloadUrl"] = $Manifest.DownloadUrl -replace $OldRegex, $NewName
+                }
+                if($Manifest.PackageInfoUrl -and !$PackageInfoUrl) {
+                    $PSBoundParameters["PackageInfoUrl"] = $Manifest.PackageInfoUrl -replace $OldRegex, $NewName
+                }
+            }
         }
 
-        if($AutoIncrementBuildNumber) {
-            $PackageVersion.Build = $PackageVersion.Build + 1
-        }
-
-        ## TODO: Increment the version number in the psd1 file(s) when asked
-        if($IncrementVersionNumber) {
-          if($PackageVersion.Revision -ge 0) {
-            $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, $PackageVersion.Build, ($PackageVersion.Revision + 1)
-          } elseif($PackageVersion.Build -ge 0) {
-            $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, ($PackageVersion.Build + 1)
-          } elseif($PackageVersion.Minor -ge 0) {
-            $PackageVersion = New-Object Version $PackageVersion.Major, ($PackageVersion.Minor + 1)
-          } else {
-            $PackageVersion = New-Object Version ($PackageVersion.Major + 1), 0
-          }
-        }
 
         # TODO: Figure out a way to get rid of one of these throughout PoshCode stuff
         $PSBoundParameters["ModuleVersion"] = $PackageVersion

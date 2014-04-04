@@ -37,6 +37,9 @@ function Compress-Module {
       [ValidateScript({if($_ -is [array]) { throw "Compress-Module can only handle one module at a time. If you want to compress more than one, please pipe them in (see examples in help)."} else { return $true }})]
       $Module,
       
+      # If set, Compress-Module will first call Set-ModuleInfo with -IncrementVersionNumber to bump all the version numbers
+      [switch]$IncrementVersionNumber,
+      
       # The folder where packages should be placed (defaults to the current FileSystem working directory)
       [Parameter()]
       [string]$OutputPath = $(Get-Location -PSProvider FileSystem),
@@ -112,9 +115,15 @@ function Compress-Module {
             $NuSpecPath = Join-Path (Split-Path $Module.Path) ($PackageName + $NuSpecManifestExtension)
             $ModuleInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $ModuleManifestExtension)
 
-            if(!(Test-Path $packageInfoPath) -or !(Test-Path $NuSpecPath) -or !(Test-Path $ModuleInfoPath))
+            if($IncrementVersionNumber) 
             {
-               Set-ModuleInfo $PackageName -NewOnly -PassThru | % { Write-Warning "Generated $($_.Name) in $PackageName" }
+                Write-Verbose "Calling Set-ModuleInfo to increment the module version"
+                Set-ModuleInfo $PackageName -IncrementVersionNumber
+            } 
+            elseif(!(Test-Path $packageInfoPath) -or !(Test-Path $NuSpecPath) -or !(Test-Path $ModuleInfoPath))
+            {
+                Write-Verbose "Calling Set-ModuleInfo to generate missing manifest(s)"
+                Set-ModuleInfo $PackageName -NewOnly -PassThru | % { Write-Warning "Generated $($_.Name) in $PackageName" }
             } 
             
             Copy-Item $packageInfoPath $OutputPackageInfoPath -ErrorVariable CantWrite
