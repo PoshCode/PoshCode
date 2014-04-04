@@ -82,14 +82,14 @@ function Compress-Module {
         if($IncrementVersionNumber) 
         {
             Write-Verbose "Calling Set-ModuleInfo to increment the module version"
-            Set-ModuleInfo $Module -IncrementVersionNumber
-            $Module = Get-ModuleInfo $Module.Name -Force
+            Set-ModuleInfo $PackageName -IncrementVersionNumber
+            $Module = Get-ModuleInfo $PackageName -Force
         } 
         elseif(!(Test-Path $packageInfoPath) -or !(Test-Path $NuSpecPath) -or !(Test-Path $ModuleInfoPath))
         {
             Write-Verbose "Calling Set-ModuleInfo to generate missing manifest(s)"
-            Set-ModuleInfo $Module -NewOnly -PassThru | % { Write-Warning "Generated $($_.Name) in $PackageName" }
-            $Module = Get-ModuleInfo $Module.Name -Force
+            Set-ModuleInfo $PackageName -NewOnly -PassThru | % { Write-Warning "Generated $($_.Name) in $PackageName" }
+            $Module = Get-ModuleInfo $PackageName -Force
         } 
 
 
