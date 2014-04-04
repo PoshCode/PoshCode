@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
   <id>http://poshcode.org/Modules/PoshCode.xml</id>
   <title type="text">Module Updates</title>
-  <updated>2014-04-04T21:19:29.2648314Z</updated>
+  <updated>2014-04-04T22:08:23.6878205Z</updated>
   <entry>
     <id>http://poshcode.org/Modules/PoshCode.xml</id>
     <title type="text">PoshCode</title>
@@ -12,7 +12,7 @@
     </author>
     <content type="application/zip" src="http://poshcode.org/Modules/PoshCode.4.0.1.6.nupkg" />
     <m:properties>
-      <d:Version>4.0.1.7</d:Version>
+      <d:Version>4.0.1.8</d:Version>
       <!-- These are RECOMMENDED: -->
       <d:Copyright>Copyright (c) 2013 by Joel Bennett, all rights reserved.</d:Copyright>
       <d:ProjectUrl>https://github.com/PoshCode/poshcode</d:ProjectUrl>
