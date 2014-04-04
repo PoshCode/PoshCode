@@ -18,7 +18,7 @@
       <d:ProjectUrl>https://github.com/PoshCode/poshcode</d:ProjectUrl>
       <d:RequireLicenseAcceptance m:type="Edm.Boolean">false</d:RequireLicenseAcceptance>
       <d:LicenseUrl>http://opensource.org/licenses/ms-pl</d:LicenseUrl>
-      <d:Tags>PoshCode Packaging NuGet PSGet</d:Tags>
+      <d:Tags>PoshCode Packaging NuGet PowerShell Module</d:Tags>
       <d:IsPrerelease m:type="Edm.Boolean">false</d:IsPrerelease>
     </m:properties>
   </entry>

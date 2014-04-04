@@ -10,6 +10,6 @@
     <projectUrl>https://github.com/PoshCode/poshcode</projectUrl>
     <description>PoshCode Module for PowerShell Module Packaging and Script Sharing</description>
     <copyright>Copyright (c) 2013 by Joel Bennett, all rights reserved.</copyright>
-    <tags>PoshCode Packaging NuGet PSGet</tags>
+    <tags>PoshCode Packaging NuGet PowerShell Module</tags>
   </metadata>
 </package>

@@ -17,6 +17,9 @@ if(!$PoshCodeModuleRoot) {
 # We're not using Requires because it just gets in the way on PSv2
 #!Requires -Version 2 -Modules "Configuration", "Metadata"
 #!Requires -Version 2 -Modules "ModuleInfo"
+Import-Module $PoshCodeModuleRoot\Atom.psm1
+Import-Module $PoshCodeModuleRoot\Configuration.psm1
+Import-Module $PoshCodeModuleRoot\Metadata.psm1
 
 
 if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
@@ -197,7 +200,7 @@ function Update-Module {
 # TODO: Validate Output is a valid module: Specifically check folder name = module manifest name
 function Expand-ZipFile {
    #.Synopsis
-   #   Expand a zip file, ensuring it's contents go to a single folder ...
+   #   Expand a zip file, ensuring it's contents go into a single folder ...
    [CmdletBinding(SupportsShouldProcess=$true)]
    param(
       # The path of the zip file that needs to be extracted
@@ -511,12 +514,21 @@ function Install-Module {
             Write-Debug "AbsolutePath: $FileName"
          }
 
-         $ext = $(if($WebResponse.Content -is [Byte[]]) { $ModulePackageExtension } else { $PackageInfoExtension })
+         $ext = if($WebResponse.Content -isnot [Byte[]]) {
+            $PackageInfoExtension
+         } else {
+            if($WebResponse.Content[0] -eq $pkZipHeader[0] -and $WebResponse.Content[1] -eq $pkZipHeader[1] -and $WebResponse.Content[2] -eq $pkZipHeader[2] -and $WebResponse.Content[3] -eq $pkZipHeader[3]) {
+                $ModulePackageExtension
+            } else { 
+                $PackageInfoExtension
+            }
+         }
 
          if(!$FileName) {
             $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $ext )
          } 
-         elseif(![IO.path]::HasExtension($FileName) -or !($PackageInfoExtension, $ModulePackageExtension -eq [IO.Path]::GetExtension($FileName))) {
+         elseif(![IO.path]::HasExtension($FileName) -or ($ModulePackageExtension, $PackageInfoExtension -eq [IO.Path]::GetExtension($FileName)) -notcontains $True)
+         {
             $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
          }
 

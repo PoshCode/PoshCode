@@ -41,6 +41,13 @@ function FindModule {
             $filters += "indexof(tolower(Id),'$SearchTerm') ge 0"
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
         }
+        if($Tags -and $Tags.Length -gt 0) {
+            foreach($tag in $Tags) {
+                $Tag = $Tag.ToLowerInvariant()
+                $filters += "indexof(tolower(Tags),'$Tag') ge 0"
+                Write-Verbose "Filtering by SearchTerm: $Tag"
+            }
+        }
         if($Author)
         {
             $Author = $Author.ToLowerInvariant()
@@ -77,7 +84,7 @@ function FindModule {
             if($reader) { $reader.Close() }
         }
 
-        ConvertFrom-AtomFeed $Content -AdditionalData @{ Repository = $Root } | % {
+        ConvertFrom-AtomFeed $Content -AdditionalData @{ Repository =  @{ NuGet = $Root } } | % {
 
             $output = New-Object psobject -Property $_
 

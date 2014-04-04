@@ -44,7 +44,9 @@ if(Test-Path $EmptyPath) {
    $EmptyPath = New-Item -Force -ItemType Directory -Path $EmptyPath | Convert-Path
 }
 
-$ModulePackageKeyword = "PSGet"
+$pkZipHeader = [byte[]](80,75,3,4)
+
+[String[]]$ModulePackageKeyword = "PowerShell", "Module"
 $UserAgent = "PoshCode\Packaging Module"
 
 # Our Extensions
@@ -52,6 +54,7 @@ $NuSpecManifestExtension = ".nuspec"
 $PackageInfoExtension    = ".packageInfo"
 $ModuleManifestExtension = ".psd1"
 $ModulePackageExtension  = ".nupkg"
+$ZipFileExtension = ".zip"
 
 $NuGetMagicPaths = "_rels", "package"
 

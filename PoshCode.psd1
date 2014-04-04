@@ -60,7 +60,7 @@ FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1', 'Metadata.p
            'ModuleInfo.psm1', 'Configuration.psm1', 'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 'Repository.psm1',
            'InvokeWeb.psm1', 'UserSettings.psd1',
            # Repository Modules
-           'Repositories\GitHub.psm1', 'Repositories\FileSystem.psm1', 'Repositories\PoshCodeRegistry.psd1',
+           'Repositories\GitHub.psm1', 'Repositories\FileSystem.psm1', 'Repositories\NuGet.psm1', 'Repositories\PoshCodeRegistry.psd1',
            # Format and Type Files
            'PoshCode.format.ps1xml', 'PoshCode.types.ps1xml',
            # Docs

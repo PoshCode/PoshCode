@@ -16,7 +16,6 @@
     Type = 'FileSystem'
     Root = 'PoshCodeRegistry'
     Name = 'Registry'
-    SearchByDefault = $true
   },@{
     Type = 'FileSystem'
     Root = '\\PoshCode.org\DavWWWRoot\Modules'
@@ -28,10 +27,12 @@
     Type = 'NuGet'
     Root = 'https://www.nuget.org/api/v2/Packages'
     Name = 'NuGet'
+    IncludePrerelease = $True
   },@{
     Type = 'NuGet'
     Root = 'https://chocolatey.org/api/v2/Packages'
     Name = 'Chocolatey'
-    IncludePrerelease = $True
+    Tags = 'PowerShell', 'Module'
+    SearchByDefault = $true
   })
 }

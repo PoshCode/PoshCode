@@ -39,7 +39,6 @@
     <Compile Include="InvokeWeb.psm1" />
     <Compile Include="ModuleInfo.psm1" />
     <Compile Include="New-InstallScript.ps1" />
-    <Compile Include="NewModule.psm1" />
     <Compile Include="PoshCode.packageInfo" />
     <Compile Include="Packaging.psm1" />
     <Compile Include="PoshCode.format.ps1xml" />
@@ -47,6 +46,7 @@
     <Compile Include="PoshCode.psd1" />
     <Compile Include="PoshCode.types.ps1xml" />
     <Compile Include="README.md" />
+    <Compile Include="Repositories\File.psm1" />
     <Compile Include="Repositories\FileSystem.psm1" />
     <Compile Include="Repositories\GitHub.psm1" />
     <Compile Include="Repositories\NuGet.psm1" />
