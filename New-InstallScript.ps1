@@ -8,7 +8,7 @@ param(
 
   # If set, increment the PoshCode version
   [Parameter(ParameterSetName="Package")]
-  [Switch]$Increment,
+  [Switch]$IncrementVersionNumber,
 
   # Also generate the PoshCode Package
   [Parameter(ParameterSetName="Package", Mandatory=$true)]
@@ -23,23 +23,6 @@ Import-Module PoshCode\Metadata
 
 
 if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
-
-if(!$Version) {
-  $Version = (Import-Metadata "${PSScriptRoot}\PoshCode.psd1").ModuleVersion
-}
-
-if($Version -le "0.0") { throw "Can't calculate a version!" }
-
-## TODO: Increment the version number in the psd1 file(s) when asked
-if($Increment) {
-  if($Version.Revision -ge 0) {
-    $Version = New-Object Version $Version.Major, $Version.Minor, $Version.Build, ($Version.Revision + 1)
-  } elseif($Version.Build -ge 0) {
-    $Version = New-Object Version $Version.Major, $Version.Minor, ($Version.Build + 1)
-  } elseif($Version.Minor -ge 0) {
-    $Version = New-Object Version $Version.Major, ($Version.Minor + 1)
-  }
-}
 
 # Note: in the install script we strip the export command, as well as the signature if it's there, and anything delimited by BEGIN FULL / END FULL 
 $Constants = (Get-Content $PSScriptRoot\Constants.ps1 -Raw)  -replace "# SIG # Begin signature block(?s:\s.*)" 
@@ -207,11 +190,11 @@ if($Package) {
    (Get-Module PoshCode).FileList | Get-Item | Where { ".psm1",".ps1",".ps1xml",".dll" -contains $_.Extension } | Sign
 
    Write-Host
-   if($PSBoundParameters.ContainsKey("Version") -or $PSBoundParameters.ContainsKey("Increment")) {
+   if($PSBoundParameters.ContainsKey("Version")) {
       Write-Warning "Setting PoshCode version to $Version ..."
       Set-ModuleInfo PoshCode -Version $Version
    }
-   $Files = Get-Module PoshCode | Compress-Module -OutputPath $OutputPath
+   $Files = Compress-Module PoshCode -OutputPath $OutputPath -IncrementVersionNumber:$IncrementVersionNumber
    @(Get-Item $InstallScript) + @($Files) | Out-Default
 
 }

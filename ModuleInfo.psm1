@@ -279,7 +279,6 @@ function Set-ModuleInfo {
             }
         }
 
-
         # TODO: Figure out a way to get rid of one of these throughout PoshCode stuff
         $PSBoundParameters["ModuleVersion"] = $PackageVersion
         $PSBoundParameters["Version"] = $PackageVersion
@@ -342,12 +341,20 @@ function Set-ModuleInfo {
                 $Manifest = Add-Member -InputObject $Manifest -Name $Key -MemberType NoteProperty -Value $PSBoundParameters.$Key -Force -PassThru 
             }
         }
+        ## Warn users about missing URLs
+        if(!$Manifest.DownloadUrl) {
+            Write-Warning "The DownloadUrl property is not set. This package will only work for upgrade if hosted by a nuget server such as Chocolatey.org"
+        } elseif(!$Manifest.PackageInfoUrl) {
+            Write-Warning "The PackageInfoUrl property is not set. This package will require the user to download the full package to check for an upgrade unless it's hosted by a nuget server."
+        }
+
 
         Write-Debug ("Exporting $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
 
         $ModuleManifestPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)
         $PackageInfoPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension)
         $NuSpecPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $NuSpecManifestExtension)
+
 
         if($PSCmdlet.ShouldProcess("Generating module manifest $ModuleManifestPath", "Generate .psd1 ($ModuleManifestPath)?", "Generating module manifest for $($Manifest.Name) v$($Manifest.Version)" )) {
             if($Force -Or !(Test-Path $ModuleManifestPath -ErrorAction SilentlyContinue) -Or (!$NewOnly -and $PSCmdlet.ShouldContinue("The manifest '$ModuleManifestPath' already exists, do you want to wipe and replace it?", "Generating manifest for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo))) {

@@ -220,8 +220,6 @@ function Compress-Module {
             # Write out the FileInfo for the package
             Get-Item $OutputPackagePath
 
-            # TODO: once the URLs are mandatory, print the full URL here
-            Write-Host "You should now copy the .xml version of the packageInfo file and the $ModulePackageExtension package to the locations specified by the PackageInfoUrl and DownloadUrl"  
             }
         }
    }
