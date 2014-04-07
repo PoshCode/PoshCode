@@ -53,9 +53,28 @@ function Compress-Module {
       
         $RejectAllOverwrite = $false;
         $ConfirmAllOverwrite = $false;
+
+        function GetModuleOrElse {
+            param([String]$Name,[Switch]$Force,[Switch]$Verbose,[hashtable]$ListAvailable)
+            if(!$ListAvailable.ListAvailable) {
+                $result = Get-ModuleInfo $Name -Force
+
+                if($result) { 
+                     return $result
+                } 
+            }
+            
+            $result = Get-ModuleInfo $Name -Force:$Force -ListAvailable # | Sort-Object Version -Descending
+            if($result) {
+                $ListAvailable.ListAvailable = $true 
+                return @($result)[0]
+            }
+        }
     }
     process {
         Write-Verbose "Compress-Module $Module to $OutputPath"
+
+        $ListAvailable = @{ListAvailable=$false}
 
         if($Module -isnot [System.Management.Automation.PSModuleInfo]) {
             # Hypothetically, could it be faster to select -first, now that pipelines are interruptable?
@@ -63,47 +82,48 @@ function Compress-Module {
             ## Workaround PowerShell Bug https://connect.microsoft.com/PowerShell/feedback/details/802030
             Push-Location $Script:EmptyPath
             if($PSVersionTable.PSVersion -lt "3.0") {
-                $Module = Import-Module $ModuleName -PassThru | Get-ModuleInfo -Force
+                $ModuleInfo = Import-Module $ModuleName -Global -PassThru | Get-ModuleInfo -Force
             } else {
-                if(!($Module = Get-ModuleInfo $ModuleName -Force)) {
-                    $Module = Get-ModuleInfo $ModuleName -Force -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+                $ModuleInfo = GetModuleOrElse $ModuleName -ListAvailable $ListAvailable 
+                if(!$ModuleInfo) {
+                    $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module not found ($($PsBoundParameters["Module"]))"), "Unexpected Exception", "InvalidResult", $_) )
                 }
             }
-
             Pop-Location
         }
-        $PackageName = $Module.Name
+        $PackageName = $ModuleInfo.Name
 
         # If there's no packageInfo file, we ought *create* one with urls in it -- but we don't know the URLs
-        $packageInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $PackageInfoExtension)
-        $NuSpecPath = Join-Path (Split-Path $Module.Path) ($PackageName + $NuSpecManifestExtension)
-        $ModuleInfoPath = Join-Path (Split-Path $Module.Path) ($PackageName + $ModuleManifestExtension)
+        $packageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) ($PackageName + $PackageInfoExtension)
+        $NuSpecPath = Join-Path (Split-Path $ModuleInfo.Path) ($PackageName + $NuSpecManifestExtension)
+        $ModuleInfoPath = Join-Path (Split-Path $ModuleInfo.Path) ($PackageName + $ModuleManifestExtension)
 
+        Write-Verbose "Calculated paths:`nPackageInfoPath: $packageInfoPath`nNuSpecPath:     $NuSpecPath`nModuleInfoPath:  $ModuleInfoPath"
         if($IncrementVersionNumber) 
         {
             Write-Verbose "Calling Set-ModuleInfo to increment the module version"
             Set-ModuleInfo $PackageName -IncrementVersionNumber
-            $Module = Get-ModuleInfo $PackageName -Force
+            $ModuleInfo = GetModuleOrElse $PackageName -ListAvailable $ListAvailable -Force
         } 
         elseif(!(Test-Path $packageInfoPath) -or !(Test-Path $NuSpecPath) -or !(Test-Path $ModuleInfoPath))
         {
             Write-Verbose "Calling Set-ModuleInfo to generate missing manifest(s)"
             Set-ModuleInfo $PackageName -NewOnly -PassThru | % { Write-Warning "Generated $($_.Name) in $PackageName" }
-            $Module = Get-ModuleInfo $PackageName -Force
+            $ModuleInfo = GetModuleOrElse $PackageName -ListAvailable $ListAvailable -Force
         } 
 
 
-        Write-Verbose "$($Module  | % { $_.FileList } | Out-String)"
-        Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Validating Inputs" -Id 0    
+        Write-Verbose "$($ModuleInfo  | % { $_.FileList } | Out-String)"
+        Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Validating Inputs" -Id 0    
 
         # If the Module.Path isn't a PSD1, then there is none, so we will refuse to package this module
-        if( $Module -isnot [System.Management.Automation.PSModuleInfo] -and [IO.Path]::GetExtension($Module.Path) -ne ".psd1" ) {
+        if( $ModuleInfo -isnot [System.Management.Automation.PSModuleInfo] -and [IO.Path]::GetExtension($ModuleInfo.Path) -ne ".psd1" ) {
             $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (${ModuleManifestExtension}) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
         }
 
         # Our packages are ModuleName.nupkg (for now, $ModulePackageExtension = .nupkg)
-        if($Module.Version -gt "0.0") {
-            $PackageVersion = $Module.Version
+        if($ModuleInfo.Version -gt "0.0") {
+            $PackageVersion = $ModuleInfo.Version
         } else {
             Write-Warning "Module Version not specified properly, using 1.0"
             $PackageVersion = "1.0"
@@ -124,8 +144,8 @@ function Compress-Module {
         Write-Verbose "Package File Path: $OutputPackagePath"
         Write-Verbose "Package Manifest : $OutputPackageInfoPath"
 
-        if($PSCmdlet.ShouldProcess("Package the module '$($Module.ModuleBase)' to '$OutputPackagePath'", "Package '$($Module.ModuleBase)' to '$OutputPackagePath'?", "Packaging $($Module.Name)" )) {
-            if($Force -Or !(Test-Path $OutputPackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$OutputPackagePath' already exists, do you want to replace it?", "Packaging $($Module.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
+        if($PSCmdlet.ShouldProcess("Package the module '$($ModuleInfo.ModuleBase)' to '$OutputPackagePath'", "Package '$($ModuleInfo.ModuleBase)' to '$OutputPackagePath'?", "Packaging $($ModuleInfo.Name)" )) {
+            if($Force -Or !(Test-Path $OutputPackagePath -ErrorAction SilentlyContinue) -Or $PSCmdlet.ShouldContinue("The package '$OutputPackagePath' already exists, do you want to replace it?", "Packaging $($ModuleInfo.ModuleBase)", [ref]$ConfirmAllOverwrite, [ref]$RejectAllOverwrite)) {
             
             Copy-Item $packageInfoPath $OutputPackageInfoPath -ErrorVariable CantWrite
             if($CantWrite) {
@@ -134,16 +154,16 @@ function Compress-Module {
             
             Get-Item $OutputPackageInfoPath
 
-            Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Preparing File List" -Id 0    
+            Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Preparing File List" -Id 0    
             
-            [String[]]$FileList = Get-ChildItem $Module.ModuleBase -Recurse | 
+            [String[]]$FileList = Get-ChildItem $ModuleInfo.ModuleBase -Recurse | 
                 Where-Object {-not $_.PSIsContainer} | 
                 Select-Object -Expand FullName
 
             # Warn about discrepacies between the Module.FileList and actual files
-            $ModuleFileList = @($Module.FileList)
+            $ModuleFileList = @($ModuleInfo.FileList)
             Write-Verbose "`nFILELIST: $FileList  `n`nMODULELIST: $ModuleFileList"
-            # $Module.FileList | Resolve-Path 
+            # $ModuleInfo.FileList | Resolve-Path 
             if($ModuleFileList.Length -gt 0) {
                 foreach($mf in $ModuleFileList){
                     if($FileList -notcontains $mf) {
@@ -170,38 +190,38 @@ function Compress-Module {
                     $FileList += $ModuleInfoPath
                 }
             } else {
-                Write-Warning "FileList not set in module metadata (${ModuleManifestExtension}) file. Packing all files from path: $($Module.ModuleBase)"
+                Write-Warning "FileList not set in module metadata (${ModuleManifestExtension}) file. Packing all files from path: $($ModuleInfo.ModuleBase)"
             }
 
             # Create the package
             $Package = [System.IO.Packaging.Package]::Open( $OutputPackagePath, [IO.FileMode]::Create )
 
             try {
-                Set-PackageProperties $Package $Module
+                Set-PackageProperties $Package $ModuleInfo
 
                 # Now pack up all the files we've found:
                 $Target = $FileList.Count
                 $Count = 0
                 foreach($file in $FileList) {
                     $Count += 1
-                    Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Packing File $Count of $Target" -Id 0 -PercentComplete ((($count-1)/$target)*100)
-                    Add-File $Package $File
+                    Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Packing File $Count of $Target" -Id 0 -PercentComplete ((($count-1)/$target)*100)
+                    AddFile $Package $File $ModuleInfo.ModuleBase
                 }
 
-                if($Module.HelpInfoUri) {
-                    $null = $Package.CreateRelationship( $Module.HelpInfoUri, "External", $ModuleHelpInfoType )
+                if($ModuleInfo.HelpInfoUri) {
+                    $null = $Package.CreateRelationship( $ModuleInfo.HelpInfoUri, "External", $ModuleHelpInfoType )
                 }
-                if($Module.PackageInfoUrl) {
-                    $null = $Package.CreateRelationship( $Module.PackageInfoUrl, "External", $PackageInfoType )
+                if($ModuleInfo.PackageInfoUrl) {
+                    $null = $Package.CreateRelationship( $ModuleInfo.PackageInfoUrl, "External", $PackageInfoType )
                 }
-                if($Module.LicenseUrl) {
-                    $null = $Package.CreateRelationship( $Module.LicenseUrl, "External", $ModuleLicenseType )
+                if($ModuleInfo.LicenseUrl) {
+                    $null = $Package.CreateRelationship( $ModuleInfo.LicenseUrl, "External", $ModuleLicenseType )
                 }
-                if($Module.DownloadUrl) {
-                    $null = $Package.CreateRelationship( $Module.DownloadUrl, "External", $PackageDownloadType )
+                if($ModuleInfo.DownloadUrl) {
+                    $null = $Package.CreateRelationship( $ModuleInfo.DownloadUrl, "External", $PackageDownloadType )
                 }
-                if($Module.ProjectUrl) {
-                    $null = $Package.CreateRelationship( $Module.ProjectUrl, "External", $ModuleProjectType )
+                if($ModuleInfo.ProjectUrl) {
+                    $null = $Package.CreateRelationship( $ModuleInfo.ProjectUrl, "External", $ModuleProjectType )
                 }
 
                
@@ -210,12 +230,12 @@ function Compress-Module {
                 $PSCmdlet.WriteError( (New-Object System.Management.Automation.ErrorRecord $_.Exception, "Unexpected Exception", "InvalidResult", $_) )
             } finally {
                 if($Package) { 
-                    Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Writing Package" -Id 0            
+                    Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Writing Package" -Id 0            
                     $Package.Close()
                 }
             }
 
-            Write-Progress -Activity "Packaging Module '$($Module.Name)'" -Status "Complete" -Id 0 -Complete
+            Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Complete" -Id 0 -Complete
 
             # Write out the FileInfo for the package
             Get-Item $OutputPackagePath
@@ -225,7 +245,7 @@ function Compress-Module {
    }
 }
 
-function Add-File {
+function AddFile {
    [CmdletBinding(DefaultParameterSetName="FilePath")]
    param(
       [Parameter(Mandatory=$true, Position=1)]
@@ -235,17 +255,24 @@ function Add-File {
       [Alias("PSPath")]
       $Path,
 
+      [Parameter(Mandatory=$true, Position=3)]
+      $ModuleBase = $ModuleInfo.ModuleBase,
+
       [Parameter(ParameterSetName="FakeFile",Mandatory=$true)]
       $Content
    )
    begin {
-      $ModuleRootRex = [regex]::Escape($Module.ModuleBase)
+      $ModuleRootRex = $([regex]::Escape($ModuleBase))
       $PackageName = $Package.PackageProperties.Title
       $MetadataName = "${PackageName}${ModuleManifestExtension}"
    }
    process {
       $FileRelativePath = $Path -replace $ModuleRootRex, ""
-      $FileUri = [System.IO.Packaging.PackUriHelper]::CreatePartUri( $FileRelativePath )
+      try {
+        $FileUri = [System.IO.Packaging.PackUriHelper]::CreatePartUri( $FileRelativePath )
+      } catch {
+          $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.FileNotFoundException "Can't create Part URI '${Path}' relative to '$ModuleBase'"), "Unexpected Exception", "InvalidResult", $_) )
+      }
 
       Write-Verbose "Packing $Path to ${PackageName}$ModulePackageExtension::$FileUri"
 
@@ -349,7 +376,7 @@ function Set-PackageProperties {
        Write-Debug $($ModuleInfo | Format-List * | Out-String)
        Export-Nuspec $NuSpecF -InputObject $ModuleInfo
     } else {
-       Add-File $Package ($ModuleInfo.Name + $NuSpecManifestExtension) -Content ($ModuleInfo | ConvertTo-Nuspec)
+       AddFile -Package $Package -Path ($ModuleInfo.Name + $NuSpecManifestExtension) -ModuleBase $ModuleInfo.ModuleBase -Content ($ModuleInfo | ConvertTo-Nuspec)
     }
 
     ## NuGet does the WRONG thing here, assuming the package name is unique

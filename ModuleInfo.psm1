@@ -204,9 +204,9 @@ function Set-ModuleInfo {
     }
     end {
         $ErrorActionPreference = "Stop"
-        $Manifest = Get-ModuleInfo $Name | Select-Object *
+        $Manifest = Get-ModuleInfo $Name | Select-Object * -First 1
         if(!$Manifest) {
-            $Manifest = Get-ModuleInfo $Name -ListAvailable | Select-Object *
+            $Manifest = Get-ModuleInfo $Name -ListAvailable | Select-Object * -First 1
         }
 
         $Path = "$($Manifest.ModuleManifestPath)"
@@ -214,22 +214,23 @@ function Set-ModuleInfo {
             Write-Debug "Manifest file not found: $Path"
             $Path = "$($Manifest.Path)"
             if(!$Path.EndsWith($ModuleManifestExtension) -or !(Test-Path $Path)){ 
-                Write-Debug "Manifest file not found: $Path"
-                $Path = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $ModuleManifestExtension)
+                Write-Debug "Not a manifest file: $Path"
+                $Path = Join-Path $Manifest.ModuleBase ($Path + $ModuleManifestExtension)
                 if(!(Test-Path $Path)){ 
-                     Write-WarningDebug "Manifest file not found: $Path"
+                     Write-Debug "Manifest file not found: $Path"
                      $Path = [IO.Path]::ChangeExtension($Manifest.Path, $ModuleManifestExtension)
                 }
             }
         }
-
         if(Test-Path $Path) {
+            Write-Debug "ImportModuleInfo. Manifest: $Path"
+
             $Manifest = ImportModuleInfo $Path
         } else {
             Write-Warning "No Manifest file: $Path"
 
             # When loading a module without an existing manifest, punt
-            $ModuleManifestProperties = @('Copyright')
+            $ModuleManifestProperties = @('Copyright', 'ModuleToProcess','ModuleVersion')
         }
 
         Write-Debug ("Loaded $Name " + (($Manifest | Format-List * | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n"))
@@ -260,7 +261,7 @@ function Set-ModuleInfo {
                     $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, $PackageVersion.Build, ($PackageVersion.Revision + 1)
                 } elseif($PackageVersion.Build -ge 0) {
                     $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, ($PackageVersion.Build + 1)
-                } elseif($PackageVersion.Minor -ge 0) {
+                } elseif($PackageVersion.Minor -gt 0) {
                     $PackageVersion = New-Object Version $PackageVersion.Major, ($PackageVersion.Minor + 1)
                 } else {
                     $PackageVersion = New-Object Version ($PackageVersion.Major + 1), 0
@@ -355,6 +356,7 @@ function Set-ModuleInfo {
         $PackageInfoPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $PackageInfoExtension)
         $NuSpecPath = Join-Path $Manifest.ModuleBase ($($Manifest.Name) + $NuSpecManifestExtension)
 
+        Write-Verbose "Calculated paths:`nPackageInfoPath: $packageInfoPath`nNuSpecPath:     $NuSpecPath`nModuleManifest:  $ModuleManifestPath"
 
         if($PSCmdlet.ShouldProcess("Generating module manifest $ModuleManifestPath", "Generate .psd1 ($ModuleManifestPath)?", "Generating module manifest for $($Manifest.Name) v$($Manifest.Version)" )) {
             if($Force -Or !(Test-Path $ModuleManifestPath -ErrorAction SilentlyContinue) -Or (!$NewOnly -and $PSCmdlet.ShouldContinue("The manifest '$ModuleManifestPath' already exists, do you want to wipe and replace it?", "Generating manifest for $($Manifest.Name) v$($Manifest.Version)", [ref]$ConfirmAllOverwriteOnModuleInfo, [ref]$RejectAllOverwriteOnModuleInfo))) {
@@ -436,7 +438,7 @@ function Get-ModuleInfo {
       ## BUG: if Get-Module is working, but the pipeline somehow stops, the Push-Location in the end block never happens!
       # Push-Location $Script:EmptyPath
 
-      try {
+      #try {
          $moduleName = $outBuffer = $null
          if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
          {
@@ -460,22 +462,23 @@ function Get-ModuleInfo {
             $PSBoundParameters['Name'] = "*"
          }
 
-         Write-Verbose "Get-Module $($moduleName -join ', ')"
+         $Fake = $(foreach($key in $PSBoundParameters.Keys) { "-${key} $($PSBoundParameters.$key -join ',')" }) -join ' '
+         Write-Verbose "Get-Module $Fake"
 
-         if($PSBoundParameters['Name'] -ne " ") {
+         if(![string]::IsNullOrWhiteSpace($PSBoundParameters['Name'])) {
             $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
             $scriptCmd = {& $wrappedCmd @PSBoundParameters | ImportModuleInfo -Force:$Force}
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
          }
-      } catch {
-         throw
-      }
+      #} catch {
+      #   $PSCmdlet.ThrowTerminatingError( $_ )
+      #}
    }
 
    process
    {
-      try {
+      #try {
          if ($PSBoundParameters.TryGetValue('Name', [ref]$moduleName))
          {
             $PSBoundParameters['Name'] = $moduleName | Where-Object { !$_.EndsWith($ModulePackageExtension) }
@@ -485,21 +488,21 @@ function Get-ModuleInfo {
          if($steppablePipeline -and $PSBoundParameters['Name'] -ne " ") {
             $steppablePipeline.Process($_)
          }
-      } catch {
-         throw
-      }
+      #} catch {
+      #   $PSCmdlet.ThrowTerminatingError( $_ )
+      #}
    }
 
    end
    {
       # Pop-Location
-      try {
+      #try {
          if($steppablePipeline -and $PSBoundParameters['Name'] -ne " ") {
             $steppablePipeline.End()
          }
-      } catch {
-         throw
-      }
+      #} catch {
+      #   $PSCmdlet.ThrowTerminatingError( $_ )
+      #}
    }
 }
 

@@ -5,6 +5,10 @@ if(!$PoshCodeModuleRoot) {
 }
 
 . $PoshCodeModuleRoot\Constants.ps1
+
+if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
+  Import-Module $PoshCodeModuleRoot\InvokeWeb
+}
 # FULL # END FULL
 
 
