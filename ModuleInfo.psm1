@@ -269,13 +269,13 @@ function Set-ModuleInfo {
 
                 # Fix Urls
 
-                $OldNameRegex = "${Name}\." + [regex]::escape($OldVersion) + "(?:\.0){0,2}"
+                $OldNameRegex = [regex]::escape($Name) + "(?:\.\d+){2,4}"
                 $NewName = "${Name}.${PackageVersion}"
                 if($Manifest.DownloadUrl -and !$DownloadUrl) {
-                    $PSBoundParameters["DownloadUrl"] = $Manifest.DownloadUrl -replace $OldRegex, $NewName
+                    $PSBoundParameters["DownloadUrl"] = $Manifest.DownloadUrl -replace $OldNameRegex, $NewName
                 }
                 if($Manifest.PackageInfoUrl -and !$PackageInfoUrl) {
-                    $PSBoundParameters["PackageInfoUrl"] = $Manifest.PackageInfoUrl -replace $OldRegex, $NewName
+                    $PSBoundParameters["PackageInfoUrl"] = $Manifest.PackageInfoUrl -replace $OldNameRegex, $NewName
                 }
             }
         }
