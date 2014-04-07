@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>PoshCode</id>
-    <version>4.0.1.8</version>
+    <version>4.0.1.9</version>
     <authors>Joel "Jaykul" Bennett &lt;Jaykul@HuddledMasses.org&gt;</authors>
     <owners>http://HuddledMasses.org</owners>
     <licenseUrl>http://opensource.org/licenses/ms-pl</licenseUrl>
