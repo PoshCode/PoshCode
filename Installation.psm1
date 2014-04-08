@@ -169,7 +169,7 @@ function Update-Module {
          }
    
          # If we need to update ...
-         if(!$ListAvailable -and ($M.Update -gt $M.ModuleVersion)) {
+         if(!$ListAvailable -and ($M.Update -gt $M.ModuleVersion -or $Force)) {
    
             if($PSCmdlet.ShouldProcess("Upgrading the module '$($M.Name)' from version $($M.Version) to $($M.Update)", "Update '$($M.Name)' from version $($M.Version) to $($M.Update)?", "Updating $($M.Name)" )) {
                if(!$InstallPath) {
