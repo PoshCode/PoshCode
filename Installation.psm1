@@ -107,6 +107,7 @@ function Update-Module {
    
          ## Download the PackageInfoUrl and see what version we got...
          $WebParam = @{Uri = $M.PackageInfoUrl}
+         Write-Verbose "Checking for new version of $($M.Name), fetching $($M.PackageInfoUrl)"
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
             $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebError -ErrorAction SilentlyContinue
@@ -154,7 +155,7 @@ function Update-Module {
          # Now lets find out what the latest version is:
          $Mi = ConvertFrom-AtomFeed $content -Count 1
    
-         $M.Update = [Version]$Mi.ModuleVersion
+         $M.Update = [Version]$Mi.Version
          Write-Verbose "Current version of $($M.Name) is $($M.Update), you have $($M.Version)"
    
          # They're going to want to install it where it already is:
