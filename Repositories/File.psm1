@@ -64,7 +64,7 @@ function FindModule {
             Write-Verbose "Using cached feed of $root"
         }
         Write-Verbose "Read Feed from $CachePath"
-        $content = Import-AtomFeed $CachePath -AdditionalData @{ Repository = @{ File = $Root } }
+        $content = Import-AtomFeed $CachePath
     }
     
     process {
@@ -81,7 +81,7 @@ function FindModule {
         {
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
             # Where does nuget search? Name, Tags, Description?
-            $content = $content | Where-Object { $_.name -match $Name}
+            $content = $content | Where-Object { $_.name -match $SearchTerm -or $_.Description -match $SearchTerm -or $_.Author -match $SearchTerm -or $_.Tags -eq $SearchTerm}
         }
         if($Author)
         {

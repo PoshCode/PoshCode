@@ -911,7 +911,7 @@ function ConvertTo-PSModuleInfo {
     )
     process {
         foreach($MI in @($ModuleInfo)) {
-            if($AddonInfo) { $MI = UpdateDictionary $MI $AddonInfo }
+            if($AddonInfo) { $MI = UpdateDictionary $MI $AddonInfo -ForceProperties $AddonInfo.Keys}
 
             Write-Verbose ">> Adding Simple Names"
 

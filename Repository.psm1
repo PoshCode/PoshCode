@@ -112,9 +112,9 @@ function Find-Module {
         # Write-Verbose ($ConfiguredRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
         foreach($Name in $SelectedRepositories.Keys) {
             $Repo = $SelectedRepositories.$Name
-            $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
-
             Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
+
+            $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
 
             # We help out by mapping anything in the settings to their parameters
             foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
@@ -135,7 +135,7 @@ function Find-Module {
                     } else {
                         &$Command @PSBoundParameters
                     }) | ConvertTo-PSModuleInfo -AddonInfo @{ 
-                            ModuleType = "SearchResult"
+                            ModuleType = "SearchResult"  # As opposed to "Script" or "Binary" or "Manifest" (I think "CDXML" modules stay as "Manifest" modules after importing)
                             Repository = @{ $Name = $Repo }
                          } -PSTypeNames ("PoshCode.ModuleInfo", "PoshCode.Search.ModuleInfo", "PoshCode.Search.${Name}.ModuleInfo") -AsObject
                 }

@@ -87,7 +87,7 @@ function FindModule {
             if($reader) { $reader.Close() }
         }
 
-        ConvertFrom-AtomFeed $Content -AdditionalData @{ Repository =  @{ NuGet = $Root } }
+        ConvertFrom-AtomFeed $Content
     }
 }
 

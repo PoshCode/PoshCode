@@ -305,7 +305,6 @@ function Set-ConfigData {
           }
         }
       }
-      $Repo
     }
 
 
