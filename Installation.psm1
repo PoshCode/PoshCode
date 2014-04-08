@@ -364,13 +364,23 @@ function Install-Module {
    param(
       # The package file to be installed
       [Parameter(ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
-      [Alias("PSPath","PackagePath","PackageInfoUrl","DownloadUrl")]
+      [Alias("PSPath","PackagePath","PackageInfoUrl","DownloadUrl", "ModuleName", "Name")]
       $Package,
-   
       # A custom path to install the module to
       [Parameter(ParameterSetName="InstallPath", Mandatory=$true, Position=1)]
       [Alias("PSModulePath")]
       $InstallPath,
+
+      # A specific version of the module to find
+      [Parameter(ValueFromPipelineByPropertyName=$true)]
+      [Alias("ModuleVersion", "Version")]
+      [string]$RequiredVersion,
+   
+      # The repository to search in for dependencies
+      # This is not normally passed on the command-line, but is populated when the results of Find-Module are piped in
+      [Parameter(ValueFromPipelineByPropertyName=$true)]
+      [Alias("Repository")]
+      $SearchRepository,
 
       # When installing modules from .zip archives instead of module packages, the ZipFolder is a subfolder in the zip which contains the module. Only files within this folder will be unpacked.
       [Parameter(ValueFromPipelineByPropertyName=$true)]
@@ -421,7 +431,7 @@ function Install-Module {
       #  Pass specific credentials to the Proxy
       [System.Management.Automation.PSCredential]
       [System.Management.Automation.Credential()]
-      $ProxyCredential= [System.Management.Automation.PSCredential]::Empty     
+      $ProxyCredential= [System.Management.Automation.PSCredential]::Empty
    )
    dynamicparam {
       $paramDictionary = new-object System.Management.Automation.RuntimeDefinedParameterDictionary
@@ -437,10 +447,16 @@ function Install-Module {
    }  
    begin {
       if($PSCmdlet.ParameterSetName -ne "InstallPath") {
-         $Config = Get-ConfigData
          switch($PSCmdlet.ParameterSetName){
             "InstallPath" {}
-            default { $InstallPath = $Config.InstallPaths.($PSCmdlet.ParameterSetName) }
+            default { 
+                try {
+                    $Config = Get-ConfigData
+                    $InstallPath = $Config.InstallPaths.($PSCmdlet.ParameterSetName) 
+                } catch {
+                    Write-Error "Can't load UserSettings.psd1 -- please specify the InstallPath parameter by hand"
+                }
+            }
             # "SystemPath" { $InstallPath = $Config.InstallPaths.SystemPath }
          }
          $null = $PsBoundParameters.Remove(($PSCmdlet.ParameterSetName))
@@ -548,7 +564,14 @@ function Install-Module {
 
       # If the Package is just a module name (and doesn't exist), we can search for it
       if( ($Package.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -eq -1) -and !(Test-Path $Package) ){
-         $SearchResults = Find-Module -Name $Package
+         $FindModule = @{ Name = $Package }
+         if($SearchRepository) {
+            $FindModule.Repository = $SearchRpository
+         }
+         if($RequiredVersion) {
+            $FindModule.Version = $RequiredVersion
+         }
+         $SearchResults = Find-Module @FindModule
          if(@($SearchResults).Count -eq 1) {
             $URI = $(if($SearchResults.DownloadUrl) { $SearchResults.DownloadUrl } else { $SearchResults.PackageInfoUrl })
             if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Module: $($SearchResults.Name)")) {
@@ -660,9 +683,30 @@ function Install-Module {
                continue
             } 
    
-            Write-Warning "The module package does not have a PackageInfoUrl for the required module $($RequiredModule.ModuleName), and there's not a local copy."
-            $FailedModules += $RequiredModule
-            continue
+            Write-Warning "The module package does not have a PackageInfoUrl for the required module $($RequiredModule.Name), and there's not a local copy. Searching ..."
+             if($SearchRepository) {
+                $DesiredModule = @{ 
+                    Name = $RequiredModule.ModuleName
+                    Repository = $SearchRepository 
+                }
+                if($RequiredModule.ModuleVersion) {
+                    $DesiredModule.Version = $RequiredModule.ModuleVersion
+                }
+             }
+             $SearchResults = Find-Module @DesiredModule
+             if(@($SearchResults).Count -eq 1) {
+                $URI = $(if($SearchResults.DownloadUrl) { $SearchResults.DownloadUrl } else { $SearchResults.PackageInfoUrl })
+                if($PSCmdlet.ShouldContinue("Install dependency from ${URI}?", "Installing Module: $($SearchResults.Name)")) {
+                   $SearchResults | Install-Module
+                   continue
+                }
+             } elseif(@($SearchResults).Count -gt 1) {
+                Write-Warning "Multiple modules found matching dependency, please call Install-Module with the specific module:"
+                $SearchResults
+             } else {
+                Write-Warning "Can't find module dependency $($RequiredModule.ModuleName)"
+             }
+             $FailedModules += $RequiredModule
          }
          if($FailedModules) {
             Write-Error "Unable to resolve required modules."
