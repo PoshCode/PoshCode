@@ -34,7 +34,6 @@
         Chocolatey = @{
             Type = 'NuGet'
             Root = 'https://chocolatey.org/api/v2/Packages'
-            Name = 'Chocolatey'
             Tags = 'PowerShell', 'Module'
             SearchByDefault = $true
         }

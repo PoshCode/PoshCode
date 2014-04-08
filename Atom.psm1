@@ -183,7 +183,7 @@ function ConvertFrom-AtomFeed {
             $outCount += 1
             if($Count -and ($outCount -gt $Count)) { break }
             $p = $m.properties
-            Write-Verbose $p.InnerXml
+            Write-Verbose "Properties: $($p.InnerXml)"
             @{
                 'Author'=if($m.author -and $m.author.name){$m.author.name}else{''}
                 'Name'=if($m.title){$m.title.innertext}else{''}

@@ -502,7 +502,7 @@ function Install-Module {
       if("$Package" -match "^https?://" ) {
          $WebParam = @{} + $PsBoundParameters
          $WebParam.Add("Uri",$Package)
-         $null = "Package", "InstallPath", "Common", "User", "Force", "Import", "Passthru", "ZipFolder", "ErrorAction", "ErrorVariable" | % { $WebParam.Remove($_) }
+         $null = "Package", "RequiredVersion", "SearchRepository", "InstallPath", "Common", "User", "Force", "Import", "Passthru", "ZipFolder", "ErrorAction", "ErrorVariable" | % { $WebParam.Remove($_) }
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
             $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue

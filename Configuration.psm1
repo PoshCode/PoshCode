@@ -338,7 +338,8 @@ function Test-ConfigData {
       if(!(Test-Path $folder)) {
         Write-Warning "The $name module location does not exist. Please validate:"
         $folder = Read-Host "Press ENTER to accept the current value:`n`t$($ConfigData.$path)`nor type a new path"
-        if([string]::IsNullOrWhiteSpace($folder)) { $folder = $ConfigData.$path }
+        # DO NOT REFACTOR TO IsNullOrWhiteSpace (that's .net 4 only)
+        if(!$folder -or ($folder -replace '\s+').Length -eq 0) { $folder = $ConfigData.$path }
 
         if(!(Test-Path $folder)) {
           $CP, $ConfirmPreference = $ConfirmPreference, 'Low'

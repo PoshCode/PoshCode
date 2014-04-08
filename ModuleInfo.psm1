@@ -465,7 +465,8 @@ function Get-ModuleInfo {
          $Fake = $(foreach($key in $PSBoundParameters.Keys) { "-${key} $($PSBoundParameters.$key -join ',')" }) -join ' '
          Write-Verbose "Get-Module $Fake"
 
-         if(![string]::IsNullOrWhiteSpace($PSBoundParameters['Name'])) {
+         # DO NOT REFACTOR TO IsNullOrWhiteSpace (that's .net 4 only)
+         if($PSBoundParameters['Name'] -and ($PSBoundParameters['Name'] -replace '\s+').Length -gt 0) {
             $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
             $scriptCmd = {& $wrappedCmd @PSBoundParameters | ImportModuleInfo -Force:$Force}
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
