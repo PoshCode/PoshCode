@@ -55,6 +55,7 @@ $PackageInfoExtension    = ".packageInfo"
 $ModuleManifestExtension = ".psd1"
 $ModulePackageExtension  = ".nupkg"
 $ZipFileExtension = ".zip"
+$XmlFileExtension = ".xml"
 
 $NuGetMagicPaths = "_rels", "package"
 

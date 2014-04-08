@@ -5,7 +5,6 @@ if(!$PoshCodeModuleRoot) {
 
 Import-Module $PoshCodeModuleRoot\Configuration.psm1
 Import-Module $PoshCodeModuleRoot\Atom.psm1
-Import-Module $PoshCodeModuleRoot\ModuleInfo.psm1
 if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
   Import-Module $PoshCodeModuleRoot\InvokeWeb
 }
@@ -103,7 +102,7 @@ function FindModule {
 
         #add type name and output
 
-        $content | ConvertTo-PSModuleInfo -PSTypeNames ('PoshCode.Search.ModuleInfo', 'PoshCode.Search.File.ModuleInfo') -AsObject
+        $content
         
     }
 }

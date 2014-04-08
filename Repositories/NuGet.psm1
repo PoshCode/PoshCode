@@ -87,15 +87,7 @@ function FindModule {
             if($reader) { $reader.Close() }
         }
 
-        ConvertFrom-AtomFeed $Content -AdditionalData @{ Repository =  @{ NuGet = $Root } } | % {
-
-            $output = New-Object psobject -Property $_
-
-            $output.pstypenames.Insert(0,'PoshCode.ModuleInfo')
-            $output.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')
-            $output.pstypenames.Insert(0,'PoshCode.Search.NuGet.ModuleInfo')
-            Write-Output $output 
-        }
+        ConvertFrom-AtomFeed $Content -AdditionalData @{ Repository =  @{ NuGet = $Root } }
     }
 }
 

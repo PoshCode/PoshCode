@@ -61,8 +61,8 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
       $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
       $json = $ser.DeserializeObject($Content)
 
-      $json.items | %{
-         $result = New-Object psobject -Property @{
+      $json.items | Where-Object { !$ModuleName -or $_.repository.name -eq $ModuleName } | %{
+         @{
             'Author'=$_.repository.owner.login
             'ModuleName'=$_.repository.name
             'Description'=$_.repository.description
@@ -71,17 +71,6 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
 
             'SourceRepoUri'=$_.repository.html_url
             'Repository' = @{ GitHub = $Root }
-         }
-         $result.pstypenames.Insert(0,'PoshCode.ModuleInfo')
-         $result.pstypenames.Insert(0,'PoshCode.Search.ModuleInfo')         
-         $result.pstypenames.Insert(0,'PoshCode.Search.Github.ModuleInfo')
-         if($ModuleName)
-         {
-            $result | Where-Object { $_.Name -eq $ModuleName }
-         }
-         else
-         {
-            $result
          }
       }
    }

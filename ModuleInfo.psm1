@@ -900,6 +900,8 @@ function ConvertTo-PSModuleInfo {
         [Parameter(ValueFromPipeline=$true, Position=0, Mandatory=$true)]
         $ModuleInfo,
 
+        $AddonInfo, 
+
         # Convert a top-level hashtable to an object before outputting it
         [Parameter(ParameterSetName="AsObject", Mandatory=$true)]
         [switch]$AsObject,
@@ -909,6 +911,8 @@ function ConvertTo-PSModuleInfo {
     )
     process {
         foreach($MI in @($ModuleInfo)) {
+            if($AddonInfo) { $MI = UpdateDictionary $MI $AddonInfo }
+
             Write-Verbose ">> Adding Simple Names"
 
             if($MI -is [Hashtable]) {

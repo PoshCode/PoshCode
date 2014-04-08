@@ -216,7 +216,7 @@ function Test-ExecutionPolicy {
 # FULL # BEGIN FULL: These cmdlets are only necessary in the full version of the module
 function Get-ConfigData {
   #.Synopsis
-  #   Gets the modulename.ini settings as a hashtable
+  #   Gets the UserSettings.pds settings as a hashtable
   #.Description
   #   Parses the non-comment lines in the config file as a simple hashtable, 
   #   parsing it as string data, and replacing {SpecialFolder} paths
@@ -243,25 +243,23 @@ function Get-ConfigData {
 
     # Our ConfigData has Repositories which may use tokens in their roots
     # The Repositories has to be an array:
-    $Results.Repositories = @(
-      foreach($Repo in $Results.Repositories) {
-        foreach($Key in @($Repo.Keys)) {
-          $Repo.$Key = $(
-            foreach($StringData in @($Repo.$Key)) {
-              $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
-              for($i = $Paths.Count - 1; $i -ge 0; $i--) {
-                if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
-                  $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
-                  break
-                }
+    foreach($Repo in $Results.Repositories.Keys) {
+      foreach($Setting in @($Results.Repositories.$Repo.Keys)) {
+        $Results.Repositories.$Repo.$Setting = $(
+          foreach($StringData in @($Results.Repositories.$Repo.$Setting)) {
+            $Paths = [Regex]::Matches($StringData, "{(?:$($Script:SpecialFolderNames -Join "|"))}")
+            for($i = $Paths.Count - 1; $i -ge 0; $i--) {
+              if($Path = Get-SpecialFolder $Paths[$i].Value.Trim("{}") -Value) {
+                $StringData = $StringData.Remove($Paths[$i].Index,$Paths[$i].Length).Insert($Paths[$i].Index, $Path)
+                break
               }
-              $StringData
             }
-          )
-        }
-        $Repo
+            $StringData
+          }
+        )
       }
-    )
+    }
+    
     return $Results
   }
 }
@@ -298,19 +296,17 @@ function Set-ConfigData {
 
     # Our ConfigData has Repositories which may use tokens in their roots
     # The Repositories has to be an array:
-    $SaveData.Repositories = @(
-      foreach($Repo in $ConfigData.Repositories) {
-        foreach($Key in @($Repo.Keys)) {
-          foreach($kvPath in $table) {
-            if($Repo.$Key -like ($kvPath.Value +"*")) {
-              $Repo.$Key = $Repo.$Key -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
-              break
-            }
+    foreach($Repo in $ConfigData.Repositories) {
+      foreach($Setting in @($ConfigData.Repositories.$Repo.Keys)) {
+        foreach($kvPath in $table) {
+          if($ConfigData.Repositories.$Repo.$Setting -like ($kvPath.Value +"*")) {
+            $ConfigData.Repositories.$Repo.$Setting = $ConfigData.Repositories.$Repo.$Setting -replace ([regex]::Escape($kvPath.Value)), "{$($kvPath.Key)}"
+            break
           }
         }
-        $Repo
       }
-    )
+      $Repo
+    }
 
 
     $ConfigString = "# You can edit this file using the ConfigData commands: Get-ConfigData and Set-ConfigData`n" +
@@ -318,9 +314,9 @@ function Set-ConfigData {
                     "# Note that the default InstallPaths here are the ones recommended by Microsoft:`n" +
                     "# http://msdn.microsoft.com/en-us/library/windows/desktop/dd878350`n" +
                     "#`n" +
-                    "# Repositories: must be an array of hashtables with Type and Root`n" +
-                    "#   Optionally, Repositories may have a name (useful for filtering Find-Module)`n" +
-                    "#   and may include settings/parameters for the Repository's FindModule command`n"
+                    "# Repositories: must a hashtable of hashtables with Type and Root`n" +
+                    "#   The keys in the Repositories hashtable are the unique names, which can be used to filter Find-Module`n" +
+                    "#   The keys in the nested hashtables MUST include the TYPE and ROOT, and may include additional settings for the Repository's FindModule command`n"
 
     Export-LocalStorage -Module $PSScriptRoot -Name UserSettings.psd1 -InputObject $ConfigData -CommentHeader $ConfigString
   }

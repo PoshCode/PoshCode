@@ -9,13 +9,15 @@ if(!$PoshCodeModuleRoot) {
 if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
   Import-Module $PoshCodeModuleRoot\InvokeWeb
 }
+
+Import-Module $PoshCodeModuleRoot\ModuleInfo.psm1
 # FULL # END FULL
 
 
 $CommonParameters = "ErrorAction", "WarningAction", "Verbose", "Debug", "ErrorVariable", "WarningVariable", "OutVariable", "OutBuffer", "PipelineVariable"
 
 function Find-Module {
-   <#
+    <#
       .Synopsis
          Find PoshCode packages online
       .DESCRIPTION
@@ -38,99 +40,117 @@ function Find-Module {
          Finds a specific module by a specific author in a specific repository
       .OUTPUTS
          PoshCode.Search.ModuleInfo
-   #>
-   [CmdletBinding()]
-   Param
-   (
-      # Term to Search for
-      [string]$SearchTerm,
+    #>
+    [CmdletBinding()]
+    param
+    (
+        # Term to Search for
+        [string]$SearchTerm,
         
-      # Search for modules published by a particular author.
-      [Parameter(ValueFromPipelineByPropertyName=$true)]
-      [string]$Author,
+        # Search for modules published by a particular author.
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [string]$Author,
 
-      # Search for a specific module.
-      [alias('Name','MN')]
-      [Parameter(ValueFromPipelineByPropertyName=$true)]
-      [string]$ModuleName,
+        # Search for a specific module.
+        [alias('Name','MN')]
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [string]$ModuleName,
 
-      # Search for a specific version. Not all repositories support versions
-      [Parameter(ValueFromPipelineByPropertyName=$true)]
-      [string]$Version,
+        # Search for a specific version. Not all repositories support versions
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [string]$Version,
 
-      # The path of a configured repository (allows wildcards), or a hashtable of @{RepositoryType=@("RepositoryRootUri")}
-      [Parameter(ValueFromPipelineByPropertyName=$true)]
-      $Repository,
+        # The path of a configured repository (allows wildcards), or a hashtable of @{RepositoryType=@("RepositoryRootUri")}
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        $Repository,
 
-      [int]
-      $Limit = 0
-   )
-   begin {
-      $Count = 0      
-   }
-   process {
-      if(($Repository -is [hashtable]) -or ($Repository -as [hashtable[]])) {
-         $ConfiguredRepositories = $Repository
-      } else {
-         $ConfiguredRepositories = @((Get-ConfigData).Repositories)
-         if(!$Repository) {
-            $ConfiguredRepositories = $ConfiguredRepositories | Where-Object { $_.SearchByDefault }
-         } else {
-            # Filter Repositories
-            # $ConfiguredRepositories = @((Get-ConfigData).Repositories)
-            $ConfiguredRepositories = $(
-               $Matching = $ConfiguredRepositories | Where-Object { foreach($r in @($Repository)){ $_.Type -like "$r" } }
-               if(!$Matching) {
-                  Write-Verbose "No matching Type"
-                  $Matching = $ConfiguredRepositories | Where-Object { foreach($r in @($Repository)){ $_.Name -like "$r" } }
-               }
-               if(!$Matching) {
-                  Write-Verbose "No matching Name"
-                  $Matching = $ConfiguredRepositories | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }
-               }
-               $Matching
-            )
-         }
-      }
-      $null = $PSBoundParameters.Remove("Repository")
-      $null = $PSBoundParameters.Remove("Limit")
+        [int]
+        $Limit = 0
+    )
+    begin { 
+        $Global:SearchErrors = New-Object System.Collections.ArrayList
+        $Count = 0
+    }
+    process {
+        if($Repository -is [hashtable]) {
+            $SelectedRepositories = $Repository
+        } else {
+            $SelectedRepositories = @{}
+            $ConfiguredRepositories = (Get-ConfigData).Repositories
+            if(!$Repository) {
+                Write-Verbose "Using SearchByDefault Repositories"
+                foreach($Repo in $ConfiguredRepositories.Keys | Where-Object { $ConfiguredRepositories.$_.SearchByDefault }) {
+                    $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                }
+            } else {
+                # Filter Repositories
+                $ConfiguredRepositories = $(
+                    # First try matching the name exactly:
+                    if($ConfiguredRepositories."$Repository") {
+                        Write-Verbose "Found exact name"
+                        $SelectedRepositories."$Repository" = $ConfiguredRepositories."$Repository"
+                    # Then try wildcards:
+                    } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_ -like "$r" } }) {
+                        Write-Verbose "Found matching names"
+                        foreach($Repo in $Keys) {
+                            $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                        }
+                    } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }) {
+                        Write-Verbose "Found matching Roots"
+                        foreach($Repo in $Keys) {
+                            $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                        }
+                    }
+                )
+            }
+        }
+    
+        $null = $PSBoundParameters.Remove("Repository")
+        $null = $PSBoundParameters.Remove("Limit")
       
-      # Write-Verbose ($ConfiguredRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
-      foreach($Repo in $ConfiguredRepositories) {
-         $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
+        # Write-Verbose ($ConfiguredRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
+        foreach($Name in $SelectedRepositories.Keys) {
+            $Repo = $SelectedRepositories.$Name
+            $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
 
-         Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
+            Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
 
-         foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
-            $PSBoundParameters.$k = $Repo.$k
-         }
-
-         $Mandatory = $Command.Parameters.Values | 
-            Where-Object { $_.Attributes.Mandatory -and ($PSBoundParameters.Keys -NotContains $_.Name)} |
-            ForEach-Object { $_.Name }
-
-
-         if($Mandatory) {
-            Write-Warning "Not searching $($Repo.Type), missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
-         } else {
-            # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
-            try {
-               if($Limit -gt 0) {
-                  &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru | 
-                     ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } 
-                     }
-               } else {
-                  &$Command @PSBoundParameters | Add-Member NoteProperty ModuleType SearchResult -Passthru
-               }
+            # There's one extra parameter we COULD support to help repositories tell themselves apart
+            if($Command.Parameters.ContainsKey("Name") ) { 
+                $PSBoundParameters.Name = $Name 
             }
-            catch 
-            {
-               Write-Warning "Error Searching $($Repo.Type) $($Repo.Root)"
+            # We help out by mapping anything in the settings to their parameters
+            foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
+                $PSBoundParameters.$k = $Repo.$k
             }
-            if($Limit -gt 0 -and $Count -ge $Limit) { return }
-         }
-      }
-   }
+
+            $Mandatory = $Command.Parameters.Values | 
+                Where-Object { $_.Attributes.Mandatory -and ($PSBoundParameters.Keys -NotContains $_.Name)} |
+                ForEach-Object { $_.Name }
+
+            if($Mandatory) {
+                Write-Warning "Not searching $($Repo.Type), missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
+            } else {
+                # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
+                try {
+                    $(if($Limit -gt 0) {
+                        &$Command @PSBoundParameters | ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } }
+                    } else {
+                        &$Command @PSBoundParameters
+                    }) | ConvertTo-PSModuleInfo -AddonInfo @{ 
+                            ModuleType = "SearchResult"
+                            Repository = @{ $Name = $Repo }
+                         } -PSTypeNames ("PoshCode.ModuleInfo", "PoshCode.Search.ModuleInfo", "PoshCode.Search.${Name}.ModuleInfo") -AsObject
+                }
+                catch 
+                {
+                    $SearchErrors.Add($_)
+                    Write-Warning "Error Searching $($Repo.Type) $($Repo.Root) (See `$SearchErrors)"
+                }
+                if($Limit -gt 0 -and $Count -ge $Limit) { return }
+            }
+        }
+    }
 }
 
 Export-ModuleMember -Function 'Find-Module'
