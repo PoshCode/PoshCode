@@ -12,7 +12,7 @@
 ModuleToProcess = 'Packaging.psm1'
 
 # Version number of this module.
-ModuleVersion = '4.0.1.10'
+ModuleVersion = '4.0.1.11'
 
 # ID used to uniquely identify this module
 GUID = '88c6579a-27b2-41c8-86c6-cd23acb791e9'
