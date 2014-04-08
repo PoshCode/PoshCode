@@ -16,7 +16,7 @@ function FindModule {
       [string]$Author,
 
       # Search for a specific module.
-      [string]$ModuleName,
+      [string]$Name,
 
       # Search for a specific version (NOT SUPPORTED)
       [string]$Version,
@@ -28,7 +28,7 @@ function FindModule {
         $RepositoryRoot = $Root
         Write-Verbose "Folder Repository $RepositoryRoot"
                  
-        if(!$ModuleName) {
+        if(!$Name) {
             $Source = (Join-Path $RepositoryRoot "*${PackageInfoExtension}"), (Join-Path $RepositoryRoot "*${XmlFileExtension}")
         } else {
             $Source = (Join-Path $RepositoryRoot "${ModuleName}*${PackageInfoExtension}"),

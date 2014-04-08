@@ -19,7 +19,7 @@ function FindModule {
         [string]$Author,
 
         # Search for a specific module.
-        [string]$ModuleName,
+        [string]$Name,
 
         # Search for an exact version
         [string]$Version = '*',
@@ -27,17 +27,27 @@ function FindModule {
         # How long to trust a local cached copy of the file
         [int]$CacheTimeSeconds = 300,
 
-        # A unique name for this root
-        [Parameter(Mandatory=$true)]
-        [String]$Name,
-
         [Parameter(Mandatory=$true)]
         $Root
     )
     begin {
         $uri = [uri]$Root
 
-        $CachePath = Join-Path (Get-LocalStoragePath "FileRepoCache") "$Name.xml"
+        $CachePath = "$Root" -replace "https?://"
+        $chars = [IO.Path]::GetInvalidFileNameChars()
+        $index = $CachePath.LastIndexOfAny('\/'.ToCharArray())
+        if($index -gt 0) {
+            $CachePath = $CachePath.Insert($index,"-")
+        }
+        $index = 0
+        while(0 -le ($index = $CachePath.IndexOfAny($chars, $index))) {
+            $CachePath = $CachePath.Remove($index,1)
+        }
+        if($CachePath.Length -gt 50) { 
+            $CachePath = $CachePath.Substring(0,50)
+        }
+
+        $CachePath = [IO.Path]::ChangeExtension((Join-Path (Get-LocalStoragePath "FileRepoCache") "$CachePath"), $XmlFileExtension)
 
         $Cache = Get-Item $CachePath -ErrorAction SilentlyContinue
         if(!$Cache -or ([DateTime]::Now - $Cache.LastWriteTime).TotalSeconds -gt $CacheTimeSeconds) {
@@ -61,17 +71,17 @@ function FindModule {
         # PSGet handles a lot of extra "types" but calls packages and zip files all "application/zip"
         $content = $content | Where-Object { $_.PackageType -eq "application/zip" }
 
-        if($ModuleName)
+        if($Name)
         {
             #using match to make it a little more flexible
-            $content = $content | Where-Object { $_.name -match $ModuleName}
-            Write-Verbose "Filtering by ModuleName: $ModuleName"
+            $content = $content | Where-Object { $_.name -match $Name}
+            Write-Verbose "Filtering by ModuleName: $Name"
         }
         elseif($SearchTerm)
         {
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
             # Where does nuget search? Name, Tags, Description?
-            $content = $content | Where-Object { $_.name -match $ModuleName}
+            $content = $content | Where-Object { $_.name -match $Name}
         }
         if($Author)
         {

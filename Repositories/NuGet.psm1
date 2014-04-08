@@ -18,7 +18,7 @@ function FindModule {
         [string]$Author,
 
         # Search for a specific module.
-        [string]$ModuleName,
+        [string]$Name,
 
         # Search for an exact version
         [string]$Version,
@@ -33,11 +33,11 @@ function FindModule {
     process {
         $filters = @()
 
-        if($ModuleName)
+        if($Name)
         {
-            $ModuleName = $ModuleName.ToLowerInvariant()
-            $filters += "tolower(Id) eq '$ModuleName'"
-            Write-Verbose "Filtering by ModuleName: $ModuleName"
+            $Name = $Name.ToLowerInvariant()
+            $filters += "tolower(Id) eq '$Name'"
+            Write-Verbose "Filtering by ModuleName: $Name"
         } elseif($SearchTerm) {
             # Currently, we don't "search" we just 
             $SearchTerm = $SearchTerm.ToLowerInvariant()

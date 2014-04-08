@@ -35,7 +35,7 @@ function Find-Module {
 
          Finds all modules by jrich523 in all repositories
       .EXAMPLE
-         Find-Module -Author jrich523 -ModuleName PSVA -Repository GitHub
+         Find-Module -Author jrich523 -Name PSVA -Repository GitHub
 
          Finds a specific module by a specific author in a specific repository
       .OUTPUTS
@@ -52,12 +52,13 @@ function Find-Module {
         [string]$Author,
 
         # Search for a specific module.
-        [alias('Name','MN')]
+        [alias('ModuleName','MN')]
         [Parameter(ValueFromPipelineByPropertyName=$true)]
-        [string]$ModuleName,
+        [string]$Name,
 
         # Search for a specific version. Not all repositories support versions
         [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Alias("ModuleVersion","MV")]
         [string]$Version,
 
         # The path of a configured repository (allows wildcards), or a hashtable of @{RepositoryType=@("RepositoryRootUri")}
@@ -87,16 +88,16 @@ function Find-Module {
                 $ConfiguredRepositories = $(
                     # First try matching the name exactly:
                     if($ConfiguredRepositories."$Repository") {
-                        Write-Verbose "Found exact name"
+                        Write-Verbose "Found exact name: $Repository"
                         $SelectedRepositories."$Repository" = $ConfiguredRepositories."$Repository"
                     # Then try wildcards:
                     } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_ -like "$r" } }) {
-                        Write-Verbose "Found matching names"
+                        Write-Verbose "Found matching names: $Keys"
                         foreach($Repo in $Keys) {
                             $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
                         }
                     } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }) {
-                        Write-Verbose "Found matching Roots"
+                        Write-Verbose "Found matching Roots: $Keys"
                         foreach($Repo in $Keys) {
                             $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
                         }
@@ -115,10 +116,6 @@ function Find-Module {
 
             Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
 
-            # There's one extra parameter we COULD support to help repositories tell themselves apart
-            if($Command.Parameters.ContainsKey("Name") ) { 
-                $PSBoundParameters.Name = $Name 
-            }
             # We help out by mapping anything in the settings to their parameters
             foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
                 $PSBoundParameters.$k = $Repo.$k

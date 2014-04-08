@@ -22,7 +22,7 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
 
          # Search for a specific module.
          [Parameter(Mandatory=$false)]
-         [string]$ModuleName,
+         [string]$Name,
 
          # Search for a specific version (NOT SUPPORTED)
          [string]$Version,
@@ -31,9 +31,9 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
       )
 
 
-      if($Author -and $ModuleName) # SAM,AM
+      if($Author -and $Name) # SAM,AM
       {
-         $search = "$SearchTerm packageInfo in:path repo:$Author/$ModuleName"
+         $search = "$SearchTerm packageInfo in:path repo:$Author/$Name"
       }
       elseif($Author) # A,AS
       {
@@ -61,7 +61,7 @@ if("System.Runtime.Serialization.Json.JsonReaderWriterFactory" -as [Type]) {
       $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
       $json = $ser.DeserializeObject($Content)
 
-      $json.items | Where-Object { !$ModuleName -or $_.repository.name -eq $ModuleName } | %{
+      $json.items | Where-Object { !$Name -or $_.repository.name -eq $Name } | %{
          @{
             'Author'=$_.repository.owner.login
             'ModuleName'=$_.repository.name
