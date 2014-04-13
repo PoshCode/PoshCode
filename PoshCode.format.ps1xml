@@ -10,7 +10,7 @@
         <TableHeaders>
           <TableColumnHeader>
             <Label>Repository</Label>
-            <Width>10</Width>
+            <Width>13</Width>
           </TableColumnHeader>
           <TableColumnHeader>
             <Label>Name</Label>
@@ -25,7 +25,7 @@
             <Width>12</Width>
           </TableColumnHeader>          
           <TableColumnHeader>
-            <Label>Url</Label>
+            <Label>Description</Label>
           </TableColumnHeader>
         </TableHeaders>
         <TableRowEntries>
@@ -42,14 +42,12 @@
               <TableColumnItem>
                 <PropertyName>Version</PropertyName>
               </TableColumnItem>
-              <TableColumnItem>
-                <PropertyName>Author</PropertyName>
-              </TableColumnItem>
-              <TableColumnItem>
-                 <ScriptBlock>
-                    if($_.DownloadUrl) { $_.DownloadUrl } else {$_.PackageInfoUrl}
-                 </ScriptBlock>
-              </TableColumnItem>
+               <TableColumnItem>
+                  <PropertyName>Author</PropertyName>
+               </TableColumnItem>
+               <TableColumnItem>
+                  <PropertyName>Description</PropertyName>
+               </TableColumnItem>
             </TableColumnItems>
           </TableRowEntry>
         </TableRowEntries>

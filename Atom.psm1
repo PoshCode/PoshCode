@@ -187,7 +187,7 @@ function ConvertFrom-AtomFeed {
             @{
                 'Author'=if($m.author -and $m.author.name){$m.author.name}else{''}
                 'Name'=if($m.title){$m.title.innertext}else{''}
-                'Description'=if($m.summary){$m.summary.innertext}else{''}
+                'Description'=if($p.Description -is [string]){$p.Description}else{''}
                 'DownloadUrl'=if($m.content -and $m.content.src){$m.content.src}else{$null}
                 'PackageType' = if($m.content -and $m.content.type){$m.content.type}else{$null}
 
