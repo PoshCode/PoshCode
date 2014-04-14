@@ -87,7 +87,7 @@ function FindModule {
             if($reader) { $reader.Close() }
         }
 
-        ConvertFrom-AtomFeed $Content
+        ConvertFrom-AtomFeed $Content -AdditionalData @{ SourceUri = $Root; SourceType = "NuGet" }
     }
 }
 

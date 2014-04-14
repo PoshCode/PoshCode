@@ -64,7 +64,7 @@ function FindModule {
             Write-Verbose "Using cached feed of $root"
         }
         Write-Verbose "Read Feed from $CachePath"
-        $content = Import-AtomFeed $CachePath
+        $content = Import-AtomFeed $CachePath -AdditionalData @{ SourceUri = $Root; SourceType = "File" }
     }
     
     process {

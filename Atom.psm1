@@ -185,28 +185,32 @@ function ConvertFrom-AtomFeed {
             $p = $m.properties
             Write-Verbose "Properties: $($p.InnerXml)"
             @{
-                'Author'=if($m.author -and $m.author.name){$m.author.name}else{''}
-                'Name'=if($m.title){$m.title.innertext}else{''}
-                'Description'=if($p.Description -is [string]){$p.Description}else{''}
-                'DownloadUrl'=if($m.content -and $m.content.src){$m.content.src}else{$null}
-                'PackageType' = if($m.content -and $m.content.type){$m.content.type}else{$null}
-
-                'PackageInfoUrl'= $(if(!$FeedBase) { $m.id } else {
-                    # The PackageInfoUrl doesn't exist for NuGet, you have to call GetUpdates():
-                    "${FeedBase}GetUpdates()?packageIds='$(if($m.title){$m.title.innertext}else{''})'&versions='0.0'&includePrerelease=false&includeAllVersions=false"
-                })
+                Name    = if($m.title){$m.title.innertext}else{''}
+                Version = $p.Version
                 
-                'RequiredModules'=if(!$m.Dependencies) {$null} else {
+                Description  = if($p.Description -is [string]){$p.Description}else{''}
+                Author       = if($m.author -and $m.author.name){$m.author.name}else{''}
+                # 'CompanyName'=if($m.owner -and $m.owner.name){$m.owner.name}else{''}
+                Copyright    = $p.Copyright
+                
+                LicenseUrl   = $p.LicenseUrl
+                ProjectUrl   = $p.ProjectUrl
+                Tags         = $p.Tags -split ' '
+
+                ReleaseNotes = if($p.ReleaseNotes){$p.ReleaseNotes}else{$null}
+                DownloadUrl  = if($m.content -and $m.content.src){$m.content.src}else{$null}
+                PackageType  = if($m.content -and $m.content.type){$m.content.type}else{$null}
+
+                # TODO: Actually validate this after download
+                Hash          = if($p.PackageHash) { $p.PackageHash } else { $null }
+                HashAlgorithm = if($p.PackageHashAlgorithm) { $p.PackageHashAlgorithm } else { $null }
+
+                RequiredModules = if(!$m.Dependencies) {$null} else {
                     @($m.Dependencies -split '\|' | % { $N,$V,$Null = $_ -split ':'; @{ModuleName=$N; ModuleVersion=$V} })
                 }
-                'Version' = $p.Version
-                'ProjectUrl'=$p.ProjectUrl
-                'Copyright'=$p.Copyright
-                'LicenseUrl'=$p.LicenseUrl
-                'Tags'=$p.Tags -split ' '
                 # Unless these are explicitly true, they're false.
-                'RequireLicenseAcceptance'=$p.RequireLicenseAcceptance -eq "true"
-                'IsPrerelease'=$p.IsPrerelease -eq "true"
+                RequireLicenseAcceptance = $p.RequireLicenseAcceptance -eq "true"
+                IsPrerelease = $p.IsPrerelease -eq "true"
 
             } + $AdditionalData | ForEach-Object {
                 if($Sortable) {

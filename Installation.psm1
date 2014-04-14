@@ -29,6 +29,8 @@ if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
 #   Import-Module $PoshCodeModuleRoot\ModuleInfo
 # }
 
+
+# TODO: Refactor into the repositories
 function Update-Module {
    <#
       .Synopsis
@@ -150,7 +152,6 @@ function Update-Module {
             if($reader) { $reader.Close() }
          }
 
-   
          # Get the metadata straight from the WebResponse:
          # Now lets find out what the latest version is:
          $Mi = ConvertFrom-AtomFeed $content -Count 1
