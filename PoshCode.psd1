@@ -97,7 +97,7 @@ ModuleList = @('Metadata',
                'Repository')
 
 # List of all files packaged with this module
-FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1', 
+FileList = 'Constants.ps1', 'PoshCode.psd1', 
                'Metadata.psm1', 'Atom.psm1', 'ModuleInfo.psm1', 'Configuration.psm1', 
                'Installation.psm1', 'Packaging.psm1', 'Scripts.psm1', 
                'Repository.psm1', 'InvokeWeb.psm1', 'UserSettings.psd1', 
@@ -106,7 +106,16 @@ FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1',
                'PoshCode.format.ps1xml', 'PoshCode.types.ps1xml', 'README.md'
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess
-# PrivateData = ''
+PrivateData = @{
+  PSPackageData = @{
+    ProjectUrl = 'http://poshcode.org/'
+    LicenseUrl = 'http://opensource.org/licenses/ms-pl'
+    IconUrl = 'http://poshcode.org/images/PoshCodeT_.png'
+  }
+}
+
+
+
 
 # HelpInfo URI of this module
 # HelpInfoURI = ''
@@ -115,5 +124,3 @@ FileList = 'PoshCode.packageInfo', 'PoshCode.psd1', 'Constants.ps1',
 # DefaultCommandPrefix = ''
 
 }
-
-

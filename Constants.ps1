@@ -45,7 +45,7 @@ if(Test-Path $EmptyPath) {
 }
 
 $pkZipHeader = [byte[]](80,75,3,4)
-
+$PrivateDataKey = 'PSPackageData'
 [String[]]$ModulePackageKeyword = "PowerShell", "Module"
 $UserAgent = "PoshCode\Packaging Module"
 
@@ -66,4 +66,35 @@ $NuGetMagicPaths = "_rels", "package"
 
 if(!("System.IO.Packaging.Package" -as [Type])) {
     Add-Type -Assembly 'WindowsBase', 'PresentationFramework'
+}
+
+
+function New-Error {
+    param(
+        [Parameter(Mandatory=$true, ParameterSetName="ExceptionMessage", Position=0)]
+        [Type]$Type = [System.Exception],
+
+        [Parameter(Mandatory=$true, ParameterSetName="ExceptionMessage", Position=1)]
+        [Parameter(Mandatory=$true, ParameterSetName="Message")]
+        [String]$Message,
+
+        [Parameter(Mandatory=$true, ParameterSetName="Exception", Position=0)]
+        [Exception]$Exception,
+
+        [Parameter(Mandatory=$true, Position=2)]
+        [String]$ErrorId,
+
+        [Parameter(Position=3)]
+        [System.Management.Automation.ErrorCategory]
+        $Category = "NotSpecified",
+
+        [Parameter(Position=4)]
+        $Target = $null
+    )
+    end {
+        if(!$Exception) {
+            $Exception = New-Object $Type $Message
+        }
+        New-Object System.Management.Automation.ErrorRecord $Exception, $ErrorId, $Category, $Target
+    }
 }
