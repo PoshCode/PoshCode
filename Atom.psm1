@@ -388,7 +388,7 @@ function ConvertTo-Nuspec {
         $Id = if($InputObject.Name){ $InputObject.Name } else { $InputObject.Id }
         $Author = if($InputObject.Author) { $InputObject.Author } else { $InputObject.Authors }
         $Owners = if($InputObject.CompanyName) { $InputObject.CompanyName } else { $InputObject.Owners }
-        $IconUrl = if($InputObject.IconUrl) { $InputObject.IconUrl } else { $InputObject.IconUrl }
+        $IconUrl = $InputObject.IconUrl
         $Tags  = if(!$InputObject.Tags) { $ModulePackageKeyword -join ' ' } else {
            @(@($InputObject.Tags) + @($InputObject.Keywords) + $ModulePackageKeyword | Select-Object -Unique) -join ' '
         }
