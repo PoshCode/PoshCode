@@ -380,7 +380,7 @@ function Install-Module {
       # The repository to search in for dependencies
       # This is not normally passed on the command-line, but is populated when the results of Find-Module are piped in
       [Parameter(ValueFromPipelineByPropertyName=$true)]
-      [Alias("Repository")]
+      [Alias("Repository","Source")]
       $SearchRepository,
 
       # When installing modules from .zip archives instead of module packages, the ZipFolder is a subfolder in the zip which contains the module. Only files within this folder will be unpacked.
@@ -564,8 +564,8 @@ function Install-Module {
 
 
       # If the Package is just a module name (and doesn't exist), we can search for it
-      if( ($Package.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -eq -1) -and !(Test-Path $Package) ){
-         $FindModule = @{ Name = $Package }
+      if(("$Package".IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -eq -1) -and !(Test-Path $Package) ){
+         $FindModule = @{ Name = "$Package" }
          if($SearchRepository) {
             $FindModule.Repository = $SearchRpository
          }

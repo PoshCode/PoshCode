@@ -393,7 +393,7 @@ function Set-PackageProperties {
     $PackageProperties.LastModifiedBy = $UserAgent
     $PackageProperties.Category = $ModuleInfo.Category
 
-    $PackageProperties.Keywords = if(!$ModuleInfo.Tags) { $ModulePackageKeyword } else {
+    $PackageProperties.Keywords = if(!$ModuleInfo.Tags) { $ModulePackageKeyword -join ' ' } else {
        @(@($ModuleInfo.Tags) + $ModulePackageKeyword | Select-Object -Unique) -join ' '
     }
     if($anyUrl = if($ModuleInfo.HelpInfoUri) { $ModuleInfo.HelpInfoUri } elseif($ModuleInfo.ProjectUrl) { $ModuleInfo.ProjectUrl } elseif($ModuleInfo.DownloadUrl) { $ModuleInfo.DownloadUrl }) {
