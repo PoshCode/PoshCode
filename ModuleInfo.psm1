@@ -1318,6 +1318,10 @@ function ConvertTo-PSModuleInfo {
                 }
             } else {
                 foreach($rm in @($MI) + @($MI.RequiredModules)) {
+                    if($rm -is [string]) {
+                        Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleName -Value $rm.Name -ErrorAction SilentlyContinue
+                        Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
+                    }
                     if($rm.ModuleName -and !$rm.Name) {
                         Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
                     }
