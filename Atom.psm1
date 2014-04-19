@@ -389,8 +389,9 @@ function ConvertTo-Nuspec {
         $Author = if($InputObject.Author) { $InputObject.Author } else { $InputObject.Authors }
         $Owners = if($InputObject.CompanyName) { $InputObject.CompanyName } else { $InputObject.Owners }
         $IconUrl = if($InputObject.IconUrl) { $InputObject.IconUrl } else { $InputObject.IconUrl }
-        $Tags = if($InputObject.Tags) { $InputObject.Tags -join ' '} else { $InputObject.Keywords -join ' '}
-
+        $Tags  = if(!$InputObject.Tags) { $ModulePackageKeyword -join ' ' } else {
+           @(@($InputObject.Tags) + @($InputObject.Keywords) + $ModulePackageKeyword | Select-Object -Unique) -join ' '
+        }
         # Generate a nuget manifest
         [xml]$doc = "<?xml version='1.0'?>
         <package xmlns='$NuGetNamespace'>

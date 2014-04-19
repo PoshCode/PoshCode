@@ -421,7 +421,7 @@ function Set-ModuleInfo {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
         # The name of the module to create a new package manifest(s) for
-        [Parameter(Mandatory=$true, Position=0)]
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline='True', ValueFromPipelineByPropertyName='True')]
         [String]$Name,
 
         [AllowEmptyCollection()]
@@ -589,7 +589,7 @@ function Set-ModuleInfo {
             $ConfirmAllOverwriteOnModuleInfo = $false
         }
     }
-    end {
+    process {
         $ErrorActionPreference = "Stop"
         $Manifest = Get-ModuleInfo $Name | Select-Object * -First 1
         if(!$Manifest) {
