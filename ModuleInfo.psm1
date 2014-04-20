@@ -1083,6 +1083,7 @@ function ImportModuleInfo {
 
          try {
             if(!$ExistingModuleInfo) {
+               Write-Verbose "ImportModuleInfo manually loading metadata from $ModuleManifestPath"
                $ModuleInfo = Import-Metadata $ModuleManifestPath | ConvertTo-PSModuleInfo
             } else {
                Write-Verbose "ImportModuleInfo merging manually-loaded metadata from $ModuleManifestPath"
@@ -1306,6 +1307,10 @@ function ConvertTo-PSModuleInfo {
 
             if($MI -is [Hashtable]) {
                 foreach($rm in @($MI) + @($MI.RequiredModules)) {
+                    if($rm -is [string]) {
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleName -Value $rm -Passthru -ErrorAction SilentlyContinue
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm -Passthru -ErrorAction SilentlyContinue
+                    }
                     if($rm.ModuleName -and !$rm.Name) {
                         $rm.Name = $rm.ModuleName
                     }
@@ -1319,17 +1324,17 @@ function ConvertTo-PSModuleInfo {
             } else {
                 foreach($rm in @($MI) + @($MI.RequiredModules)) {
                     if($rm -is [string]) {
-                        Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleName -Value $rm.Name -ErrorAction SilentlyContinue
-                        Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleName -Value $rm -Passthru -ErrorAction SilentlyContinue
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm -Passthru -ErrorAction SilentlyContinue
                     }
                     if($rm.ModuleName -and !$rm.Name) {
-                        Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.Name -ErrorAction SilentlyContinue
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name Name -Value $rm.ModuleName -Passthru -ErrorAction SilentlyContinue
                     }
                     if($rm.ModuleVersion -and !$rm.Version) {
-                        Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -ErrorAction SilentlyContinue
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name Version -Value $rm.Version -Passthru -ErrorAction SilentlyContinue
                     }
                     if($rm.RootModule -and !$rm.ModuleToProcess) {
-                        Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -ErrorAction SilentlyContinue
+                        $rm = Add-Member -InputObject $rm -MemberType NoteProperty -Name ModuleToProcess -Value $rm.RootModule -Passthru -ErrorAction SilentlyContinue
                     }
                 }
             }
@@ -1338,7 +1343,7 @@ function ConvertTo-PSModuleInfo {
             if($AsObject -and ($MI -is [Collections.IDictionary])) {
                 if($MI.RequiredModules) {
                     $MI.RequiredModules = @(foreach($Module in @($MI.RequiredModules)) {
-                        if($Module -is [String]) { $Module = @{ModuleName=$Module} }
+                        if($Module -is [String]) { $Module = @{Name=$Module; ModuleName=$Module} }
 
                         if($Module -is [Hashtable] -and $Module.Count -gt 0) {
                             Write-Debug ($Module | Format-List * | Out-String)
