@@ -367,6 +367,7 @@ function Install-Module {
       [Parameter(ValueFromPipelineByPropertyName=$true, Mandatory=$true, Position=0)]
       [Alias("PSPath","PackagePath","PackageInfoUrl","DownloadUrl", "ModuleName", "Name")]
       $Package,
+
       # A custom path to install the module to
       [Parameter(ParameterSetName="InstallPath", Mandatory=$true, Position=1)]
       [Alias("PSModulePath")]
@@ -397,6 +398,9 @@ function Install-Module {
    
       # If set, overwrite existing modules without prompting
       [Switch]$Force,
+
+      # If set, install dependencies without prompting
+      [Switch]$Recurse,
    
       # If set, the module is imported immediately after install
       [Switch]$Import,
@@ -436,7 +440,7 @@ function Install-Module {
    )
    dynamicparam {
       $paramDictionary = new-object System.Management.Automation.RuntimeDefinedParameterDictionary
-      if(Get-Command Get-ConfigDat[a] -ListImported -ErrorAction SilentlyContinue) {
+      if(Get-Command Get-ConfigDat[a] -ErrorAction SilentlyContinue) {
          foreach( $name in (Get-ConfigData).InstallPaths.Keys ){
             if("CommonPath","UserPath" -notcontains $name) {
                $param = new-object System.Management.Automation.RuntimeDefinedParameter( $Name, [Switch], (New-Object Parameter -Property @{ParameterSetName=$Name;Mandatory=$true}))
@@ -495,6 +499,11 @@ function Install-Module {
             $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.DirectoryNotFoundException "$InstallPath does not exist"), "InstallPath not found", "ObjectNotFound", $InstallPath) )
          }
       }
+
+      [bool]$InstallAllDependencies = $False
+      [bool]$DoNotInstallAnyDependencies = $False
+      [bool]$InstallAllModules = $False
+      [bool]$DoNotInstallAnyModules = $False
    }
    process {
       # There are a few possibilities here: they might be installing from a web module, in which case we need to download first
@@ -502,7 +511,7 @@ function Install-Module {
       if("$Package" -match "^https?://" ) {
          $WebParam = @{} + $PsBoundParameters
          $WebParam.Add("Uri",$Package)
-         $null = "Package", "RequiredVersion", "SearchRepository", "InstallPath", "Common", "User", "Force", "Import", "Passthru", "ZipFolder", "ErrorAction", "ErrorVariable" | % { $WebParam.Remove($_) }
+         $null = "Package", "RequiredVersion", "SearchRepository", "InstallPath", "Common", "User", "Force", "Recurse", "Import", "Passthru", "ZipFolder", "ErrorAction", "ErrorVariable" | % { $WebParam.Remove($_) }
          try { # A 404 is a terminating error, but I still want to handle it my way.
             $VPR, $VerbosePreference = $VerbosePreference, "SilentlyContinue"
             $WebResponse = Invoke-WebRequest @WebParam -ErrorVariable WebException -ErrorAction SilentlyContinue
@@ -574,9 +583,13 @@ function Install-Module {
          }
          $SearchResults = Find-Module @FindModule
          if(@($SearchResults).Count -eq 1) {
-            $URI = $(if($SearchResults.DownloadUrl) { $SearchResults.DownloadUrl } else { $SearchResults.PackageInfoUrl })
-            if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Module: $($SearchResults.Name)")) {
-               $SearchResults | Install-Module
+            $DisplayName = "{0} v{1} from {2}" -f $SearchResults.Name, $SearchResults.Version, ($SearchResults.Repository.Keys -join ' ')
+
+            $PassThrough = @{} + $PsBoundParameters
+            $null = "Package", "RequiredVersion", "SearchRepository" | % { $PassThrough.Remove($_) }
+            if($PSCmdlet.ShouldContinue("Install ${DisplayName}?", "Installing Module: $($SearchResults.Name)", [ref]$InstallAllModules, [ref]$DoNotInstallAnyModules)) {
+               $SearchResults | Install-Module @PassThrough
+               return
             }
          } elseif(@($SearchResults).Count -gt 1) {
             Write-Warning "Multiple matching modules found, please call Install-Module with the right PackageInfoUrl below:"
@@ -634,12 +647,9 @@ function Install-Module {
          Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the $PackageInfoExtension manifest)"
       }
 
-      if(!$Manifest) {
-         Write-Verbose "Get-ModuleInfo $($ModuleFolder.Name) -ListAvailable"
-         $Manifest = Get-ModuleInfo $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
-         Write-Verbose "Module Manifest loaded by Get-ModuleInfo:`n$($Manifest | out-string)"
-      }
-
+      # To resolve dependencies, always reload the Module information
+      $Manifest = Get-ModuleInfo $ModuleFolder.Name -ListAvailable | Where-Object { $_.ModuleBase -eq $ModuleFolder.FullName }
+      $ModuleDisplayName = "{0} v{1}" -f $Manifest.Name, $Manifest.Version
       # Now verify the RequiredModules are available, and try installing them.
       if($Manifest -and $Manifest.RequiredModules) {
          $FailedModules = @()
@@ -648,64 +658,63 @@ function Install-Module {
             $VPR = "SilentlyContinue"
             $VPR, $VerbosePreference = $VerbosePreference, $VPR
 
-            if($Module = Get-ModuleInfo -Name $RequiredModule.ModuleName -ListAvailable) {
+            if($Module = Get-ModuleInfo -Name $RequiredModule.Name -ListAvailable) {
                $VPR, $VerbosePreference = $VerbosePreference, $VPR
-               if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.ModuleVersion }) {
+               if($Module = $Module | Where-Object { $_.Version -ge $RequiredModule.Version }) {
                   if($Import) {
-                     Import-Module -Name $RequiredModule.ModuleName -MinimumVersion
+                     Import-Module -Name $RequiredModule.Name -MinimumVersion
                   }
                   continue
                } else {
-                  Write-Warning "The package $PackagePath requires $($RequiredModule.ModuleVersion) of the $($RequiredModule.ModuleName) module. Yours is version $($Module.Version)."
+                  Write-Warning "The module $ModuleDisplayName requires $($RequiredModule.Version) of the $($RequiredModule.Name) module. Yours is version $($Module.Version)."
                }
             } else {
-               Write-Warning "The package $PackagePath requires the $($RequiredModule.ModuleName) module."
+               Write-Verbose "The module $ModuleDisplayName requires the $($RequiredModule.Name) module."
             }
 
             # Check for a local copy, maybe we get lucky:
             $Folder = Split-Path $PackagePath
             # Check with and without the version number in the file name:
-            if(($RequiredFile = Get-Item (Join-Path $Folder "$($RequiredModule.ModuleName)*$ModulePackageExtension") | 
+            if(($RequiredFile = Get-Item (Join-Path $Folder "$($RequiredModule.Name)*$ModulePackageExtension") | 
                                   Sort-Object { [IO.Path]::GetFileNameWithoutExtension($_) } | 
                                   Select-Object -First 1) -and
-               (Get-ModuleInfo $RequiredFile).Version -ge $RequiredModule.ModuleVersion)
+               (Get-ModuleInfo $RequiredFile).Version -ge $RequiredModule.Version)
             {
-               Write-Warning "Installing required module $($RequiredModule.ModuleName) from $RequiredFile"
+               Write-Warning "Installing required module $($RequiredModule.Name) from $RequiredFile"
                Install-Module $RequiredFile $InstallPath
                continue
             }
 
             # If they have a PackageInfoUrl, we can try that:
-            if($RequiredModule.PackageInfoUrl) {
+            if($RequiredModule.PackageInfoUrl -or $RequiredModule.DownloadUrl) {
                $URI = $(if($RequiredModule.DownloadUrl) { $RequiredModule.DownloadUrl } else { $RequiredModule.PackageInfoUrl })
-               if($PSCmdlet.ShouldContinue("Install from ${URI}?", "Installing Required Module: $($RequiredModule.Name)")) {
-                  Install-Module -Package $URI -InstallPath $InstallPath 
+               if($Recurse -or $PSCmdlet.ShouldContinue("Install $($Manifest.Name) dependency from PackageInfoUrl ${URI}?", "Installing Required Module: $($RequiredModule.Name)", [ref]$InstallAllDependencies, [ref]$DoNotInstallAnyDependencies)) {
+                   $Recurse = $Recurse -or $InstallAllDependencies
+                   Install-Module -Package $URI -InstallPath $InstallPath -Recurse:$Recurse
                }
                continue
             } 
    
-            Write-Warning "The module package does not have a PackageInfoUrl for the required module $($RequiredModule.Name), and there's not a local copy. Searching ..."
-             if($SearchRepository) {
-                $DesiredModule = @{ 
-                    Name = $RequiredModule.ModuleName
-                    Repository = $SearchRepository 
-                }
-                if($RequiredModule.ModuleVersion) {
-                    $DesiredModule.Version = $RequiredModule.ModuleVersion
-                }
+            Write-Verbose "The module package does not have a PackageInfoUrl for the required module $($RequiredModule.Name), and there's not a local copy. Searching ..."
+            $DesiredModule = @{ Name = $RequiredModule.Name }
+            if($SearchRepository) { $DesiredModule.Repository = $SearchRepository }
+
+            if($RequiredModule.Version) {
+               $DesiredModule.Version = $RequiredModule.Version
              }
              $SearchResults = Find-Module @DesiredModule
              if(@($SearchResults).Count -eq 1) {
-                $URI = $(if($SearchResults.DownloadUrl) { $SearchResults.DownloadUrl } else { $SearchResults.PackageInfoUrl })
-                if($PSCmdlet.ShouldContinue("Install dependency from ${URI}?", "Installing Module: $($SearchResults.Name)")) {
-                   $SearchResults | Install-Module
+                $DisplayName = "{0} v{1} from {2}" -f $SearchResults.Name, $SearchResults.Version, ($SearchResults.Repository.Keys -join ' ')
+                if($Recurse -or $PSCmdlet.ShouldContinue("Install $($Manifest.Name) dependency: ${DisplayName}?", "Installing Module: $($SearchResults.Name)", [ref]$InstallAllDependencies, [ref]$DoNotInstallAnyDependencies)) {
+                   $Recurse = $Recurse -or $InstallAllDependencies
+                   $SearchResults | Install-Module -Recurse:$Recurse
                    continue
                 }
              } elseif(@($SearchResults).Count -gt 1) {
                 Write-Warning "Multiple modules found matching dependency, please call Install-Module with the specific module:"
                 $SearchResults
              } else {
-                Write-Warning "Can't find module dependency $($RequiredModule.ModuleName)"
+                Write-Warning "Can't find $($Manifest.Name) dependency: $($RequiredModule.Name)"
              }
              $FailedModules += $RequiredModule
          }
