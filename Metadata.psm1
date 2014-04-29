@@ -488,15 +488,14 @@ function Update-ModuleManifest {
 
     )
     begin {
-        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport', 'Passthru'
-        $PoshCodeProperties = 'ModuleName','ModuleVersion','Author','Copyright','Description','ProjectUrl','IconUrl','Tags','PackageInfoUrl','DownloadUrl','RepositoryUrl','LicenseUrl','RequireLicenseAcceptance','RequiredModules','IsPrerelease'
-        $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUrl','ProjectUrl','IconUrl','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Tags','RequiredModules'
+        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
+        $PackageProperties = 'Category', 'IconUrl', 'IsPrerelease', 'LicenseUrl', 'PackageInfoUrl', 'ProjectUrl', 'RequireLicenseAcceptance', 'Tags'
         if(!(Test-Path variable:RejectAllOverwriteOnModuleInfo)){
             $RejectAllOverwriteOnModuleInfo = $false
             $ConfirmAllOverwriteOnModuleInfo = $false
         }
     }
-    end {
+    process {
 
         $ErrorActionPreference = "Stop"
         $Manifest = Get-Module $Name -ListAvailable
@@ -630,7 +629,6 @@ function Update-ModuleManifest {
 
 
         # Generate or update the PrivateData.PackageData hashtable
-        $PackageProperties = 'Category', 'IconUrl', 'IsPrerelease', 'LicenseUrl', 'PackageInfoUrl', 'ProjectUrl', 'RequireLicenseAcceptance', 'Tags'
         $UpdatedPrivateData = $False
         [Hashtable]$PackageData = $Manifest.PrivateData
         foreach($Key in @($PSBoundParameters.Keys)) { 
@@ -650,7 +648,6 @@ function Update-ModuleManifest {
         [string]$Code = $Ast.ToString()
 
         #Requires -Version 4.0
-        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
         [String[]]$ParameterKeys = $Hashtable.KeyValuePairs.Item1.Value
         
         $OrderedKeys = foreach($Key in $PSBoundParameters.Keys) { 

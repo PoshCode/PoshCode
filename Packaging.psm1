@@ -94,9 +94,9 @@ function Compress-Module {
         $PackageName = $ModuleInfo.Name
 
         # If there's no packageInfo file, we ought *create* one with urls in it -- but we don't know the URLs
-        $packageInfoPath = Join-Path (Split-Path $ModuleInfo.Path) ($PackageName + $PackageInfoExtension)
-        $NuSpecPath = Join-Path (Split-Path $ModuleInfo.Path) ($PackageName + $NuSpecManifestExtension)
-        $ModuleInfoPath = Join-Path (Split-Path $ModuleInfo.Path) ($PackageName + $ModuleManifestExtension)
+        $packageInfoPath = Join-Path $ModuleInfo.ModuleBase ($PackageName + $PackageInfoExtension)
+        $NuSpecPath = Join-Path $ModuleInfo.ModuleBase ($PackageName + $NuSpecManifestExtension)
+        $ModuleInfoPath = Join-Path $ModuleInfo.ModuleBase ($PackageName + $ModuleManifestExtension)
 
         Write-Verbose "Calculated paths:`nPackageInfoPath: $packageInfoPath`nNuSpecPath:     $NuSpecPath`nModuleInfoPath:  $ModuleInfoPath"
         if($IncrementVersionNumber) 
