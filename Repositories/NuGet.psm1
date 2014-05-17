@@ -8,6 +8,31 @@ if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
   Import-Module $PoshCodeModuleRoot\InvokeWeb
 }
 
+function Convert-Wildcard {
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        $Field,
+
+        [Parameter(Mandatory=$true, Position=1, ValueFromPipeline=$true)]
+        $Text,
+
+        [Switch]$Contains
+    )
+    process {
+        if(![System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters($Text)) {
+            $Text = $Text.ToLowerInvariant()
+            if($Contains) {
+                "indexof(tolower($Field),'$Text') ge 0"
+            } else {
+                "tolower($Field) eq '$Text'"
+            }
+        } else {
+            $Text -split "\[.*?]|\?|\*" | Where-Object { $_.Length } | Convert-Wildcard $Field -Contains
+        }
+    }
+}
+
+
 function FindModule {
     [CmdletBinding()]
     param(
@@ -35,32 +60,30 @@ function FindModule {
 
         if($Name)
         {
-            $Name = $Name.ToLowerInvariant()
-            $filters += "tolower(Id) eq '$Name'"
+            $filters += Convert-Wildcard Id $Name
             Write-Verbose "Filtering by ModuleName: $Name"
         } elseif($SearchTerm) {
-            # Currently, we don't "search" we just 
-            $SearchTerm = $SearchTerm.ToLowerInvariant()
-            $filters += "indexof(tolower(Id),'$SearchTerm') ge 0"
+            $filters += "(" + (@(
+                Convert-Wildcard Id $SearchTerm
+                Convert-Wildcard Tags $SearchTerm
+                Convert-Wildcard Description $SearchTerm
+            ) -join ' or ') + ")"
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
         }
         if($Tags -and $Tags.Length -gt 0) {
             foreach($tag in $Tags) {
-                $Tag = $Tag.ToLowerInvariant()
-                $filters += "indexof(tolower(Tags),'$Tag') ge 0"
+                Convert-Wildcard Tags $Tag -Contains
                 Write-Verbose "Filtering by SearchTerm: $Tag"
             }
         }
         if($Author)
         {
-            $Author = $Author.ToLowerInvariant()
-            $filters += "tolower(Authors) eq '$Author'"
+            $filters += Convert-Wildcard Authors $Author -Contains
         }
         if($Version)
         {
             if($Version -ne '*'){
-                $Version = $Version.ToLowerInvariant()
-                $filters += "tolower(Version) eq '$Version'"
+                $filters += Convert-Wildcard Version $Version
             }
         } else {
             $filters += "IsLatestVersion"

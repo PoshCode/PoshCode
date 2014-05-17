@@ -74,19 +74,19 @@ function FindModule {
         if($Name)
         {
             #using match to make it a little more flexible
-            $content = $content | Where-Object { $_.name -match $Name}
+            $content = $content | Where-Object { $_.name -like $Name}
             Write-Verbose "Filtering by ModuleName: $Name"
         }
         elseif($SearchTerm)
         {
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
             # Where does nuget search? Name, Tags, Description?
-            $content = $content | Where-Object { $_.name -match $SearchTerm -or $_.Description -match $SearchTerm -or $_.Author -match $SearchTerm -or $_.Tags -eq $SearchTerm}
+            $content = $content | Where-Object { $_.name -like $SearchTerm -or $_.Description -like $SearchTerm -or $_.Author -like $SearchTerm -or $_.Tags -like $SearchTerm}
         }
         if($Author)
         {
             #using match to be more flexible
-            $content = $content | Where-Object {$_.Author -match $Author}
+            $content = $content | Where-Object {$_.Author -like $Author}
             Write-Verbose "Filtering by Author: $Author"
         }
 

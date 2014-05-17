@@ -44,19 +44,19 @@ function Find-Module {
     [CmdletBinding()]
     param
     (
-        # Term to Search for
+        # Text to search for in name, description or tags (supports wildcards).
         [string]$SearchTerm,
         
-        # Search for modules published by a particular author.
+        # Search for modules published by a particular author (supports wildcards, and searches for partial matches by default because multiple authors end up as one string in PowerShell modules).
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [string]$Author,
 
-        # Search for a specific module.
+        # Search for a specific module by name (supports wildcards).
         [alias('ModuleName','MN')]
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [string]$Name,
 
-        # Search for a specific version. Not all repositories support versions
+        # Search for a specific version. Not all repositories support versions.
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [Alias("ModuleVersion","MV")]
         [string]$Version,
