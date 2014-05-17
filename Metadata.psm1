@@ -432,7 +432,7 @@ function Update-ModuleManifest {
 
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [AllowNull()]
-        [System.Object]
+        [System.Collections.IDictionary]
         ${PrivateData},
 
 
@@ -529,13 +529,33 @@ function Update-ModuleManifest {
 
         # PrivateData has to be a hashtable.
         if($Manifest.PrivateData -and $Manifest.PrivateData -isnot [Hashtable]) {
-            Write-Warning "Sorry, for the purposes of packaging, your Module manifest must use a Hashtable as the value of PrivateData. We add a '$PrivateDataKey' key to your PrivateData hashtable to store the additional module information which is needed for packaging."
+            Write-Warning "Sorry, for the purposes of packaging, your Module manifest must use a Hashtable as the value of PrivateData. We add a '$PackageDataKey' key to your PrivateData hashtable to store the additional module information which is needed for packaging."
             throw "Incompatible PrivateData - must be a Hashtable, please see docs."
+        } elseif(!$Manifest.PrivateData -and $PrivateData) {
+            $Manifest.PrivateData = $PrivateData
         } elseif(!$Manifest.PrivateData) {
-            $Manifest.PrivateData = @{$PrivateDataKey = @{}}
-        } elseif(!$Manifest.PrivateData.$PrivateDataKey -or $Manifest.PrivateData -isnot [Hashtable]) {
-            $Manifest.PrivateData.$PrivateDataKey = @{}
+            $Manifest.PrivateData = @{$PackageDataKey = @{}}
+        } elseif(!$Manifest.PrivateData.$PackageDataKey -or $Manifest.PrivateData -isnot [Hashtable]) {
+            $Manifest.PrivateData.Add($PackageDataKey, @{})
+        }elseif($Manifest.PrivateData -and $PrivateData) {
+            # Wipe the current PrivateData but keep the PackageData if there isn't any in the new PrivateData
+            if(!$PrivateData.ContainsKey($PackageDataKey) -and $Manifest.PrivateData.ContainsKey($PackageDataKey)) {
+                $PrivateData.$PackageDataKey = $Manifest.PrivateData.$PackageDataKey
+            }
+            $Manifest.PrivateData = $PrivateData
         }
+        # Generate or update the PrivateData.PackageData hashtable
+        $UpdatedPrivateData = $False
+        [Hashtable]$PrivateCopy = $Manifest.PrivateData
+        foreach($Key in @($PSBoundParameters.Keys)) { 
+            if($Key -in $PackageProperties) {
+                Write-Verbose "Updating $Key in PackageProperties"
+                $PrivateCopy.$PackageDataKey.$Key = $PSBoundParameters.$Key
+                $Null = $PSBoundParameters.Remove($Key)
+                $UpdatedPrivateData = $True
+            }
+        }
+        $PSBoundParameters["PrivateData"] = $PrivateCopy
         
         # Deal with setting or incrementing the module version
         if($IncrementVersionNumber -or $ModuleVersion -or $Manifest.Version -le [Version]"0.0") {
@@ -626,25 +646,13 @@ function Update-ModuleManifest {
             }
             $PSBoundParameters["RequiredModules"] = $RequiredModules
         }
+        
 
-
-        # Generate or update the PrivateData.PackageData hashtable
-        $UpdatedPrivateData = $False
-        [Hashtable]$PackageData = $Manifest.PrivateData
-        foreach($Key in @($PSBoundParameters.Keys)) { 
-            if($Key -in $PackageProperties) {
-                Write-Verbose "Updating $Key in PackageProperties"
-                $PackageData.$PrivateDataKey.$Key = $PSBoundParameters.$Key
-                $Null = $PSBoundParameters.Remove($Key)
-                $UpdatedPrivateData = $True
-            }
-        }
-        $PSBoundParameters["PrivateData"] = $PackageData
-
-        # Get the current module manifest
+        # Ok, now get the current module manifest and figure out what's in it
         $Tokens = $Null; $ParseErrors = $Null
         $AST = [System.Management.Automation.Language.Parser]::ParseFile( (Convert-Path $ModuleManifestPath), [ref]$Tokens, [ref]$ParseErrors)
         $Hashtable = $Ast.Find( { param($a) $a -is [System.Management.Automation.Language.HashtableAst] }, $false )
+        # Get the module manifest as a string
         [string]$Code = $Ast.ToString()
 
         #Requires -Version 4.0
@@ -676,6 +684,7 @@ function Update-ModuleManifest {
                         }
         $OrderedKeys = $OrderedKeys | Sort Start -Descending 
 
+        # Put our new values into the module manifest in string form ... 
         foreach($Key in $OrderedKeys) {
             Write-Verbose "Replacing $($Key.Name) at $($Key.Start), $($Key.Length)"
             $Code = $Code.Remove($Key.Start, $Key.Length).Insert($Key.Start, "$($Key.Name) = $(ConvertTo-Metadata $PSBoundParameters.($Key.Name))`r`n")
@@ -686,4 +695,3 @@ function Update-ModuleManifest {
 }
 
 Export-ModuleMember -Function Export-Metadata, Import-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata, Update-ModuleManifest
-

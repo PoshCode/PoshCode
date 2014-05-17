@@ -45,7 +45,7 @@ if(Test-Path $EmptyPath) {
 }
 
 $pkZipHeader = [byte[]](80,75,3,4)
-$PrivateDataKey = 'PSPackageData'
+$PackageDataKey = 'PSPackageData'
 [String[]]$ModulePackageKeyword = "PowerShell", "Module"
 $UserAgent = "PoshCode\Packaging Module"
 

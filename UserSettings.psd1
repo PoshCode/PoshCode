@@ -35,6 +35,11 @@
             Type = 'NuGet'
             Root = 'https://chocolatey.org/api/v2/Packages'
             Tags = 'PowerShell', 'Module'
+        }
+        ConfigGallery = @{
+            Type = 'NuGet'
+            # The official URL is a forwarding url https://go.microsoft.com/fwlink/?LinkID=397631&clcid=0x409
+            Root = 'https://msconfiggallery.cloudapp.net/api/v2/Packages'
             SearchByDefault = $true
         }
     }

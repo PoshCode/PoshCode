@@ -265,7 +265,7 @@ function Update-ModuleManifest {
 
         # PrivateData has to be a hashtable.
         if($Manifest.PrivateData -and $Manifest.PrivateData -isnot [Hashtable]) {
-            Write-Warning "Sorry, for the purposes of packaging, your Module manifest must use a Hashtable as the value of PrivateData. We add a '$PrivateDataKey' key to your PrivateData hashtable to store the additional module information which is needed for packaging."
+            Write-Warning "Sorry, for the purposes of packaging, your Module manifest must use a Hashtable as the value of PrivateData. We add a '$PackageDataKey' key to your PrivateData hashtable to store the additional module information which is needed for packaging."
             throw "Incompatible PrivateData - must be a Hashtable, please see docs."
         }
         
@@ -365,7 +365,7 @@ function Update-ModuleManifest {
         $NuGetProperties = 'Name','Version','Author','CompanyName','LicenseUrl','ProjectUrl','IconUrl','RequireLicenseAcceptance','Description','ReleaseNotes','Copyright','Tags','RequiredModules'
 
         # Generate or update the PrivateData hashtable. 
-        [Hashtable]$PackageData = $Manifest.PrivateData.$PrivateDataKey
+        [Hashtable]$PackageData = $Manifest.PrivateData.$PackageDataKey
         
 
 

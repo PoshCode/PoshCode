@@ -74,7 +74,7 @@ NestedModules = @('Metadata.psm1',
 # Functions to export from this module
 FunctionsToExport = 'Install-Module', 'Find-Module', 'Update-Module', 'Compress-Module', 
                'Set-ModuleInfo', 'Get-ModuleInfo', 'Get-ConfigData', 'Set-ConfigData', 
-               'Get-SpecialFolder', 'Get-PoshCode', 'Send-PoshCode'
+               'Get-SpecialFolder', 'Get-PoshCode', 'Send-PoshCode', 'Update-ModuleManifest'
 
 # Cmdlets to export from this module
 CmdletsToExport = '*'
@@ -108,13 +108,13 @@ FileList = 'Constants.ps1', 'PoshCode.psd1',
 # Private data to pass to the module specified in RootModule/ModuleToProcess
 PrivateData = @{
   PSPackageData = @{
+    Tags = @('PoshCode','Packaging','OneGet')
+    Category = 'Applications'
     ProjectUrl = 'http://poshcode.org/'
     LicenseUrl = 'http://opensource.org/licenses/ms-pl'
     IconUrl = 'http://poshcode.org/images/PoshCodeT_.png'
   }
 }
-
-
 
 
 # HelpInfo URI of this module
