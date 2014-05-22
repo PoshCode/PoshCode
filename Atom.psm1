@@ -388,10 +388,14 @@ function ConvertTo-Nuspec {
         $Id = if($InputObject.Name){ $InputObject.Name } else { $InputObject.Id }
         $Author = if($InputObject.Author) { $InputObject.Author } else { $InputObject.Authors }
         $Owners = if($InputObject.CompanyName) { $InputObject.CompanyName } else { $InputObject.Owners }
-        $IconUrl = $InputObject.IconUrl
-        $Tags  = if(!$InputObject.Tags) { $ModulePackageKeyword -join ' ' } else {
-           @(@($InputObject.Tags) + @($InputObject.Keywords) + $ModulePackageKeyword | Select-Object -Unique) -join ' '
+
+        $PackageData = @{} + $InputObject.PrivateData
+        $PackageData = @{} + $PackageData.$PackageDataKey
+        $Tags  = if(!$PackageData.Tags) { $ModulePackageKeyword -join ' ' } else {
+           @(@($PackageData.Tags) + @($PackageData.Keywords) | Select-Object -Unique) -join ' '
         }
+
+
         # Generate a nuget manifest
         [xml]$doc = "<?xml version='1.0'?>
         <package xmlns='$NuGetNamespace'>
@@ -400,20 +404,20 @@ function ConvertTo-Nuspec {
             <version>$([System.Security.SecurityElement]::Escape($InputObject.Version))</version>
             <authors>$([System.Security.SecurityElement]::Escape($Author))</authors>
             <owners>$([System.Security.SecurityElement]::Escape($Owners))</owners>
-            $(if($InputObject.LicenseUrl){
-            "<licenseUrl>$([System.Security.SecurityElement]::Escape($InputObject.LicenseUrl))</licenseUrl>
-            <requireLicenseAcceptance>$(([bool]$InputObject.RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>"
+            $(if($PackageData.LicenseUrl){
+            "<licenseUrl>$([System.Security.SecurityElement]::Escape($PackageData.LicenseUrl))</licenseUrl>
+            <requireLicenseAcceptance>$(([bool]$PackageData.RequireLicenseAcceptance).ToString().ToLower())</requireLicenseAcceptance>"
             })
-            <projectUrl>$([System.Security.SecurityElement]::Escape($InputObject.ProjectUrl))</projectUrl>
-            <iconUrl>$([System.Security.SecurityElement]::Escape($IconUrl))</iconUrl>
+            <projectUrl>$([System.Security.SecurityElement]::Escape($PackageData.ProjectUrl))</projectUrl>
+            <iconUrl>$([System.Security.SecurityElement]::Escape($PackageData.IconUrl))</iconUrl>
             <description>$([System.Security.SecurityElement]::Escape($InputObject.Description))</description>
-            <releaseNotes>$([System.Security.SecurityElement]::Escape($InputObject.ReleaseNotes))</releaseNotes>
+            <releaseNotes>$([System.Security.SecurityElement]::Escape($PackageData.ReleaseNotes))</releaseNotes>
             <copyright>$([System.Security.SecurityElement]::Escape($InputObject.Copyright))</copyright>
             <tags>$([System.Security.SecurityElement]::Escape($Tags))</tags>
           </metadata>
         </package>"
 
-        # Remove nodes without values (this is to clean up the "Url" nodes that aren't set)
+        # Remove nodes without values (this is to clean up the nodes that aren't set)
         $($doc.package.metadata.GetElementsByTagName("*")) | 
            Where-Object { $_."#text" -eq $null } | 
            ForEach-Object { $null = $doc.package.metadata.RemoveChild( $_ ) }

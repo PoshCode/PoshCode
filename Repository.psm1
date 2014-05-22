@@ -10,7 +10,7 @@ if(!(Get-Command Invoke-WebReques[t] -ErrorAction SilentlyContinue)){
   Import-Module $PoshCodeModuleRoot\InvokeWeb
 }
 
-Import-Module $PoshCodeModuleRoot\ModuleInfo.psm1
+Import-Module $PoshCodeModuleRoot\Metadata.psm1
 # FULL # END FULL
 
 

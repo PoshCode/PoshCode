@@ -8,39 +8,43 @@
 #   The keys in the nested hashtables MUST include the TYPE and ROOT, and may include additional settings for the Repository's FindModule command
 
 @{
-    InstallPaths = @{
-        CommonPath = '{ProgramFiles}\WindowsPowerShell\Modules'
-        UserPath = '{Personal}\WindowsPowerShell\Modules'
+  AuthorInfo = @{
+    Copyright = 'Copyright (c) 2014 by Joel Bennett, all rights reserved.'
+    Author = 'Joel Bennett'
+    CompanyName = 'http://HuddledMasses.org'
+  }
+  InstallPaths = @{
+    CommonPath = 'C:\Program Files\WindowsPowerShell\Modules'
+    UserPath = 'C:\Users\Joel\Documents\WindowsPowerShell\Modules'
+  }
+  Repositories = @{
+    Chocolatey = @{
+      Root = 'https://chocolatey.org/api/v2/Packages'
+      Tags = @('PowerShell','Module')
+      Type = 'NuGet'
     }
-    Repositories = @{
-        PSGet = @{
-            Type = 'File'
-            Root = 'https://github.com/psget/psget/raw/master/Directory.xml'
-            CacheTimeSeconds = 900
-        }
-        PoshCode = @{
-            Type = 'Folder'
-            Root = '\\PoshCode.org\DavWWWRoot\Modules'
-        }
-        GitHub = @{
-            Type = 'GitHub'
-            Root = 'https://api.github.com/search/code'
-        }
-        NuGet = @{
-            Type = 'NuGet'
-            Root = 'https://www.nuget.org/api/v2/Packages'
-            IncludePrerelease = $True
-        }
-        Chocolatey = @{
-            Type = 'NuGet'
-            Root = 'https://chocolatey.org/api/v2/Packages'
-            Tags = 'PowerShell', 'Module'
-        }
-        ConfigGallery = @{
-            Type = 'NuGet'
-            # The official URL is a forwarding url https://go.microsoft.com/fwlink/?LinkID=397631&clcid=0x409
-            Root = 'https://msconfiggallery.cloudapp.net/api/v2/Packages'
-            SearchByDefault = $true
-        }
+    ConfigGallery = @{
+      Root = 'https://msconfiggallery.cloudapp.net/api/v2/Packages'
+      Type = 'NuGet'
+      SearchByDefault = $True
     }
+    GitHub = @{
+      Root = 'https://api.github.com/search/code'
+      Type = 'GitHub'
+    }
+    NuGet = @{
+      Root = 'https://www.nuget.org/api/v2/Packages'
+      Type = 'NuGet'
+      IncludePrerelease = $True
+    }
+    PSGet = @{
+      Root = 'https://github.com/psget/psget/raw/master/Directory.xml'
+      CacheTimeSeconds = 900
+      Type = 'File'
+    }
+    PoshCode = @{
+      Root = '\\PoshCode.org\DavWWWRoot\Modules'
+      Type = 'Folder'
+    }
+  }
 }

@@ -28,7 +28,6 @@ if(!$PSScriptRoot) { $PSScriptRoot = $Pwd }
 $Constants = (Get-Content $PSScriptRoot\Constants.ps1 -Raw)  -replace "# SIG # Begin signature block(?s:\s.*)" 
 $Atom = (Get-Content $PSScriptRoot\Atom.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
 $Metadata = (Get-Content $PSScriptRoot\Metadata.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
-$ModuleInfo = (Get-Content $PSScriptRoot\ModuleInfo.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
 $Configuration = (Get-Content $PSScriptRoot\Configuration.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
 $InvokeWeb = (Get-Content $PSScriptRoot\InvokeWeb.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"
 $Installation = (Get-Content $PSScriptRoot\Installation.psm1 -Raw) -replace '(Export-ModuleMember.*(?m:;|$))','<#$1#>'  -replace "# SIG # Begin signature block(?s:\s.*)" -replace "# FULL # BEGIN FULL(?s:.*?)# FULL # END FULL"

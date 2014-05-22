@@ -45,17 +45,16 @@ if(Test-Path $EmptyPath) {
 }
 
 $pkZipHeader = [byte[]](80,75,3,4)
-$PackageDataKey = 'PSPackageData'
+$PackageDataKey = 'PSData'
 [String[]]$ModulePackageKeyword = "PowerShell", "Module"
 $UserAgent = "PoshCode\Packaging Module"
 
 # Our Extensions
 $NuSpecManifestExtension = ".nuspec"
-$PackageInfoExtension    = ".packageInfo"
 $ModuleManifestExtension = ".psd1"
 $ModulePackageExtension  = ".nupkg"
 $ZipFileExtension = ".zip"
-$XmlFileExtension = ".xml"
+$XmlFeedExtension = ".xml"
 
 $NuGetMagicPaths = "_rels", "package"
 

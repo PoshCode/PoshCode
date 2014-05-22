@@ -37,7 +37,6 @@
     <Compile Include="Constants.ps1" />
     <Compile Include="Installation.psm1" />
     <Compile Include="InvokeWeb.psm1" />
-    <Compile Include="ModuleInfo.psm1" />
     <Compile Include="New-InstallScript.ps1" />
     <Compile Include="PoshCode.packageInfo" />
     <Compile Include="Packaging.psm1" />

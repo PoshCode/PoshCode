@@ -14,7 +14,7 @@ if(!$PoshCodeModuleRoot) {
 . $PoshCodeModuleRoot\Constants.ps1
 
 # We're not using Requires because it just gets in the way on PSv2
-#!Requires -Modules Metadata, ModuleInfo
+#!Requires -Modules Metadata
 Import-Module $PoshCodeModuleRoot\Metadata.psm1
 # FULL # END FULL
 

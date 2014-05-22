@@ -15,8 +15,7 @@ if(!$PoshCodeModuleRoot) {
 . $PoshCodeModuleRoot\Constants.ps1
 
 # We're not using Requires because it just gets in the way on PSv2
-#!Requires -Version 2 -Modules "Configuration", "Metadata"
-#!Requires -Version 2 -Modules "ModuleInfo"
+#!Requires -Version 2 -Modules "Atom", "Configuration", "Metadata"
 Import-Module $PoshCodeModuleRoot\Atom.psm1
 Import-Module $PoshCodeModuleRoot\Configuration.psm1
 Import-Module $PoshCodeModuleRoot\Metadata.psm1
@@ -135,7 +134,7 @@ function Update-Module {
                $reader = New-Object System.IO.StreamReader $WebResponse.RawContentStream, $encoding
                $content = $reader.ReadToEnd()
             } else {
-               $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $PackageInfoExtension )
+               $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $XmlFeedExtension )
                if( $WebResponse.Content -is [Byte[]] ) {
                   Set-Content $FileName $WebResponse.Content -Encoding Byte -Confirm:$false
                   [string]$content = Get-Content $FileName -Delimiter ([char]0)
@@ -542,19 +541,19 @@ function Install-Module {
          }
 
          $ext = if($WebResponse.Content -isnot [Byte[]]) {
-            $PackageInfoExtension
+            $XmlFeedExtension
          } else {
             if($WebResponse.Content[0] -eq $pkZipHeader[0] -and $WebResponse.Content[1] -eq $pkZipHeader[1] -and $WebResponse.Content[2] -eq $pkZipHeader[2] -and $WebResponse.Content[3] -eq $pkZipHeader[3]) {
                 $ModulePackageExtension
             } else { 
-                $PackageInfoExtension
+                $XmlFeedExtension
             }
          }
 
          if(!$FileName) {
             $FileName = [IO.path]::ChangeExtension( [IO.Path]::GetTempFileName(), $ext )
          } 
-         elseif(![IO.path]::HasExtension($FileName) -or ($ModulePackageExtension, $PackageInfoExtension -eq [IO.Path]::GetExtension($FileName)) -notcontains $True)
+         elseif(![IO.path]::HasExtension($FileName) -or ($ModulePackageExtension, $XmlFeedExtension -eq [IO.Path]::GetExtension($FileName)) -notcontains $True)
          {
             $FileName = [IO.path]::ChangeExtension( $FileName, $ext )
          }
@@ -604,10 +603,10 @@ function Install-Module {
       # At this point, the Package must be a file 
       $PackagePath = Resolve-Path $Package -ErrorAction Stop
 
-      ## If we just got back a module manifest (text file vs. zip/nupkg)
+      ## If we just got back a feed (xml text file vs. zip/nupkg)
       ## Figure out the real package Uri and recurse so we can download it
       # TODO: Check the file contents instead (it's just testing extensions right now)
-      if($PackageInfoExtension -eq [IO.Path]::GetExtension($PackagePath)) {
+      if($XmlFeedExtension -eq [IO.Path]::GetExtension($PackagePath)) {
          Write-Verbose "The file '$PackagePath' is just a package entry (feed), get the DownloadUrl."
          $MI = Import-AtomFeed $PackagePath -ErrorAction "SilentlyContinue" -Count 1
          Remove-Item $PackagePath
@@ -645,7 +644,7 @@ function Install-Module {
 
       if(!(Test-Path (Join-Path $ModuleFolder.FullName "*${ModuleManifestExtension}"))) {
          # TODO: if we got this from a NuGet server, we know how to upgrade it anyway...
-         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported for upgrade (it is missing the $PackageInfoExtension manifest)"
+         Write-Warning "The archive was unpacked to $($ModuleFolder.Fullname), but is not supported. It's missing a module manifest (${ModuleManifestExtension}) and thus, version information."
       }
 
       # To resolve dependencies, always reload the Module information

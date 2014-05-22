@@ -63,18 +63,13 @@ TypesToProcess = 'PoshCode.types.ps1xml'
 FormatsToProcess = 'PoshCode.format.ps1xml'
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @('Metadata.psm1', 
-               'Atom.psm1', 
-               'ModuleInfo.psm1', 
-               'Configuration.psm1', 
-               'Installation.psm1', 
-               'Scripts.psm1', 
-               'Repository.psm1')
+NestedModules = 'Metadata.psm1', 'Atom.psm1', 'Configuration.psm1', 'Installation.psm1', 
+                'Scripts.psm1', 'Repository.psm1'
 
 # Functions to export from this module
 FunctionsToExport = 'Install-Module', 'Find-Module', 'Update-Module', 'Compress-Module', 
                'Set-ModuleInfo', 'Get-ModuleInfo', 'Get-ConfigData', 'Set-ConfigData', 
-               'Get-SpecialFolder', 'Get-PoshCode', 'Send-PoshCode', 'Update-ModuleManifest'
+               'Get-SpecialFolder', 'Get-PoshCode', 'Send-PoshCode', 'Set-ModuleManifest'
 
 # Cmdlets to export from this module
 CmdletsToExport = '*'
@@ -86,15 +81,8 @@ VariablesToExport = '*'
 AliasesToExport = '*'
 
 # List of all modules packaged with this module
-ModuleList = @('Metadata', 
-               'Atom', 
-               'ModuleInfo', 
-               'Configuration', 
-               'Installation', 
-               'InvokeWeb', 
-               'Packaging', 
-               'Scripts', 
-               'Repository')
+ModuleList = @('Metadata', 'Atom', 'Configuration', 'Installation', 'InvokeWeb', 
+               'Packaging', 'Scripts', 'Repository')
 
 # List of all files packaged with this module
 FileList = 'Constants.ps1', 'PoshCode.psd1', 

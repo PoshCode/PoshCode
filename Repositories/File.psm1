@@ -47,7 +47,7 @@ function FindModule {
             $CachePath = $CachePath.Substring(0,50)
         }
 
-        $CachePath = [IO.Path]::ChangeExtension((Join-Path (Get-LocalStoragePath "FileRepoCache") "$CachePath"), $XmlFileExtension)
+        $CachePath = [IO.Path]::ChangeExtension((Join-Path (Get-LocalStoragePath "FileRepoCache") "$CachePath"), $XmlFeedExtension)
 
         $Cache = Get-Item $CachePath -ErrorAction SilentlyContinue
         if(!$Cache -or ([DateTime]::Now - $Cache.LastWriteTime).TotalSeconds -gt $CacheTimeSeconds) {
