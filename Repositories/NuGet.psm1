@@ -98,7 +98,7 @@ function FindModule {
     
         Write-Verbose "`$orderby=LastUpdated&`$filter=${filter}"
       
-        $wr = Invoke-WebRequest $Root -Body @{'$filter'=$filter; '$orderby'='Published desc' } 
+        $wr = Invoke-WebRequest "$Root/Packages" -Body @{'$filter'=$filter; '$orderby'='Published desc' } 
         # Read the data using the right character set, because Invoke-WebRequest doesn't
         try {
             $null = $wr.RawContentStream.Seek(0,"Begin")
@@ -114,4 +114,25 @@ function FindModule {
     }
 }
 
+
+
+function PushModule {
+    [CmdletBinding()]
+    param(
+        # The file you want to publish
+        [Parameter(Mandatory=$true)]
+        [System.IO.FileInfo]$Package,
+
+        # Search for modules published by a particular author.
+        [Parameter(Mandatory=$true)]
+        [string]$ApiKey,
+
+        [Parameter(Mandatory=$true)]
+        $Root
+    )
+    process {
+        [Byte[]]$Bytes = Get-Content $Package -Encoding Byte
+        Invoke-WebRequest -Uri "$Root/package/" -Method "PUT" -ContentType "application/octet-stream" -Body $Bytes -Headers @{"X-NuGet-ApiKey" = $APIKey}
+    }
+}
 Export-ModuleMember -Function FindModule

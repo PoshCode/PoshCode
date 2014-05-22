@@ -19,14 +19,18 @@
   }
   Repositories = @{
     Chocolatey = @{
-      Root = 'https://chocolatey.org/api/v2/Packages'
+      Root = 'https://chocolatey.org/api/v2'
       Tags = @('PowerShell','Module')
       Type = 'NuGet'
+      PublishByDefault = $True
+      ApiKey = '4322b657-9d22-4319-9012-1d179c21940c'
     }
     ConfigGallery = @{
-      Root = 'https://msconfiggallery.cloudapp.net/api/v2/Packages'
+      Root = 'https://msconfiggallery.cloudapp.net/api/v2'
       Type = 'NuGet'
       SearchByDefault = $True
+      PublishByDefault = $True
+      ApiKey = '4fe2e893-d4fc-4294-8e87-6a7c51cfe32e'
     }
     GitHub = @{
       Root = 'https://api.github.com/search/code'

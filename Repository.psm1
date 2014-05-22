@@ -85,31 +85,34 @@ function Find-Module {
                 }
             } else {
                 # Filter Repositories
-                $ConfiguredRepositories = $(
-                    # First try matching the name exactly:
-                    if($ConfiguredRepositories."$Repository") {
-                        Write-Verbose "Found exact name: $Repository"
-                        $SelectedRepositories."$Repository" = $ConfiguredRepositories."$Repository"
-                    # Then try wildcards:
-                    } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_ -like "$r" } }) {
-                        Write-Verbose "Found matching names: $Keys"
-                        foreach($Repo in $Keys) {
-                            $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
-                        }
-                    } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }) {
-                        Write-Verbose "Found matching Roots: $Keys"
-                        foreach($Repo in $Keys) {
-                            $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
-                        }
+                # First try matching the name exactly:
+                if($ConfiguredRepositories."$Repository") {
+                    Write-Verbose "Found exact name: $Repository"
+                    $SelectedRepositories."$Repository" = $ConfiguredRepositories."$Repository"
+                # Then try wildcards:
+                } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_ -like "$r" } }) {
+                    Write-Verbose "Found matching names: $Keys"
+                    foreach($Repo in $Keys) {
+                        $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
                     }
-                )
+                } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }) {
+                    Write-Verbose "Found matching Roots: $Keys"
+                    foreach($Repo in $Keys) {
+                        $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                    }
+                }
             }
+        }
+
+        if($SelectedRepositories.Count -eq 0) {
+            Write-Error "No repository specified for search. Please specify a repository name or set one or more of your configured repositories to SearchByDefault."
+            return
         }
     
         $null = $PSBoundParameters.Remove("Repository")
         $null = $PSBoundParameters.Remove("Limit")
       
-        # Write-Verbose ($ConfiguredRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
+        # Write-Verbose ($SelectedRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
         foreach($Name in $SelectedRepositories.Keys) {
             $Repo = $SelectedRepositories.$Name
             Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
@@ -126,7 +129,7 @@ function Find-Module {
                 ForEach-Object { $_.Name }
 
             if($Mandatory) {
-                Write-Warning "Not searching $($Repo.Type), missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
+                Write-Warning "Not searching $($Repo.Type) repository $Name, missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
             } else {
                 # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
                 try {
@@ -150,4 +153,98 @@ function Find-Module {
     }
 }
 
-Export-ModuleMember -Function 'Find-Module'
+
+
+
+function Publish-Module {
+    #.Synopsis
+    #   Pushes a package to a NuGet-API compatible repository
+    param(
+        # The file you want to publish
+        [Parameter(Mandatory=$True, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        $Package,
+
+        # The name or partial URL of a configured repository, or the full URL to a repository
+        $Repository,
+
+        # An API Key or login credentials for the repository
+        $ApiKey
+    )
+    begin { 
+        $Global:PublishErrors = New-Object System.Collections.ArrayList
+        $Count = 0
+    }
+    process {
+
+        if($Repository -is [hashtable]) {
+            $SelectedRepositories = $Repository
+        } else {
+            $SelectedRepositories = @{}
+            $ConfiguredRepositories = (Get-ConfigData).Repositories
+            if(!$Repository) {
+                Write-Verbose "Using SearchByDefault Repositories"
+                foreach($Repo in $ConfiguredRepositories.Keys | Where-Object { $ConfiguredRepositories.$_.PublishByDefault }) {
+                    $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                }
+            } else {
+                # Filter Repositories
+                # First try matching the name exactly:
+                if($ConfiguredRepositories."$Repository") {
+                    Write-Verbose "Found exact name: $Repository"
+                    $SelectedRepositories."$Repository" = $ConfiguredRepositories."$Repository"
+                # Then try wildcards:
+                } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_ -like "$r" } }) {
+                    Write-Verbose "Found matching names: $Keys"
+                    foreach($Repo in $Keys) {
+                        $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                    }
+                } elseif($Keys = $ConfiguredRepositories.Keys | Where-Object { foreach($r in @($Repository)){ $_.Root -like "$r" } }) {
+                    Write-Verbose "Found matching Roots: $Keys"
+                    foreach($Repo in $Keys) {
+                        $SelectedRepositories."$Repo" = $ConfiguredRepositories."$Repo"
+                    }
+                }
+            }
+        }
+
+        if($SelectedRepositories.Count -eq 0) {
+            Write-Error "No repository specified for search. Please specify a repository name or set one or more of your configured repositories to SearchByDefault."
+            return
+        }
+    
+        $null = $PSBoundParameters.Remove("Repository")
+
+        foreach($Name in $SelectedRepositories.Keys) {
+            $Repo = $SelectedRepositories.$Name
+            Write-Verbose "$(${Repo}.Type)\PushModule -Root $($Repo.Root)"
+
+            $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['PushModule'] } 
+
+            # We help out by mapping anything in the settings to their parameters
+            foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
+                $PSBoundParameters.$k = $Repo.$k
+            }
+
+            $Mandatory = $Command.Parameters.Values | 
+                Where-Object { $_.Attributes.Mandatory -and ($PSBoundParameters.Keys -NotContains $_.Name)} |
+                ForEach-Object { $_.Name }
+
+            if($Mandatory) {
+                Write-Warning "Not publishing to $($Repo.Type) repository $($Name), missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
+            } else {
+                # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
+                try {
+                    &$Command @PSBoundParameters
+                }
+                catch 
+                {
+                    $PublishErrors.Add($_)
+                    Write-Warning "Error Searching $($Repo.Type) $($Repo.Root) (See `$PublishErrors)"
+                }
+            }
+        }
+    }
+}
+
+
+Export-ModuleMember -Function 'Find-Module', 'Publish-Module'

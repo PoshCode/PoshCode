@@ -64,8 +64,8 @@ function Set-RequestContent {
           $request.ContentLength = $bytes.Length
         }
         $stream = $request.GetRequestStream()
-        $stream.Write($bytes, 0, $bytes.Length)
-        $stream.Flush()
+        $null = $stream.Write($bytes, 0, $bytes.Length)
+        $null = $stream.Flush()
         return $request.ContentLength;
     }
 }
@@ -232,7 +232,7 @@ function Invoke-WebRequest {
             }
             elseif ($body -is [byte[]])
             {
-                Set-RequestContent $request $content
+                Set-RequestContent $request $body
             }
             else {
                 Set-RequestContent $request ([System.Management.Automation.LanguagePrimitives]::ConvertTo($body, [string], [IFormatProvider]::InvariantCulture))
