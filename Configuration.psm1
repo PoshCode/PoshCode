@@ -18,7 +18,6 @@ if(!$PoshCodeModuleRoot) {
 Import-Module $PoshCodeModuleRoot\Metadata.psm1
 # FULL # END FULL
 
-
 $Script:SpecialFolderNames = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
 
 function Get-SpecialFolder {
@@ -34,12 +33,12 @@ function Get-SpecialFolder {
       if($Script:SpecialFolderNames -like $Name) {
         return $true
       } else {
-        throw "Cannot convert Path, with value: `"$Name`", to type `"System.Environment+SpecialFolder`": Error: `"The identifier name $Name is noe one of $($Names -join ', ')"
+        throw "Cannot convert Path, with value: `"$Name`", to type `"System.Environment+SpecialFolder`": Error: `"The identifier name $Name is not one of $($Script:SpecialFolderNames -join ', ')"
       }
     })]
     [String]$Path = "*",
 
-    # If set, returns a hashtable of folder names to paths
+    # If not set, returns a hashtable of folder names to paths
     [Switch]$Value
   )
 
@@ -462,6 +461,79 @@ function Get-LocalStoragePath {
    }
 }
 
+function Get-ScopeStoragePath {
+    #.Synopsis
+    #   Saves the object to local storage with the specified name
+    #.Description
+    #   Persists objects to disk using Get-LocalStoragePath and Export-Metadata
+    param(
+        # A unique valid module name to use when persisting the object to disk
+        [Parameter(Mandatory=$true, Position=0)]
+        [ValidateScript({ 
+            $invalid = "$_".IndexOfAny([IO.Path]::GetInvalidPathChars())       
+            if($invalid -eq -1){ 
+                return $true
+            } else {
+                throw "Invalid character in Module Name '$_' at $invalid"
+            }
+        })]      
+        $Module,
+
+        # A unique object name to use when persisting the object to disk
+        [Parameter(Mandatory=$true, Position=1)]
+        [ValidateScript({ 
+            $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+            if($invalid -eq -1){ 
+                return $true
+            } else {
+                throw "Invalid character in Object Name '$_' at $invalid"
+            }
+        })]      
+        [string]$Name,
+
+        # The scope to store the data in. Defaults to storing in the ModulePath
+        [ValidateSet("Module", "User", $Null)]
+        $Scope = "Module"
+    )
+    end {
+        $invalid = "$Module".IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
+        if(($Scope -ne "User") -and $invalid -and (Test-Path "$Module")) 
+        {
+            $ModulePath = Resolve-Path $Module
+        } 
+        elseif($Scope -eq "Module") 
+        {
+            if($Module -is [System.Management.Automation.PSModuleInfo]) {
+                $ModulePath = $Module.ModuleBase
+            } else {
+                $Module = Split-Path $Module -Leaf
+                $ModulePath = Get-ModuleInfo $Module -ListAvailable | Select -Expand ModuleBase -First 1
+            }
+        }
+
+        # Scope -eq "User"
+        if(!$ModulePath -or !(Test-Path $ModulePath)) {
+            $Module = Split-Path $Module -Leaf
+            $ModulePath = Get-LocalStoragePath $Module
+            if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
+                $Null = New-Item -ItemType Directory $ModulePath
+            }
+        }
+
+        if(!(Test-Path $ModulePath)) {
+            Write-Error "The folder for storage doesn't exist: $ModulePath"
+        }
+
+        # Make sure it has a PSD1 extension
+        if($Name -notmatch '.*\.psd1$') {
+            $Name = "${Name}.psd1"
+        }
+
+        Join-Path $ModulePath $Name
+    }
+}
+
+
 function Export-LocalStorage {
    #.Synopsis
    #   Saves the object to local storage with the specified name
@@ -477,7 +549,7 @@ function Export-LocalStorage {
          } else {
             throw "Invalid character in Module Name '$_' at $invalid"
          }
-      })]      
+      })]
       [string]$Module,
 
       # A unique object name to use when persisting the object to disk
@@ -504,40 +576,7 @@ function Export-LocalStorage {
       $InputObject
    )
    begin {
-      $invalid = $Module.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-
-      if(($Scope -ne "User") -and $invalid -and (Test-Path $Module))
-      {
-         $ModulePath = Resolve-Path $Module
-      } 
-      elseif($Scope -eq "Module") 
-      {
-         $Module = Split-Path $Module -Leaf
-         $ModulePath = Get-ModuleInfo $Module -ListAvailable | Select -Expand ModuleBase -First 1
-      }
-
-      # Scope -eq "User"
-      if(!$ModulePath -or !(Test-Path $ModulePath)) {
-         $Module = Split-Path $Module -Leaf
-         $ModulePath = Get-LocalStoragePath $Module
-         if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
-            $Null = New-Item -ItemType Directory $ModulePath
-         }
-      }
-
-      if(!(Test-Path $ModulePath)) {
-         Write-Error "The folder for storage doesn't exist: $ModulePath"
-      }
-
-      $ModulePath = Resolve-Path $ModulePath -ErrorAction Stop
-
-      # Make sure it has a PSD1 extension
-      if($Name -notmatch '.*\.psd1$') {
-        $Name = "${Name}.psd1"
-      }
-
-      $Path = Join-Path $ModulePath $Name
-
+      $Path = Get-ScopeStoragePath -Module:$Module -Name:$Name -Scope:$Scope
       if($PSBoundParameters.ContainsKey("InputObject")) {
          Write-Verbose "Clean Export"
          Write-Verbose ""
@@ -570,6 +609,14 @@ function Import-LocalStorage {
    param(
       # A unique valid module name to use when persisting the object to disk
       [Parameter(Mandatory=$true, Position=0)]
+      [ValidateScript({ 
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
+         if($invalid -eq -1){ 
+            return $true
+         } else {
+            throw "Invalid character in Module Name '$_' at $invalid"
+         }
+      })]
       [string]$Module,
 
       # A unique object name to use when persisting the object to disk
@@ -593,37 +640,7 @@ function Import-LocalStorage {
       [Object]$DefaultValue
    )
    end {
-      $invalid = $Module.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-      if(($Scope -ne "User") -and $invalid -and (Test-Path $Module)) 
-      {
-         $ModulePath = Resolve-Path $Module
-      } 
-      elseif($Scope -eq "Module") 
-      {
-         $Module = Split-Path $Module -Leaf
-         $ModulePath = Get-ModuleInfo $Module -ListAvailable | Select -Expand ModuleBase -First 1
-      }
-
-      # Scope -eq "User"
-      if(!$ModulePath -or !(Test-Path $ModulePath)) {
-         $Module = Split-Path $Module -Leaf
-         $ModulePath = Get-LocalStoragePath $Module
-         if(!(Test-Path $ModulePath) -and ($Scope -ne "Module")) {
-            $Null = New-Item -ItemType Directory $ModulePath
-         }
-      }
-
-      if(!(Test-Path $ModulePath)) {
-         Write-Error "The folder for storage doesn't exist: $ModulePath"
-      }
-
-      # Make sure it has a PSD1 extension
-      if($Name -notmatch '.*\.psd1$') {
-        $Name = "${Name}.psd1"
-      }
-
-      $Path = Join-Path $ModulePath $Name
-
+      $Path = Get-ScopeStoragePath -Module:$Module -Name:$Name -Scope:$Scope
       try {
          $Path = Resolve-Path $Path -ErrorAction Stop
          if(@($Path).Count -gt 1) {
@@ -645,7 +662,8 @@ function Import-LocalStorage {
    }
 }
                               
-Export-ModuleMember -Function Import-LocalStorage, Export-LocalStorage, Get-LocalStoragePath,
+Export-ModuleMember -Function Get-ScopeStoragePath, Get-LocalStoragePath,
+                              Import-LocalStorage, Export-LocalStorage,
                               Get-SpecialFolder, Select-ModulePath, Test-ExecutionPolicy, 
                               Get-ConfigData, Set-ConfigData, Test-ConfigData
 # FULL # END FULL

@@ -37,3 +37,25 @@ test "Get Special Folder" {
       }
    }
 }
+
+test "Get Scope Storage Path" {
+    arrange {
+        $AllM = Get-Module -ListAvailable 
+        $Module = $AllM | Where { $_.ModuleBase -like "${Home}*" } | Select -First 1
+        if(!$Module) { $Module = $Allm[0] }
+
+        $Name = $Module.Name
+        $Base = $Module.ModuleBase
+        $Local = Get-SpecialFolder LocalApplicationData -Value
+    }
+    act {
+        $Default = Get-ScopeStoragePath -Module $Module -Name "UserSettings"
+        $User    = Get-ScopeStoragePath -Module $Module -Name "UserSettings" -Scope "User"
+        $Module  = Get-ScopeStoragePath -Module $Module -Name "UserSettings" -Scope "Module"
+    }
+    assert {
+        $Module.MustEqual( (Join-Path ${Base} "UserSettings.psd1") )
+        $User.MustEqual( (Join-Path ${Local} "PoshCode\$Name\UserSettings.psd1") )
+        $Default.MustEqual( $Module )
+    }
+}
