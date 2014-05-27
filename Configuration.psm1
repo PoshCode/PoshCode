@@ -492,7 +492,7 @@ function Get-ScopeStoragePath {
         [string]$Name,
 
         # The scope to store the data in. Defaults to storing in the ModulePath
-        [ValidateSet("Module", "User", $Null)]
+        [ValidateSet("Module", "User")]
         $Scope = "Module"
     )
     end {
@@ -576,14 +576,15 @@ function Export-LocalStorage {
       $InputObject
    )
    begin {
-      $Path = Get-ScopeStoragePath -Module:$Module -Name:$Name -Scope:$Scope
       if($PSBoundParameters.ContainsKey("InputObject")) {
+         $null = $PSBoundParameters.Remove("InputObject")
+         $Path = Get-ScopeStoragePath @PSBoundParameters
          Write-Verbose "Clean Export"
-         Write-Verbose ""
          Export-Metadata -Path $Path -InputObject $InputObject -CommentHeader $CommentHeader
          $Output = $null
       } else {
          $Output = @()
+         $Path = Get-ScopeStoragePath @PSBoundParameters
       }
    }
    process {
@@ -640,7 +641,11 @@ function Import-LocalStorage {
       [Object]$DefaultValue
    )
    end {
-      $Path = Get-ScopeStoragePath -Module:$Module -Name:$Name -Scope:$Scope
+      $null = $PSBoundParameters.Remove("DefaultValue")
+      if($Name -eq "*") {
+        $PSBoundParameters["Name"] = "*" 
+      }
+      $Path = Get-ScopeStoragePath @PSBoundParameters
       try {
          $Path = Resolve-Path $Path -ErrorAction Stop
          if(@($Path).Count -gt 1) {
@@ -653,7 +658,7 @@ function Import-LocalStorage {
             Import-Metadata -Path $Path
          }
       } catch {
-         if($PSBoundParameters.ContainsKey("DefaultValue")) {
+         if($DefaultValue) {
             Write-Output $DefaultValue
          } else {
             throw
