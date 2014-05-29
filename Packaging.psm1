@@ -135,7 +135,6 @@ function Compress-Module {
                         "ModuleNotAvailableLocallyToPublish", "InvalidArgument", $ModuleInfo) )
             }
 
-
             if($PSVersionTable.PSVersion -lt "3.0") {
                 $ModuleInfo = Import-Module $ModuleName -Global -PassThru | Get-ModuleInfo -Force
             } else {
@@ -145,7 +144,7 @@ function Compress-Module {
         }
         $PackageName = $ModuleInfo.Name
 
-        # If there's no packageInfo file, we ought *create* one with urls in it -- but we don't know the URLs
+        # If there's no module manifest, we'll need to create one ..
         $ModuleInfoPath = Join-Path $ModuleInfo.ModuleBase ($PackageName + $ModuleManifestExtension)
 
         $ManifestProperties = "IncrementVersionNumber", "ModuleVersion", "Category", "IconUrl", "IsPrerelease", "LicenseUrl", "ProjectUrl", "RequireLicenseAcceptance", "Tags"
@@ -164,6 +163,8 @@ function Compress-Module {
                 Write-Warning "Generated $ModuleInfoPath in $PackageName"
             }
         }
+
+        Test-ModuleManifest $ModuleInfoPath
 
         Write-Debug "$($ModuleInfo  | % { $_.FileList } | Out-String)"
         Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Validating Inputs" -Id 0    
@@ -414,7 +415,7 @@ function Set-PackageProperties {
     $ModuleInfo
   )
   process {
-    $PackageProperties = $Package.PackageProperties
+    $PrivatePackageProperties = $Package.PackageProperties
 
     $PackageData = @{} + $ModuleInfo.PrivateData
     $PackageData = @{} + $PackageData.$PackageDataKey
@@ -427,23 +428,23 @@ function Set-PackageProperties {
 
     ## NuGet does the WRONG thing here, assuming the package name is unique
     ## And  pretending there's only one repo, and no need for unique identifiers
-    #$PackageProperties.Identifier = $ModuleInfo.GUID
-    $PackageProperties.Title = $ModuleInfo.Name
-    $PackageProperties.Identifier = $ModuleInfo.Name
+    #$PrivatePackageProperties.Identifier = $ModuleInfo.GUID
+    $PrivatePackageProperties.Title = $ModuleInfo.Name
+    $PrivatePackageProperties.Identifier = $ModuleInfo.Name
 
-    $PackageProperties.Version = $ModuleInfo.Version
-    $PackageProperties.Creator = $ModuleInfo.Author
-    $PackageProperties.Description = $ModuleInfo.Description
-    $PackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
-    $PackageProperties.Created = Get-Date
-    $PackageProperties.LastModifiedBy = $UserAgent
-    $PackageProperties.Category = $PackageData.Category
+    $PrivatePackageProperties.Version = $ModuleInfo.Version
+    $PrivatePackageProperties.Creator = $ModuleInfo.Author
+    $PrivatePackageProperties.Description = $ModuleInfo.Description
+    $PrivatePackageProperties.ContentStatus = "PowerShell " + $ModuleInfo.PowerShellVersion
+    $PrivatePackageProperties.Created = Get-Date
+    $PrivatePackageProperties.LastModifiedBy = $UserAgent
+    $PrivatePackageProperties.Category = $PackageData.Category
 
-    $PackageProperties.Keywords = if(!$PackageData.Tags) { $ModulePackageKeyword -join ' ' } else { @($PackageData.Tags) -join ' ' }
+    $PrivatePackageProperties.Keywords = if(!$PackageData.Tags) { $ModulePackageKeyword -join ' ' } else { @($PackageData.Tags) -join ' ' }
     if($PackageData.ProjectUrl) {
-        $PackageProperties.Subject = $PackageData.ProjectUrl
+        $PrivatePackageProperties.Subject = $PackageData.ProjectUrl
     } elseif($ModuleInfo.HelpInfoUri) { 
-        $PackageProperties.Subject = $ModuleInfo.HelpInfoUri 
+        $PrivatePackageProperties.Subject = $ModuleInfo.HelpInfoUri 
     }
   }
 }

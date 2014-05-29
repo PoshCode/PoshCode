@@ -69,7 +69,8 @@ NestedModules = 'Metadata.psm1', 'Atom.psm1', 'Configuration.psm1', 'Installatio
 # Functions to export from this module
 FunctionsToExport = 'Install-Module', 'Find-Module', 'Update-Module', 'Compress-Module', 
                'Set-ModuleInfo', 'Get-ModuleInfo', 'Get-ConfigData', 'Set-ConfigData', 
-               'Get-SpecialFolder', 'Get-PoshCode', 'Send-PoshCode', 'Set-ModuleManifest'
+               'Get-SpecialFolder', 'Get-PoshCode', 'Send-PoshCode', 
+               'Set-ModuleManifest', 'New-ModuleManifest', 'Test-ModuleManifest'
 
 # Cmdlets to export from this module
 CmdletsToExport = '*'

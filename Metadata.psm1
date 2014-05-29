@@ -19,6 +19,9 @@ if(!$PoshCodeModuleRoot) {
 #!Requires -Version 2 -Module "Atom"
 Import-Module $PoshCodeModuleRoot\Atom.psm1
 
+Set-Variable -Option Constant -Name ModuleManifestProperties -Value @('AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport')
+Set-Variable -Option Constant -Name PackageProperties -Value @('Category', 'IconUrl', 'IsPrerelease', 'LicenseUrl', 'PackageInfoUrl', 'ProjectUrl', 'RequireLicenseAcceptance', 'Tags')
+
 # Import and Export are the external functions. 
 function Import-Metadata {
    <#
@@ -150,7 +153,12 @@ function ConvertFrom-Metadata {
       }
 
       $Script = $AST.GetScriptBlock()
-      $Script.CheckRestrictedLanguage( $ValidCommands, $ValidVariables, $true )
+      try {
+        $Script.CheckRestrictedLanguage( $ValidCommands, $ValidVariables, $true )
+      }
+      catch {
+        Write-Error "$Script"
+      }
 
       $Mode, $ExecutionContext.SessionState.LanguageMode = $ExecutionContext.SessionState.LanguageMode, "RestrictedLanguage"
 
@@ -173,7 +181,7 @@ function ConvertTo-Metadata {
 
    process {
       if($InputObject -eq $Null) {
-
+        '""'
       } elseif( $InputObject -is [Int16] -or 
                 $InputObject -is [Int32] -or 
                 $InputObject -is [Int64] -or 
@@ -300,15 +308,180 @@ function DateTimeOffset {
    [DateTimeOffset]$Value
 }
 
+       
+function FindTokens {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position=0, Mandatory=$true)] 
+        [System.Management.Automation.Language.HashtableAst]$Hashtable,
+
+        [Parameter(Position=1, Mandatory=$true)] 
+        [String[]]$Keys,
+
+        $AllowedKeys = $ModuleManifestProperties
+    )
+    #Requires -Version 4.0
+    [String[]]$ParameterKeys = $Hashtable.KeyValuePairs.Item1.Value
+
+    foreach($Key in $Keys) {
+        if($Key -in $ParameterKeys) {
+            $Item = $Hashtable.KeyValuePairs | Where-Object { $_.Item1.Value -eq $Key }
+            Write-Debug "ParameterKeys Contains $Key at $($Item.Item1.Extent.StartOffset)..$($Item.Item1.Extent.EndOffset)"
+            [PSCustomObject]@{
+                Name = $Item.Item1.Value
+                Display = "Replacing {0} at line {1} col {2}" -f $Item.Item1.Value, $Item.Item1.Extent.StartLineNumber, $Item.Item1.Extent.StartColumnNumber
+                Start = $Item.Item1.Extent.StartOffset
+                End = $Item.Item1.Extent.EndOffset
+                Length = $Item.Item2.Extent.EndOffset - $Item.Item1.Extent.StartOffset
+            }
+        } elseif($AllowedKeys -and ($Key -in $AllowedKeys)) {
+            if(($Match = ([regex]"#\s*$Key\s*=.*").Match($Code)).Success) {
+                Write-Debug "Found a match for $Key in comments at $($Match.Value)"
+                [PSCustomObject]@{  
+                    Name = $Key
+                    Display = "Replacing {0} at index {1} in {2}" -f $Key, $Match.Index, $Match.Value
+                    Start = $Match.Index
+                    End = $Match.Index + $Match.Length
+                    Length = $Match.Length
+                }
+            } else {
+                Write-Debug "Found no match for $Key. Writing at the end $($Hashtable.Extent.EndOffset)"
+                [PSCustomObject]@{  
+                    Name = $Key
+                    Display = "Inserting {0} at the end of the file" -f $Key
+                    Start = $Hashtable.Extent.EndOffset - 1
+                    End = $Hashtable.Extent.EndOffset - 1
+                    Length = 0
+                }
+            }
+        } else {
+            Write-Debug "Did not deal with $Key"
+        }
+    }
+}
+ 
+$HashtableAst = [System.Management.Automation.Language.HashtableAst]
+$ArrayLiteralAst = [System.Management.Automation.Language.ArrayLiteralAst]
+function UpdateManifestContent {
+    # Update a Manifest file with the values in a hashtable. 
+    # This is the core of Set-ModuleManifest, but is also used by New-ModuleManifest
+    [CmdletBinding(DefaultParameterSetName="Path")]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [Alias("PSPath")]
+        [String]$Path,
+
+        [Parameter(Mandatory=$true, Position=1)]
+        [Hashtable]$Properties,
+
+        [Parameter(Mandatory=$true, ParameterSetName="Content")]
+        [String]$Content
+    )
+    end {
+        # Ok, now get the current module manifest and figure out what's in it
+        $Tokens = $Null; $ParseErrors = $Null
+        if(!$Content) {
+            $AST = [System.Management.Automation.Language.Parser]::ParseFile( (Convert-Path $Path), [ref]$Tokens, [ref]$ParseErrors)
+            if($ParseErrors -ne $null) {
+                $ParseException = New-Object System.Management.Automation.ParseException (,[System.Management.Automation.Language.ParseError[]]$ParseErrors)
+                $PSCmdlet.ThrowTerminatingError((New-Object System.Management.Automation.ErrorRecord $ParseException, "Metadata Error", "ParserError", $InputObject))
+            }
+        } else {
+            $AST = [System.Management.Automation.Language.Parser]::ParseInput( $Content, [ref]$Tokens, [ref]$ParseErrors)
+            if($ParseErrors -ne $null) {
+                $ParseException = New-Object System.Management.Automation.ParseException (,[System.Management.Automation.Language.ParseError[]]$ParseErrors)
+                $PSCmdlet.ThrowTerminatingError((New-Object System.Management.Automation.ErrorRecord $ParseException, "Metadata Error", "ParserError", $InputObject))
+            }
+        }
+        $Hashtable = $Ast.Find( { param($a) $a -is $HashtableAst }, $false )
+        # Get the module manifest as a string
+        [string]$Code = $Ast.ToString()
+
+        $OrderedKeys = @()
+        $PSData = @{}
+        # Special treatment for PackageProperties
+        foreach($name in $PackageProperties) {
+            if($Properties.ContainsKey($name)) {
+                $PSData.$name = $Properties.$name
+                $null = $Properties.Remove($name)
+            }
+            if($Properties.ContainsKey('PrivateData') -and $Properties.PrivateData.ContainsKey($PackageDataKey) -and $Properties.PrivateData.$PackageDataKey.ContainsKey($name)) {
+                
+                $PSData.$name = $Properties.PrivateData.$PackageDataKey.$name
+                $null = $Properties.PrivateData.$PackageDataKey.Remove($name)
+            }
+        }
+        # To preserve strings, I'm dealing with PrivateData.PSData outside of the proper hashtable system.
+        # Therefore, to avoid duplicate PrivateData.PSData entries, we MUST make sure there are none in PrivateData
+        if($Properties.ContainsKey('PrivateData') -and $Properties.PrivateData.ContainsKey($PackageDataKey)) {
+            foreach($Key in $Properties.PrivateData.$PackageDataKey.Keys) {
+                Write-Verbose "Writing UNKNOWN KEY $Key to $PackageDataKey"
+                $PSData.$Key = $Properties.PrivateData.$PackageDataKey.$Key
+            }
+            $null = $Properties.PrivateData.Remove($PackageDataKey)
+        }
+        if($PSData.Count -or $Properties.ContainsKey('PrivateData')) {
+            # Existing PrivateData
+            if($PrivateDataHash = $Hashtable.KeyValuePairs | Where { $_.Item1.Value -eq 'PrivateData' }) {
+                if($PrivateHash = $PrivateDataHash.Item2.Find( { param($a) $a -is $HashtableAst }, $false )) {
+                    # Existing PackageData (PSData)
+                    if($PrivateHash = $PrivateHash.KeyValuePairs | Where { $_.Item1.Value -eq $PackageDataKey }) {
+                        # They're trying to set something in PSData
+                        if($PSData.Count) {
+                            if($PrivateHash = $PrivateHash.Item2.Find( { param($a) $a -is $HashtableAst }, $false )) {
+                                # Do not validate the keys that are "allowed" in the PrivateData hash -- anything goes.
+                                $OrderedKeys = FindTokens $PrivateHash $PSData.Keys -AllowedKeys $PSData.Keys | Sort End -Descending
+                                foreach($Key in $OrderedKeys) {
+                                    $Code = $Code.Remove($Key.Start, $Key.Length).Insert($Key.Start, "$($Key.Name) = $(ConvertTo-Metadata $PSData.($Key.Name))`r`n")
+                                }
+                                UpdateManifestContent -Path $Path -Properties $Properties -Content $Code
+                                return
+                            }
+                        } else {
+                            # If there's existing PSData, and none specified, make sure we keep it
+                            $PSDataContent = $Code.Substring($PrivateHash.Item1.Extent.StartOffset, ($PrivateHash.Item2.Extent.EndOffset - $PrivateHash.Item1.Extent.StartOffset))
+                        }
+                    }
+                }
+            }
+        }
+
+        $OrderedKeys = FindTokens $Hashtable $Properties.Keys | Sort End -Descending
+        Write-Host ($OrderedKeys | Format-Table Name, Start, End, Display -AutoSize | out-string)
+
+        # Put our new values into the module manifest in string form ... 
+        foreach($Key in $OrderedKeys) {
+            $NewCode = ConvertTo-Metadata $Properties.($Key.Name)
+            if($Key.Name -eq "PrivateData" -and $PSDataContent) {
+                $NewCode = $NewCode -replace '([ \t]*\})$',"  ${PSDataContent}`r`n  `$1"
+            }
+            $Code = $Code.Remove($Key.Start, $Key.Length).Insert($Key.Start, "$($Key.Name) = $NewCode`r`n")
+        }
+
+        $Code = $Code -replace "\r?\n", "`r`n" -replace "(?:\s*\r\n){2,}","`r`n`r`n"
+        Set-Content $Path $Code.Trim()
+    }
+}
+
 function Set-ModuleManifest {
     <#
       .Synopsis
-         Creates or updates Module manifest (.psd1), package manifest (.nuspec) and data files (.packageInfo) for a module.
+         Creates or Updates Module manifest (.psd1) for a module.
       .Description
-         Creates a package manifest with the mandatory and optional properties
+         Updates specified parameters on a module manifest
     #>   
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
+        # The name of the module to setmodule manifest information on
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipelineByPropertyName=$true)]
+        [String]$Name,
+
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Alias("Version")]
+        [ValidateNotNull()]
+        [version]
+        ${ModuleVersion},
+
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [AllowEmptyString()]
         [string[]]
@@ -389,10 +562,6 @@ function Set-ModuleManifest {
         [System.Object[]]
         ${ModuleList},
 
-        # The name of the module to create a new package manifest(s) for
-        [Parameter(Mandatory=$true, Position=0, ValueFromPipelineByPropertyName=$true)]
-        [String]$Name,
-
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [AllowEmptyCollection()]
         [System.Object[]]
@@ -434,12 +603,6 @@ function Set-ModuleManifest {
         [System.Collections.IDictionary]
         ${PrivateData},
 
-
-        [Parameter(ValueFromPipelineByPropertyName=$true)]
-        [Alias("Version")]
-        [ValidateNotNull()]
-        [version]
-        ${ModuleVersion},
 
 
         # Choose one category from the list:
@@ -483,14 +646,10 @@ function Set-ModuleManifest {
         # If set, overwrite existing files without prompting
         [Switch]$Force,
 
-        [Switch]$NewOnly,
-
         [switch]${PassThru}
 
     )
     begin {
-        $ModuleManifestProperties = 'AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport'
-        $PackageProperties = 'Category', 'IconUrl', 'IsPrerelease', 'LicenseUrl', 'PackageInfoUrl', 'ProjectUrl', 'RequireLicenseAcceptance', 'Tags'
         if(!(Test-Path variable:RejectAllOverwriteOnModuleInfo)){
             $RejectAllOverwriteOnModuleInfo = $false
             $ConfirmAllOverwriteOnModuleInfo = $false
@@ -499,7 +658,7 @@ function Set-ModuleManifest {
     process {
 
         $ErrorActionPreference = "Stop"
-        $Manifest = Get-Module $Name -ListAvailable
+        $Manifest = GetModuleOrElse $Name
         $Null = $PSBoundParameters.Remove("Name")
 
         if(-not $Manifest)
@@ -508,7 +667,7 @@ function Set-ModuleManifest {
         }
         elseif(@($Manifest).Count -gt 1)
         {
-            $PSCmdlet.ThrowTerminatingError( (New-Error -Type System.ArgumentException "Found more than one module matching '$Name', please specify a full path instead." ModuleNotAvailable InvalidArgument $Name) )
+            $PSCmdlet.ThrowTerminatingError( (New-Error -Type System.ArgumentException "Found more than one module matching '$Name', please specify a full path, or import the module you want to modify." ModuleNotAvailable InvalidArgument $Name) )
         }
 
         # Double check there's already a manifest...
@@ -540,34 +699,12 @@ function Set-ModuleManifest {
         }
 
         # PrivateData has to be a hashtable.
-        if($Manifest.PrivateData -and $Manifest.PrivateData -isnot [Hashtable]) {
-            Write-Warning "Sorry, for the purposes of packaging, your Module manifest must use a Hashtable as the value of PrivateData. We add a '$PackageDataKey' key to your PrivateData hashtable to store the additional module information which is needed for packaging."
+        if($Manifest.PrivateData -and (($Manifest.PrivateData -isnot [Hashtable]) -or ($Manifest.PrivateData.$PackageDataKey -and $Manifest.PrivateData.$PackageDataKey -isnot [Hashtable]))) {
+            Write-Warning "Sorry, for the purposes of packaging, your Module manifest must use a Hashtable as the value of PrivateData, and we must be able to add a '$PackageDataKey' key to your PrivateData hashtable to store the additional module information which is needed for packaging."
             throw "Incompatible PrivateData - must be a Hashtable, please see docs."
         } elseif(!$Manifest.PrivateData -and $PrivateData) {
             $Manifest.PrivateData = $PrivateData
-        } elseif(!$Manifest.PrivateData) {
-            $Manifest.PrivateData = @{$PackageDataKey = @{}}
-        } elseif(!$Manifest.PrivateData.$PackageDataKey -or $Manifest.PrivateData -isnot [Hashtable]) {
-            $Manifest.PrivateData.Add($PackageDataKey, @{})
-        }elseif($Manifest.PrivateData -and $PrivateData) {
-            # Wipe the current PrivateData but keep the PackageData if there isn't any in the new PrivateData
-            if(!$PrivateData.ContainsKey($PackageDataKey) -and $Manifest.PrivateData.ContainsKey($PackageDataKey)) {
-                $PrivateData.$PackageDataKey = $Manifest.PrivateData.$PackageDataKey
-            }
-            $Manifest.PrivateData = $PrivateData
         }
-        # Generate or update the PrivateData.PackageData hashtable
-        $UpdatedPrivateData = $False
-        [Hashtable]$PrivateCopy = $Manifest.PrivateData
-        foreach($Key in @($PSBoundParameters.Keys)) { 
-            if($Key -in $PackageProperties) {
-                Write-Verbose "Updating $Key in PackageProperties"
-                $PrivateCopy.$PackageDataKey.$Key = $PSBoundParameters.$Key
-                $Null = $PSBoundParameters.Remove($Key)
-                $UpdatedPrivateData = $True
-            }
-        }
-        $PSBoundParameters["PrivateData"] = $PrivateCopy
         
         # Deal with setting or incrementing the module version
         if($IncrementVersionNumber -or $ModuleVersion -or $Manifest.Version -le [Version]"0.0") {
@@ -619,7 +756,7 @@ function Set-ModuleManifest {
             if(!$RequiredModules -and @($Manifest.RequiredModules).Count -gt 0) {
                 $RequiredModules = @($Manifest.RequiredModules)
             }
-            $RequiredModules = foreach($Module in $RequiredModules) {
+            $RequiredModules = foreach($Module in $RequiredModules | Where { $_ }) {
                 if($Module -is [String]) { 
                     $Module
                 }
@@ -630,7 +767,7 @@ function Set-ModuleManifest {
                     } elseif( $Module.Name ) {
                         $M.ModuleName = $Module.Name
                     } else {
-                        Write-Warning ("RequiredModules is a " + $RequiredModules.GetType().FullName + " and this Module is a " + $Module.GetType().FullName)
+                        Write-Warning ("This Module is a " + $Module.GetType().FullName)
                         Write-Debug (($Module | Get-Member | Out-String -Stream | %{ $_.TrimEnd() }) -join "`n")
                         throw "The RequiredModules must be an array of module names or an array of ModuleInfo hashtables or objects (which must have a ModuleName key and optionally a ModuleVersion and PackageInfoUrl)"
                     }
@@ -656,56 +793,15 @@ function Set-ModuleManifest {
                     $M
                 }
             }
-            $PSBoundParameters["RequiredModules"] = $RequiredModules
+            if($RequiredModules -and @($RequiredModules).Count -gt 0) {
+                $PSBoundParameters["RequiredModules"] = @($RequiredModules)
+            } else {
+                $null = $PSBoundParameters.Remove("RequiredModules")
+            }
         }
         
-
-        # Ok, now get the current module manifest and figure out what's in it
-        $Tokens = $Null; $ParseErrors = $Null
-        $AST = [System.Management.Automation.Language.Parser]::ParseFile( (Convert-Path $ModuleManifestPath), [ref]$Tokens, [ref]$ParseErrors)
-        $Hashtable = $Ast.Find( { param($a) $a -is [System.Management.Automation.Language.HashtableAst] }, $false )
-        # Get the module manifest as a string
-        [string]$Code = $Ast.ToString()
-
-        #Requires -Version 4.0
-        [String[]]$ParameterKeys = $Hashtable.KeyValuePairs.Item1.Value
-        
-        $OrderedKeys = foreach($Key in $PSBoundParameters.Keys) { 
-                            if($Key -in $ParameterKeys) { 
-                                $Item = $Hashtable.KeyValuePairs | Where-Object { $_.Item1.Value -eq $Key }
-                                [PSCustomObject]@{
-                                    Name = $Item.Item1.Value
-                                    Display = "Replacing {0} at line {1} col {2}" -f $Item.Item1.Value, $Item.Item1.Extent.StartLineNumber, $Item.Item1.Extent.StartColumnNumber
-                                    Start = $Item.Item1.Extent.StartOffset
-                                    Length = $Item.Item2.Extent.EndOffset - $Item.Item1.Extent.StartOffset
-                                }
-                            } elseif($Key -in $ModuleManifestProperties) {
-                                if($Match = ([regex]"#\s*$Key\s*=.*").Match($Code)) {
-                                    [PSCustomObject]@{  
-                                        Name = $Key
-                                        Display = "Replacing {0} at index {1} in {2}" -f $Key, $Match.Index, $Match.Value
-                                        Start = $Match.Index
-                                        Length = $Match.Length
-                                    }
-                                } else {
-                                    [PSCustomObject]@{  
-                                        Name = $Key
-                                        Display = "Inserting {0} at the end of the file" -f $Key
-                                        Start = $Hashtable.Extent.EndOffset - 1
-                                        Length = 0
-                                    }
-                                }
-                            }
-                        }
-        $OrderedKeys = $OrderedKeys | Sort Start -Descending 
-
-        # Put our new values into the module manifest in string form ... 
-        foreach($Key in $OrderedKeys) {
-            Write-Verbose "Replacing $($Key.Display)"
-            $Code = $Code.Remove($Key.Start, $Key.Length).Insert($Key.Start, "$($Key.Name) = $(ConvertTo-Metadata $PSBoundParameters.($Key.Name))`r`n")
-        }
-
-        Set-Content $ModuleManifestPath $Code.Trim()
+        Write-Verbose "$($PSBoundParameters | Out-String)"
+        UpdateManifestContent $ModuleManifestPath $PSBoundParameters
         if($Passthru) {
             Get-Item $ModuleManifestPath
         }
@@ -713,213 +809,359 @@ function Set-ModuleManifest {
 }
 
 function New-ModuleManifest {
-[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='Medium', HelpUri='http://go.microsoft.com/fwlink/?LinkID=141555')]
-param(
-    [Parameter(Mandatory=$true, Position=0)]
-    [string]
-    ${Path},
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='Medium', HelpUri='http://go.microsoft.com/fwlink/?LinkID=141555')]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]
+        ${Path},
 
-    [AllowEmptyCollection()]
-    [System.Object[]]
-    ${NestedModules},
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        ${NestedModules},
 
-    [guid]
-    ${Guid} = [Guid]::NewGuid(),
+        [guid]
+        ${Guid} = [Guid]::NewGuid(),
 
-    [AllowEmptyString()]
-    [string]
-    ${Author},
+        [AllowEmptyString()]
+        [string]
+        ${Author},
 
-    [AllowEmptyString()]
-    [string]
-    ${CompanyName},
+        [AllowEmptyString()]
+        [string]
+        ${CompanyName},
 
-    [AllowEmptyString()]
-    [string]
-    ${Copyright},
+        [AllowEmptyString()]
+        [string]
+        ${Copyright},
 
-    [AllowEmptyString()]
-    [string]
-    [Alias('ModuleToProcess')]
-    ${RootModule},
+        [AllowEmptyString()]
+        [string]
+        [Alias('ModuleToProcess')]
+        ${RootModule},
 
-    [ValidateNotNull()]
-    [version]
-    ${ModuleVersion},
+        [ValidateNotNull()]
+        [version]
+        ${ModuleVersion},
 
-    [Parameter(Mandatory=$true, Position=1, ValueFromRemainingArguments=$true)]
-    [string]
-    ${Description},
+        [Parameter(Mandatory=$true, Position=1, ValueFromRemainingArguments=$true)]
+        [string]
+        ${Description},
 
-    [System.Reflection.ProcessorArchitecture]
-    ${ProcessorArchitecture},
+        [System.Reflection.ProcessorArchitecture]
+        ${ProcessorArchitecture},
 
-    [version]
-    ${PowerShellVersion},
+        [version]
+        ${PowerShellVersion},
 
-    [version]
-    ${ClrVersion},
+        [version]
+        ${ClrVersion},
 
-    [version]
-    ${DotNetFrameworkVersion},
+        [version]
+        ${DotNetFrameworkVersion},
 
-    [string]
-    ${PowerShellHostName},
+        [string]
+        ${PowerShellHostName},
 
-    [version]
-    ${PowerShellHostVersion},
+        [version]
+        ${PowerShellHostVersion},
 
-    [System.Object[]]
-    ${RequiredModules},
+        [System.Object[]]
+        ${RequiredModules},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${TypesToProcess},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${TypesToProcess},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${FormatsToProcess},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${FormatsToProcess},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${ScriptsToProcess},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${ScriptsToProcess},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${RequiredAssemblies},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${RequiredAssemblies},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${FileList},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${FileList},
 
-    [AllowEmptyCollection()]
-    [System.Object[]]
-    ${ModuleList},
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        ${ModuleList},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${FunctionsToExport},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${FunctionsToExport},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${AliasesToExport},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${AliasesToExport},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${VariablesToExport},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${VariablesToExport},
 
-    [AllowEmptyCollection()]
-    [string[]]
-    ${CmdletsToExport},
+        [AllowEmptyCollection()]
+        [string[]]
+        ${CmdletsToExport},
 
-    [AllowNull()]
-    [System.Object]
-    ${PrivateData},
+        [AllowNull()]
+        [System.Object]
+        ${PrivateData},
 
-    [AllowNull()]
-    [string]
-    ${HelpInfoUri},
+        [AllowNull()]
+        [string]
+        ${HelpInfoUri},
 
-    [switch]
-    ${PassThru},
+        [switch]
+        ${PassThru},
 
-    [AllowNull()]
-    [string]
-    ${DefaultCommandPrefix})
+        [AllowNull()]
+        [string]
+        ${DefaultCommandPrefix},
 
-begin
-{
-    if(!${GUID} -or [GUID]::Empty -eq ${GUID}) {
-        $PSBoundParameters['GUID'] = ${GUID} = [GUID]::NewGuid()
-    }
-    if(!${ModuleVersion} -or ([Version]'0.0.0.0') -ge ${ModuleVersion}) {
-        $PSBoundParameters['ModuleVersion'] = $ModuleVersion = [Version]'1.0'
-    }
-    $ConfigChanged = $False
-    if(!${Author}) {
-        $ConfigData = Get-ConfigData
-        if(!$ConfigData.AuthorInfo.Author) {
-            $ConfigData.AuthorInfo.Author = Read-Host "Please enter your full name for the module info"
-            $ConfigChanged = $True
+        # Choose one category from the list:
+        [ValidateSet("Active Directory", "Applications", "App-V", "Backup and System Restore", "Databases", "Desktop Management", "Exchange", "Group Policy", "Hardware", "Interoperability and Migration", "Local Account Management", "Logs and monitoring", "Lync", "Messaging & Communication", "Microsoft Dynamics", "Multimedia", "Networking", "Office", "Office 365", "Operating System", "Other Directory Services", "Printing", "Remote Desktop Services", "Scripting Techniques", "Security", "Servers", "SharePoint", "Storage", "System Center", "UE-V", "Using the Internet", "Windows Azure", "Windows Update")]
+        [String]$Category,
+
+        # a URL or relative path to an icon for the module in gif/jpg/png form
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [String]$IconUrl,
+
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Switch]$IsPrerelease,
+
+        # The url to a license
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [String]$LicenseUrl,
+
+        # a URL or relative path to a web page about this module
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [String]$ProjectUrl,
+      
+        # TODO: If set, require the license to be accepted during installation (not supported yet)
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [Switch]$RequireLicenseAcceptance,
+
+        # An array of keyword tags for search
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [String[]]$Tags
+
+    )
+    begin {
+        if(!${GUID} -or [GUID]::Empty -eq ${GUID}) {
+            $PSBoundParameters['GUID'] = ${GUID} = [GUID]::NewGuid()
+        }
+        if(!${ModuleVersion} -or ([Version]'0.0.0.0') -ge ${ModuleVersion}) {
+            $PSBoundParameters['ModuleVersion'] = $ModuleVersion = [Version]'1.0'
+        }
+
+        $ConfigChanged = $False
+        if(!${Author}) {
+            $ConfigData = Get-ConfigData
             if(!$ConfigData.AuthorInfo.Author) {
-                $ConfigData.AuthorInfo.Author = $Env:UserName
+                $ConfigData.AuthorInfo.Author = Read-Host "Please enter your full name for the module info"
+                $ConfigChanged = $True
+                if(!$ConfigData.AuthorInfo.Author) {
+                    $ConfigData.AuthorInfo.Author = $Env:UserName
+                }
             }
+            $PSBoundParameters['Author'] = $Author = $ConfigData.AuthorInfo.Author
         }
-        $PSBoundParameters['Author'] = $Author = $ConfigData.AuthorInfo.Author
-    }
 
-    if(!${CompanyName}) {
-        if(!$ConfigData) { $ConfigData = Get-ConfigData }
-        if(!$ConfigData.AuthorInfo.CompanyName) {
-            $ConfigChanged = $True
-            $ConfigData.AuthorInfo.CompanyName = Read-Host "Enter a Company Name for the module info (or a web address) or leave blank for none:"
-        }
-        $PSBoundParameters['CompanyName'] = $CompanyName = $ConfigData.AuthorInfo.CompanyName
-    }
-
-    if(!$Copyright) {
-        if(!$ConfigData) { $ConfigData = Get-ConfigData }
-        if(!$ConfigData.AuthorInfo.Copyright) {
-            $Year = [DateTime]::Now.Year
-            if($CompanyName -and $CompanyName -notmatch "://") {
-                $Copyright = "Copyright (c) ${Year} by ${CompanyName}, all rights reserved."
-            } else {
-                $Copyright = "Copyright (c) ${Year} by ${Author}, all rights reserved."
+        if(!${CompanyName}) {
+            if(!$ConfigData) { $ConfigData = Get-ConfigData }
+            if(!$ConfigData.AuthorInfo.CompanyName) {
+                $ConfigChanged = $True
+                $ConfigData.AuthorInfo.CompanyName = Read-Host "Enter a Company Name for the module info (or a web address) or leave blank for none:"
             }
-            $ConfigChanged = $True
-            $ConfigData.AuthorInfo.Copyright = Read-Host "Enter a copyright statement, or press enter to accept: `"$Copyright`""
+            $PSBoundParameters['CompanyName'] = $CompanyName = $ConfigData.AuthorInfo.CompanyName
+        }
+
+        if(!$Copyright) {
+            if(!$ConfigData) { $ConfigData = Get-ConfigData }
             if(!$ConfigData.AuthorInfo.Copyright) {
-                $ConfigData.AuthorInfo.Copyright = $Copyright
+                $Year = [DateTime]::Now.Year
+                if($CompanyName -and $CompanyName -notmatch "://") {
+                    $Copyright = "Copyright (c) ${Year} by ${CompanyName}, all rights reserved."
+                } else {
+                    $Copyright = "Copyright (c) ${Year} by ${Author}, all rights reserved."
+                }
+                $ConfigChanged = $True
+                $ConfigData.AuthorInfo.Copyright = Read-Host "Enter a copyright statement, or press enter to accept: `"$Copyright`""
+                if(!$ConfigData.AuthorInfo.Copyright) {
+                    $ConfigData.AuthorInfo.Copyright = $Copyright
+                }
+            }
+            $PSBoundParameters['Copyright'] = $Copyright = $ConfigData.AuthorInfo.Copyright
+        }
+
+        if($ConfigChanged) { Set-ConfigData $ConfigData }
+
+        $PSData = @{}
+        foreach($name in $PackageProperties) {
+            if($PSBoundParameters.ContainsKey($name)) {
+                $PSData.$name = $PSBoundParameters.$name
+                $null = $PSBoundParameters.Remove($name)
             }
         }
-        $PSBoundParameters['Copyright'] = $Copyright = $ConfigData.AuthorInfo.Copyright
-    }
-
-    if($ConfigChanged) { Set-ConfigData $ConfigData }
-
-    try {
-        $outBuffer = $null
-        if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
-        {
-            $PSBoundParameters['OutBuffer'] = 1
+        if($PSBoundParameters.Remove("PrivateData")) {
+            $PSData.PrivateData = $PrivateData
         }
-        $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Core\New-ModuleManifest', [System.Management.Automation.CommandTypes]::Cmdlet)
-        $scriptCmd = {& $wrappedCmd @PSBoundParameters }
-        $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
-        $steppablePipeline.Begin($PSCmdlet)
-    } catch {
-        throw
+
+
+        try {
+            $outBuffer = $null
+            if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
+            {
+                $PSBoundParameters['OutBuffer'] = 1
+            }
+            $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Core\New-ModuleManifest', [System.Management.Automation.CommandTypes]::Cmdlet)
+            $scriptCmd = {& $wrappedCmd @PSBoundParameters }
+            $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
+            $steppablePipeline.Begin($PSCmdlet)
+        } catch {
+            throw
+        }
+    }
+    process {
+        try {
+            $steppablePipeline.Process($_)
+        } catch {
+            throw
+        }
+
+        # Force manifests to be compatible with PowerShell 2, since we can
+        $Content = Get-Content $Path -Delimiter ([char]0)
+        $Content = $Content -replace "(?m)^RootModule = ","ModuleToProcess = "
+        $Content = $Content -replace "#\s*PrivateData\s*=.*",@"
+PrivateData = @{
+    # PSData is module packaging and gallery metadata embedded in PrivateData 
+    # We had to do this because it's the only place we're allowed to extend the manifest
+    # https://connect.microsoft.com/PowerShell/feedback/details/421837
+    PSData = @{
+        # The primary categorization of this module (from the TechNet Gallery tech tree).
+        # Category = ""
+
+        # Keyword tags to help users find this module via navigations and search.
+        # Tags = ""
+
+        # The web address of an icon which can be used in galleries to represent this module
+        # IconUrl = ""
+
+        # The web address of this module's project or support homepage.
+        # ProjectUrl = ""
+
+        # The web address of this module's license. Points to a page that's embeddable and linkable.
+        # LicenseUrl = ""
+
+        # If true, the LicenseUrl points to an end-user license (not just a source license) which requires the user agreement before use.
+        # RequireLicenseAcceptance = ""
+
+        # Indicates this is a pre-release/testing version of the module.
+        # IsPrerelease = $False
     }
 }
-
-process
-{
-    try {
-        $steppablePipeline.Process($_)
-    } catch {
-        throw
+"@
+        if($PSData.Count -gt 0) {
+            UpdateManifestContent -Path $Path -Properties $PSData -Content $Content
+        } else {
+            Set-Content $Path -Value $Content
+        }
     }
+    end {
+        try {
+            $steppablePipeline.End()
+        } catch {
+            throw
+        }
+    }
+    <#
 
-    # Force manifests to be compatible with PowerShell 2, since we can
-    $Content = Get-Content $Path -Delimiter ([char]0)
-    $Content = $Content -replace "(?m)^RootModule = ","ModuleToProcess = "
-    Set-Content $Path -Value $Content
+    .ForwardHelpTargetName Microsoft.PowerShell.Core\New-ModuleManifest
+    .ForwardHelpCategory Cmdlet
+
+    #>
 }
 
-end
-{
-    try {
-        $steppablePipeline.End()
-    } catch {
-        throw
+function Test-ModuleManifest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [Alias("PSPath")]
+        [string]$Path
+    )
+    end {
+        # Read the module manifest and validate minimum requirements for publishing.
+        $Tokens = $Null; $ParseErrors = $Null
+        $AST = [System.Management.Automation.Language.Parser]::ParseFile( (Convert-Path $Path), [ref]$Tokens, [ref]$ParseErrors)
+        if($ParseErrors -ne $null) {
+            $ParseException = New-Object System.Management.Automation.ParseException (,[System.Management.Automation.Language.ParseError[]]$ParseErrors)
+            $PSCmdlet.ThrowTerminatingError((New-Object System.Management.Automation.ErrorRecord $ParseException, "Metadata Error", "ParserError", $InputObject))
+        }
+        $Hashtable = $Ast.Find( { param($a) $a -is $HashtableAst }, $false )
+
+        # Check a few specific values:
+        # ModuleToProcess should be a relative path
+        $KVP = $Hashtable.KeyValuePairs | Where { ($_.Item1.Value -eq 'ModuleToProcess') -or ($_.Item1.Value -eq 'RootModule') }
+        if(!$KVP) {
+            Write-Warning "The manifest does not specify a value for ModuleToProcess or RootModule"
+        } else {
+            $Name = $KVP.Item1.Value
+            if($KVP.Item2.PipelineElements[0] -isnot [System.Management.Automation.Language.CommandExpressionAst]) {
+                Write-Error "Unexpected value for $Name. Should be a simple string!"
+            }
+            $Value = $KVP.Item2.PipelineElements[0].Expression.Value
+            if([IO.Path]::IsPathRooted($Value)) {
+                Write-Warning "The $Name value is not a relative path: $Value"
+            }
+            # It should use ModuleToProcess, not RootModule
+            if($Name -eq "RootModule") {
+                Write-Warning "The $Name value is not compatible with PowerShell 2.0 -- consider using ModuleToProcess"
+            }
+        }
+        # Description should be filled in
+        # Author should be filled in
+        # Copyright should be filled in
+        # ModuleVersion should be filled in
+        foreach($Property in "Description", "Author", "Copyright", "ModuleVersion") {
+            $KVP = $Hashtable.KeyValuePairs | Where { $_.Item1.Value -eq $Property  }
+            if(!$KVP) {
+                Write-Error "The $Property is not set. Modules without $Property should not be published."
+            } else {
+                $Name = $KVP.Item1.Value
+                if($KVP.Item2.PipelineElements[0] -isnot [System.Management.Automation.Language.CommandExpressionAst]) {
+                    Write-Error "Unexpected value for $Name. It should be a simple string!"
+                }
+            }
+        }
+        # ModuleVersion should be a version
+        if($KVP.Item1.Value -eq "ModuleVersion") {
+            $Value = $KVP.Item2.PipelineElements[0].Expression.Value
+            if(!($Value -as [Version])) {
+                Write-Error "The value '$Value' is not a valid version "
+            }
+        }
+        # Tags should be an array of strings
+        # If it's not set, we won't warn or anything
+        $KVP = $Hashtable.KeyValuePairs | Where { $_.Item1.Value -eq "PrivateData" }
+        if(!$KVP) { return }
+        $PrivateData = $KVP.Item2.Find( { param($a) $a -is $HashtableAst }, $false )
+        if(!$PrivateData) { return }
+        $KVP = $PrivateData.KeyValuePairs | Where { $_.Item1.Value -eq "PSData" }
+        if(!$KVP) { return }
+        $PSData = $KVP.Item2.Find( { param($a) $a -is $HashtableAst }, $false )
+        if(!$PSData) { return }
+        $KVP = $PSData.KeyValuePairs | Where { $_.Item1.Value -eq "Tags" }
+        if(!$KVP) { return }
+        $Tags = $KVP.Item2.Find( { param($a) $a -is $ArrayLiteralAst }, $false )
+        if(!$Tags -or !($Tags.Elements.Value -as [String[]])) {
+            Write-Error "PrivateData.${PackageDataKey}.Tags is not a string array."
+        }
     }
-}
-<#
-
-.ForwardHelpTargetName Microsoft.PowerShell.Core\New-ModuleManifest
-.ForwardHelpCategory Cmdlet
-
-#>
 }
 
 function ConvertToHashtable {
@@ -954,6 +1196,58 @@ function ConvertToHashtable {
             if(!$IgnoreEmptyProperties -or (($InputObject.$Name -ne $null) -and (@($InputObject.$Name).Count -gt 0) -and ($InputObject.$Name -ne ""))) {
                 $Output.$Name = $InputObject.$Name 
             }
+        }
+    }
+}
+
+function GetModuleOrElse {
+    [CmdletBinding()]
+    param([String]$Name, [Switch]$Force, [Switch]$ListAvailable)
+    end {
+        $ModuleName = $Name
+        $Path = ""
+        if($Name.IndexOfAny(([io.path]::DirectorySeparatorChar, [io.path]::AltDirectorySeparatorChar)) -ge 0) {
+            # If this thing points at a file or folder, what do they expect of us?
+            # They're probably hoping we can get the module from the .psd1
+            if(Test-Path $Name -PathType Leaf) {
+                $ModuleName = [io.path]::GetFileNameWithoutExtension($Name)
+                $Path = Split-Path $Name | Convert-Path
+            # Or from the folder path
+            } elseif(Test-Path $Name) {
+                $ModuleName = Split-Path $Name -Leaf 
+                $Path = Convert-Path $Name
+            } else {
+                throw "Invalid Module Name: Has directory separactors in it, but we can't find the path $Name"
+            }
+        }
+        # First try with the given options ...
+        if($result = Get-ModuleInfo $ModuleName -Force:$Force -ListAvailable:$ListAvailable | Where-Object { !$Path -or $_.ModuleBase -eq $Path } ) {
+            return $result
+        }
+        # Then make sure we try with -ListAvailable
+        if(!$ListAvailable) {
+            if($result = Get-ModuleInfo $ModuleName -ListAvailable | Where-Object { !$Path -or $_.ModuleBase -eq $Path } ) {
+                return $result
+            }
+        }
+        # Then try with -Force -List -All
+        if($result = Get-ModuleInfo $ModuleName -Force -ListAvailable -All | Where-Object { !$Path -or $_.ModuleBase -eq $Path } ) {
+            Write-Warning ("'{0}' is not discoverable in '{1}', you should consider moving it out into the PSModulePath" -f $result.Name, $result.ModuleBase)
+            return $result
+        }
+
+        # If that fails, maybe the module just isn't in the PSModulePath:
+        $PSModulePath = $env:PSModulePath
+        try {
+            $env:PSModulePath =  (Split-Path $Path) + ";" + $env:PSModulePath
+            if($result = GetModuleOrElse @PSBoundParameters) {
+                Write-Warning ("'{0}' is not discoverable in '{1}', you should consider moving it into the PSModulePath" -f $result.Name, $result.ModuleBase)
+                return $result
+            }
+        } catch {
+            throw
+        } finally {
+            $env:PSModulePath = $PSModulePath
         }
     }
 }
@@ -1022,7 +1316,7 @@ function Get-ModuleInfo {
 
          # DO NOT REFACTOR TO IsNullOrWhiteSpace (that's .net 4 only)
          if($PSBoundParameters['Name'] -and ($PSBoundParameters['Name'] -replace '\s+').Length -gt 0) {
-            $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
+            $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Core\Get-Module',  [System.Management.Automation.CommandTypes]::Cmdlet)
             $scriptCmd = {& $wrappedCmd @PSBoundParameters | ImportModuleInfo -Force:$Force}
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
@@ -1325,9 +1619,8 @@ function UpdateDictionary {
          #    ....
 
          # So far we only have special handling for RequiredModules:
-         Write-Verbose "Updating $($prop.Name)"
+         Write-Debug "UpdateDictionary Key $($prop.Name)"
          switch($prop.Name) {
-
             "RequiredModules" {
                # Sometimes, RequiredModules are just strings (the name of a module)
                [string[]]$rmNames = $Authoritative.RequiredModules | ForEach-Object { if($_ -is [string]) { $_ } else { $_.Name } }
@@ -1468,4 +1761,4 @@ function ConvertTo-PSModuleInfo {
     }
 }
 
-Export-ModuleMember -Function Export-Metadata, Import-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata, Set-ModuleManifest, New-ModuleManifest, Get-ModuleInfo, ConvertTo-PSModuleInfo
+Export-ModuleMember -Function Export-Metadata, Import-Metadata, ConvertFrom-Metadata, ConvertTo-Metadata, Set-ModuleManifest, New-ModuleManifest, Test-ModuleManifest, Get-ModuleInfo, ConvertTo-PSModuleInfo
