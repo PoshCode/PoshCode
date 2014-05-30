@@ -1094,6 +1094,10 @@ function Test-ModuleManifest {
         [Alias("PSPath")]
         [string]$Path
     )
+    begin {
+        if(!(Test-Path $Path)) { Write-Error "Module Manifest not found: $Path"; return }
+        Microsoft.PowerShell.Core\Test-ModuleManifest -Path $Path
+    }
     end {
         # Read the module manifest and validate minimum requirements for publishing.
         $Tokens = $Null; $ParseErrors = $Null
