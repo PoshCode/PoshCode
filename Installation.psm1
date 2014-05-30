@@ -815,7 +815,8 @@ function Expand-Package {
                   throw "You do not have permission to install a module to '$InstallPath'. You may need to be elevated."
                }
 
-               $ForbiddenPathsPattern = "^/(?:{0})/" -f ($(foreach($nmp in $NuGetMagicPaths){[regex]::Escape($nmp)}) -join "|")
+               # We're no longer going to leave the nuspec file behind (just because, well, PowerShellGet doesn't).
+               $ForbiddenPathsPattern = ".*\${NuSpecManifestExtension}`$|^/(?:{0})/" -f ($(foreach($nmp in $NuGetMagicPaths){[regex]::Escape($nmp)}) -join "|")
 
                foreach($part in $Package.GetParts() | Where-Object {$_.Uri -notmatch $ForbiddenPathsPattern}) {
                   $fileSuccess = $false
