@@ -688,14 +688,17 @@ function Set-ModuleManifest {
                 $ModuleManifest = $Manifest | ConvertToHashtable $ModuleManifestProperties -IgnoreEmptyProperties
                 # New-ModuleManifest can't handle Hashtables in PrivateData
                 $ModuleManifest.Remove('PrivateData')
-                Push-Location (Split-Path $Manifest.Path)
-                $ModuleToProcess = Resolve-Path $Manifest.Path -Relative
+                Push-Location $Manifest.ModuleBase
+                $ModuleManifest.ModuleToProcess = Resolve-Path $Manifest.Path -Relative
                 Pop-Location
 
-                New-ModuleManifest -Path $ModuleManifestPath @ModuleManifest -ModuleToProcess $ModuleToProcess
+                New-ModuleManifest -Path $ModuleManifestPath @ModuleManifest
                 # Reread it, because we probably got guid/version/author/description/copyright etc.
                 $Manifest = Get-Module $Name -ListAvailable
-            } else { return }
+            } else {
+                Write-Warning "$($Module.Name) Module does not have a manifest."
+                return
+            }
         }
 
         # PrivateData has to be a hashtable.
