@@ -582,7 +582,7 @@ function Install-Module {
             $FindModule.Version = $RequiredVersion
          }
          $SearchResults = Find-Module @FindModule
-         if(@($SearchResults).Count -eq 1) {
+         if(@($SearchResults).Count -eq 1 -and $SearchResults -ne $null) {
             $DisplayName = "{0} v{1} from {2}" -f $SearchResults.Name, $SearchResults.Version, ($SearchResults.Repository.Keys -join ' ')
 
             $PassThrough = @{} + $PsBoundParameters
