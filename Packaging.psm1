@@ -164,8 +164,6 @@ function Compress-Module {
             }
         }
 
-        Test-ModuleManifest $ModuleInfoPath
-
         Write-Debug "$($ModuleInfo  | % { $_.FileList } | Out-String)"
         Write-Progress -Activity "Packaging Module '$($ModuleInfo.Name)'" -Status "Validating Inputs" -Id 0    
 
@@ -173,6 +171,9 @@ function Compress-Module {
         if( $ModuleInfo -isnot [System.Management.Automation.PSModuleInfo] -and [IO.Path]::GetExtension($ModuleInfo.Path) -ne ".psd1" ) {
             $PSCmdlet.ThrowTerminatingError( (New-Object System.Management.Automation.ErrorRecord (New-Object System.IO.InvalidDataException "Module metadata file (${ModuleManifestExtension}) not found for $($PsBoundParameters["Module"])"), "Unexpected Exception", "InvalidResult", $_) )
         }
+
+        # This may write a lot of errors ....
+        Test-ModuleManifest $ModuleInfoPath -ErrorVariable ModuleErrors
 
         # Our packages are ModuleName.nupkg (for now, $ModulePackageExtension = .nupkg)
         if($ModuleInfo.Version -gt "0.0") {
