@@ -132,7 +132,8 @@ function PushModule {
     )
     process {
         [Byte[]]$Bytes = Get-Content $Package -Encoding Byte
-        Invoke-WebRequest -Uri "$Root/package/" -Method "PUT" -ContentType "application/octet-stream" -Body $Bytes -Headers @{"X-NuGet-ApiKey" = $APIKey}
+        $Response = Invoke-WebRequest -Uri "$Root/package/" -Method "PUT" -ContentType "application/octet-stream" -Body $Bytes -Headers @{"X-NuGet-ApiKey" = $APIKey}
+        $Response | Select StatusCode, StatusDescription
     }
 }
-Export-ModuleMember -Function FindModule
+Export-ModuleMember -Function FindModule, PushModule

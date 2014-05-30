@@ -218,7 +218,12 @@ function Publish-Module {
             $Repo = $SelectedRepositories.$Name
             Write-Verbose "$(${Repo}.Type)\PushModule -Root $($Repo.Root)"
 
-            $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['PushModule'] } 
+            $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['PushModule'] }
+
+            if(!$Command) {
+                Write-Error "Publishing not supported by $($Repo.Type) repositories!"
+                return
+            }
 
             # We help out by mapping anything in the settings to their parameters
             foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
@@ -239,7 +244,7 @@ function Publish-Module {
                 catch 
                 {
                     $PublishErrors.Add($_)
-                    Write-Warning "Error Searching $($Repo.Type) $($Repo.Root) (See `$PublishErrors)"
+                    Write-Warning "Error Publishing to $($Repo.Type) repository at $($Repo.Root) (See `$PublishErrors)"
                 }
             }
         }
