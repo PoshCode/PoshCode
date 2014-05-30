@@ -8,13 +8,8 @@ $NuGetNamespace          = "http://schemas.microsoft.com/packaging/2011/08/nuspe
 # This is what nuget uses for .nuspec
 $ManifestType            = "http://schemas.microsoft.com/packaging/2010/07/manifest"
 
-# We need to make up a URL for the metadata psd1 relationship type
+# We need to make up a URL for the module manifest psd1 relationship type
 $ModuleMetadataType      = "http://schemas.poshcode.org/package/module-metadata"
-# The package metadata should probably be in:
-# http ://schemas.openxmlformats.org/package/2006/relationships/metadata/extended-properties
-# But that is supposed to be in XML format: application/vnd.openxmlformats-officedocument.extended-properties+xml
-$PackageMetadataType     = "http://schemas.poshcode.org/package/package-metadata"
-
 
 $ModuleHelpInfoType      = "http://schemas.poshcode.org/package/help-info"
 $PackageThumbnailType    = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"

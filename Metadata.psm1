@@ -802,9 +802,10 @@ function Set-ModuleManifest {
                 $null = $PSBoundParameters.Remove("RequiredModules")
             }
         }
-        
-        Write-Verbose "$($PSBoundParameters | Out-String)"
-        UpdateManifestContent $ModuleManifestPath $PSBoundParameters
+        if($PSBoundParameters.Count -gt 0) {
+            Write-Verbose "PSBoundParameters: $($PSBoundParameters | Out-String)"
+            UpdateManifestContent $ModuleManifestPath $PSBoundParameters
+        }
         if($Passthru) {
             Get-Item $ModuleManifestPath
         }
@@ -1387,28 +1388,10 @@ function ReadModulePackageInfo {
                     return
                 }
 
-                ## First load the package metadata if there is one (that has URLs in it)
-                $Manifest = @($Package.GetRelationshipsByType( $PackageMetadataType ))[0]
                 $NugetManifest = @($Package.GetRelationshipsByType( $ManifestType ))[0]
                 $ModuleManifest = @($Package.GetRelationshipsByType( $ModuleMetadataType ))[0]
 
-                if(!$Manifest -or !$Manifest.TargetUri) {
-                    $DownloadUrl = @($Package.GetRelationshipsByType( $PackageDownloadType ))[0]
-                    $ManifestUri = @($Package.GetRelationshipsByType( $PackageInfoType ))[0]
-                    if((!$ManifestUri -or !$ManifestUri.TargetUri) -and (!$DownloadUrl -or !$DownloadUrl.TargetUri)) {
-                        Write-Warning "This is not a full PoshCode Package, it has not specified the manifest nor a download Url"
-                    }
-                    $PackageInfo = @{}
-                } else {
-                    $Part = $Package.GetPart( $Manifest.TargetUri )
-                    if(!$Part) {
-                        Write-Warning "This file is not a valid PoshCode Package, the specified Package manifest is missing at $($Manifest.TargetUri)"
-                        $PackageInfo = @{}
-                    } else {
-                        Write-Verbose "Reading Package Manifest From Package: $($Manifest.TargetUri)"
-                        $PackageInfo = ImportNugetStream ($Part.GetStream())
-                    }
-                }
+                $PackageInfo = @{}
 
                 if(!$NugetManifest -or !$NugetManifest.TargetUri) {
                     Write-Warning "This is not a NuGet Package, it does not specify a nuget manifest"
