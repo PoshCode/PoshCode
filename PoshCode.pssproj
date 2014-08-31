@@ -63,6 +63,7 @@
   <ItemGroup>
     <Content Include="Atom.psm1" />
     <Content Include="Metadata.psm1" />
+    <Content Include="Releases\Test.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Target Name="Build" />

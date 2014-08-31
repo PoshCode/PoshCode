@@ -22,6 +22,7 @@
       Root = 'https://chocolatey.org/api/v2'
       Tags = @('PowerShell','Module')
       Type = 'NuGet'
+      SearchByDefault = $True
       PublishByDefault = $True
       ApiKey = '4322b657-9d22-4319-9012-1d179c21940c'
     }

@@ -189,13 +189,15 @@ function ConvertFrom-AtomFeed {
                 Version = $p.Version
                 
                 Description  = if($p.Description -is [string]){$p.Description}else{''}
-                Author       = if($m.author -and $m.author.name){$m.author.name}else{''}
-                # 'CompanyName'=if($m.owner -and $m.owner.name){$m.owner.name}else{''}
-                Copyright    = $p.Copyright
+                Author       = if($m.author -and $m.author.name){$m.author.name}else{$null}
+                CompanyName   =if($m.owner -and $m.owner.name){$m.owner.name}else{$null}
+                Copyright    = if($p.Copyright -is [string]){$p.Copyright}else{$null}
                 
-                LicenseUrl   = $p.LicenseUrl
-                ProjectUrl   = $p.ProjectUrl
-                Tags         = $p.Tags -split ' '
+                LicenseUrl   = if($p.LicenseUrl -is [string]){$p.LicenseUrl}else{$null}
+                ProjectUrl   = if($p.ProjectUrl -is [string]){$p.ProjectUrl}else{$null}
+                Tags         = if($p.Tags -is [string]){
+                                    [string[]](New-Object System.Collections.Generic.List[String] (,[string[]]($p.Tags -split ' '))).ToArray()
+                                } else { New-Object 'string[]' 0 }
 
                 ReleaseNotes = if($p.ReleaseNotes){$p.ReleaseNotes}else{$null}
                 DownloadUrl  = if($m.content -and $m.content.src){$m.content.src}else{$null}

@@ -115,28 +115,29 @@ function Find-Module {
         # Write-Verbose ($SelectedRepositories | %{ $_ | Format-Table -HideTableHeaders }| Out-String -Width 110)
         foreach($Name in $SelectedRepositories.Keys) {
             $Repo = $SelectedRepositories.$Name
-            Write-Verbose "$(${Repo}.Type)\FindModule -Root $($Repo.Root)"
+            $SearchParameters = @{} + $PSBoundParameters
 
             $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['FindModule'] } 
 
             # We help out by mapping anything in the settings to their parameters
             foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
-                $PSBoundParameters.$k = $Repo.$k
+                $SearchParameters.$k = $Repo.$k
             }
 
             $Mandatory = $Command.Parameters.Values | 
-                Where-Object { $_.Attributes.Mandatory -and ($PSBoundParameters.Keys -NotContains $_.Name)} |
+                Where-Object { $_.Attributes.Mandatory -and ($SearchParameters.Keys -NotContains $_.Name)} |
                 ForEach-Object { $_.Name }
 
             if($Mandatory) {
                 Write-Warning "Not searching $($Repo.Type) repository $Name, missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
             } else {
-                # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
+                Write-Verbose "$(${Repo}.Type)\FindModule $(($SearchParameters.GetEnumerator() | %{ '-' + $_.Key + ' ''' + $_.Value + '''' }) -join ' ')"
+                # Write-Verbose ($SearchParameters | Format-Table | Out-String -Width 110)
                 try {
                     $(if($Limit -gt 0) {
-                        &$Command @PSBoundParameters | ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } }
+                        &$Command @SearchParameters | ForEach-Object { if(($Count++) -lt $Limit){ $_ } else { break } }
                     } else {
-                        &$Command @PSBoundParameters
+                        &$Command @SearchParameters
                     }) | ConvertTo-PSModuleInfo -AddonInfo @{ 
                             ModuleType = "SearchResult"  # As opposed to "Script" or "Binary" or "Manifest" (I think "CDXML" modules stay as "Manifest" modules after importing)
                             Repository = @{ $Name = $Repo }
@@ -216,6 +217,7 @@ function Publish-Module {
 
         foreach($Name in $SelectedRepositories.Keys) {
             $Repo = $SelectedRepositories.$Name
+            $SearchParameters = @{} + $PSBoundParameters
             Write-Verbose "$(${Repo}.Type)\PushModule -Root $($Repo.Root)"
 
             $Command = Import-Module "${PoshCodeModuleRoot}\Repositories\$(${Repo}.Type)" -Passthru | % { $_.ExportedCommands['PushModule'] }
@@ -227,19 +229,19 @@ function Publish-Module {
 
             # We help out by mapping anything in the settings to their parameters
             foreach($k in @($Repo.Keys) | Where-Object { ($Command.Parameters.Keys -contains $_) -and ("Type" -notcontains $_)}) {
-                $PSBoundParameters.$k = $Repo.$k
+                $SearchParameters.$k = $Repo.$k
             }
 
             $Mandatory = $Command.Parameters.Values | 
-                Where-Object { $_.Attributes.Mandatory -and ($PSBoundParameters.Keys -NotContains $_.Name)} |
+                Where-Object { $_.Attributes.Mandatory -and ($SearchParameters.Keys -NotContains $_.Name)} |
                 ForEach-Object { $_.Name }
 
             if($Mandatory) {
                 Write-Warning "Not publishing to $($Repo.Type) repository $($Name), missing mandatory parameter(s) '$($Mandatory -join ''',''')'"
             } else {
-                # Write-Verbose ($PSBoundParameters | Format-Table | Out-String -Width 110)
+                # Write-Verbose ($SearchParameters | Format-Table | Out-String -Width 110)
                 try {
-                    &$Command @PSBoundParameters
+                    &$Command @SearchParameters
                 }
                 catch 
                 {

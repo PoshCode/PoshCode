@@ -64,17 +64,15 @@ function FindModule {
             Write-Verbose "Filtering by ModuleName: $Name"
         } elseif($SearchTerm) {
             $filters += "(" + (@(
-                Convert-Wildcard Id $SearchTerm
-                Convert-Wildcard Tags $SearchTerm
-                Convert-Wildcard Description $SearchTerm
+                Convert-Wildcard Id $SearchTerm -Contains
+                Convert-Wildcard Tags $SearchTerm -Contains
+                Convert-Wildcard Description $SearchTerm -Contains
             ) -join ' or ') + ")"
             Write-Verbose "Filtering by SearchTerm: $SearchTerm"
         }
         if($Tags -and $Tags.Length -gt 0) {
-            foreach($tag in $Tags) {
-                Convert-Wildcard Tags $Tag -Contains
-                Write-Verbose "Filtering by SearchTerm: $Tag"
-            }
+            $filters += $Tags | Convert-Wildcard Tags -Contains
+            Write-Verbose "Filtering by SearchTerm: $Tag"
         }
         if($Author)
         {
@@ -110,7 +108,30 @@ function FindModule {
             if($reader) { $reader.Close() }
         }
 
-        ConvertFrom-AtomFeed $Content -AdditionalData @{ SourceUri = $Root; SourceType = "NuGet" }
+        ConvertFrom-AtomFeed $Content -AdditionalData @{ SourceUri = $Root; SourceType = "NuGet" } | 
+            Where {
+                $(  if($Name)
+                    {
+                        $_.Name -like $Name
+                    } elseif($SearchTerm) {
+                        $_.Id -like $SearchTerm -or $_.Tags -like $SearchTerm -or $_.Description -like $SearchTerm
+                    } else { $true }
+                ) -and $(
+                    if($Tags -and $Tags.Length -gt 0) {
+                        $(foreach($p in $Tags){ foreach($t in $_.Tags) { $t -like $p } }) -contains $true
+                    } else { $true }
+                ) -and $(
+                    if($Author)
+                    {
+                        $_.Author -like $Author
+                    } else { $true }
+                ) -and $(
+                    if($Version)
+                    {
+                        $_.Version -like $Version
+                    } else { $true }
+                )
+            }
     }
 }
 

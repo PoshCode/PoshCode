@@ -1,6 +1,6 @@
 ########################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
-## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
+## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice.
 ########################################################################
 ## Configuration.psm1 defines the Get/Set functionality for ConfigData
 ## It also includes Get-SpecialFolder for resolving special folder paths
@@ -17,56 +17,6 @@ if(!$PoshCodeModuleRoot) {
 #!Requires -Modules Metadata
 Import-Module $PoshCodeModuleRoot\Metadata.psm1
 # FULL # END FULL
-
-$Script:SpecialFolderNames = @([System.Environment+SpecialFolder].GetFields("Public,Static") | ForEach-Object { $_.Name }) + @("PSHome") | Sort-Object
-
-function Get-SpecialFolder {
-  #.Synopsis
-  #   Gets the current value for a well known special folder
-  [CmdletBinding()]
-  param(
-    # The name of the Path you want to fetch (supports wildcards).
-    #  From the list: AdminTools, ApplicationData, CDBurning, CommonAdminTools, CommonApplicationData, CommonDesktopDirectory, CommonDocuments, CommonMusic, CommonOemLinks, CommonPictures, CommonProgramFiles, CommonProgramFilesX86, CommonPrograms, CommonStartMenu, CommonStartup, CommonTemplates, CommonVideos, Cookies, Desktop, DesktopDirectory, Favorites, Fonts, History, InternetCache, LocalApplicationData, LocalizedResources, MyComputer, MyDocuments, MyMusic, MyPictures, MyVideos, NetworkShortcuts, Personal, PrinterShortcuts, ProgramFiles, ProgramFilesX86, Programs, PSHome, Recent, Resources, SendTo, StartMenu, Startup, System, SystemX86, Templates, UserProfile, Windows
-    [ValidateScript({
-      $Name = $_
-      $Names = 
-      if($Script:SpecialFolderNames -like $Name) {
-        return $true
-      } else {
-        throw "Cannot convert Path, with value: `"$Name`", to type `"System.Environment+SpecialFolder`": Error: `"The identifier name $Name is not one of $($Script:SpecialFolderNames -join ', ')"
-      }
-    })]
-    [String]$Path = "*",
-
-    # If not set, returns a hashtable of folder names to paths
-    [Switch]$Value
-  )
-
-  $Names = $Script:SpecialFolderNames -like $Path
-  if(!$Value) {
-    $return = @{}
-  }
-
-  foreach($name in $Names) {
-    $result = $(
-      if($name -eq "PSHome") {
-        $PSHome
-      } else {
-        [Environment]::GetFolderPath($name)
-      }
-    )
-    if($result) {
-      if($Value) {
-        Write-Output $result
-      } else {
-        $return.$name = $result
-      }
-    }
-  }
-  if(!$Value) {
-    Write-Output $return
-  }
-}
 
 function Select-ModulePath {
    #.Synopsis
@@ -125,7 +75,7 @@ function Select-ModulePath {
             if($Default -lt 0){$Default = $index}
             continue
          }
-         "$([Environment]::GetFolderPath("MyDocuments"))*" { 
+         "$([Environment]::GetFolderPath("MyDocuments"))*" {
             $index++
             $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&MyDocuments", $_
             if($Default -lt 0){$Default = $index}
@@ -147,32 +97,32 @@ function Select-ModulePath {
       # And we always offer the "Other" location:
       $index++
       $ChoicesWithHelp += New-Object System.Management.Automation.Host.ChoiceDescription "&Other", "Type in your own path!"
-   
+
       while(!$InstallPath -or !(Test-Path $InstallPath)) {
          if($InstallPath -and !(Test-Path $InstallPath)){
             if($PSCmdlet.ShouldProcess(
-               "Verifying module install path '$InstallPath'", 
-               "Create folder '$InstallPath'?", 
+               "Verifying module install path '$InstallPath'",
+               "Create folder '$InstallPath'?",
                "Creating Module Install Path" )) {
-      
+
                $null = New-Item -Type Directory -Path $InstallPath -Force -ErrorVariable FailMkDir
-            
+
                ## Handle the error if they asked for -Common and don't have permissions
                if($FailMkDir -and @($FailMkDir)[0].CategoryInfo.Category -eq "PermissionDenied") {
                   Write-Warning "You do not have permission to install a module to '$InstallPath\$ModuleName'. You may need to be elevated. (Press Ctrl+C to cancel)"
-               } 
+               }
             }
          }
-   
+
          if(!$InstallPath -or !(Test-Path $InstallPath)){
             $Answer = $Host.UI.PromptForChoice(
                "Please choose an install path.",
                "Choose a Module Folder (use ? to see the full paths)",
                ([System.Management.Automation.Host.ChoiceDescription[]]$ChoicesWithHelp),
                $Default)
-      
+
             if($Answer -ge $index) {
-               $InstallPath = Read-Host ("You should pick a path that's already in your PSModulePath. " + 
+               $InstallPath = Read-Host ("You should pick a path that's already in your PSModulePath. " +
                                           "To choose again, press Enter.`n" +
                                           "Otherwise, type the path for a 'Modules' folder you want to create")
             } else {
@@ -180,7 +130,7 @@ function Select-ModulePath {
             }
          }
       }
-   
+
       return $InstallPath
    }
 }
@@ -209,7 +159,7 @@ function Test-ExecutionPolicy {
     Write-Host "Your execution policy is $Policy and should be fine. Note that modules flagged as internet may still cause warnings."
   } elseif(([Microsoft.PowerShell.ExecutionPolicy]"RemoteSigned") -contains $Policy) {
     Write-Host "Your execution policy is $Policy and should be fine. Note that modules flagged as internet will not load if they're not signed."
-  } 
+  }
 }
 
 # FULL # BEGIN FULL: These cmdlets are only necessary in the full version of the module
@@ -217,7 +167,7 @@ function Get-ConfigData {
   #.Synopsis
   #   Gets the UserSettings.pds settings as a hashtable
   #.Description
-  #   Parses the non-comment lines in the config file as a simple hashtable, 
+  #   Parses the non-comment lines in the config file as a simple hashtable,
   #   parsing it as string data, and replacing {SpecialFolder} paths
   [CmdletBinding(DefaultParameterSetname="FromFile")]
   param()
@@ -258,7 +208,7 @@ function Get-ConfigData {
         )
       }
     }
-    
+
     return $Results
   }
 }
@@ -361,7 +311,7 @@ function Test-ConfigData {
         $folder = Convert-Path $folder
         $CP, $ConfirmPreference = $ConfirmPreference, 'Low'
         if($PSCmdlet.ShouldContinue("The folder '$folder' is not in your PSModulePath, do you want to add it?", "Configuring <$name> module location:")) {
-          $ConfirmPreference = $CP          
+          $ConfirmPreference = $CP
           # Global and System paths need to go in the Machine registry to work properly
           if("Global","System","Common" -contains $name) {
             try {
@@ -370,7 +320,7 @@ function Test-ConfigData {
               [System.Environment]::SetEnvironmentVariable("PSModulePath",$PsMP,"Machine")
               $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
             }
-            catch [System.Security.SecurityException] 
+            catch [System.Security.SecurityException]
             {
               Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be added to your Local Machine PSModulePath.")
               if($PSCmdlet.ShouldContinue("Do you want to store the path '$folder' in your <User> PSModulePath instead?", "Configuring <$name> module location:")) {
@@ -381,7 +331,7 @@ function Test-ConfigData {
                   $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
                   Write-Host "Added '$folder' to your User PSModulePath instead."
                 }
-                catch [System.Security.SecurityException] 
+                catch [System.Security.SecurityException]
                 {
                   Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be permanently added to your User PSModulePath. Adding for this session anyway.")
                   $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
@@ -395,7 +345,7 @@ function Test-ConfigData {
               [System.Environment]::SetEnvironmentVariable("PSModulePath", $PsMP, "User")
               $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
             }
-            catch [System.Security.SecurityException] 
+            catch [System.Security.SecurityException]
             {
               Write-Warning ($_.Exception.Message + " The $name path '$folder' couldn't be permanently added to your User PSModulePath. Adding for this session anyway.")
               $Env:PSModulePath = ($PSModulePaths + $folder) -join ";"
@@ -419,39 +369,39 @@ function Test-ConfigData {
 # These are special functions just for saving in the AppData folder...
 function Get-LocalStoragePath {
    #.Synopsis
-   #   Gets the LocalApplicationData path for the specified company\module 
+   #   Gets the LocalApplicationData path for the specified company\module
    #.Description
    #   Appends Company\Module to the LocalApplicationData, and ensures that the folder exists.
    param(
       # The name of the module you want to access storage for (defaults to SplunkStanzaName)
       [Parameter(Position=0, Mandatory=$true)]
-      [ValidateScript({ 
-         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-         if($invalid -eq -1){ 
+      [ValidateScript({
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())
+         if($invalid -eq -1){
             return $true
          } else {
             throw "Invalid character in Module Name '$_' at $invalid"
          }
-      })]         
+      })]
       [string]$Module,
 
       # The name of a "company" to use in the storage path (defaults to "PoshCode")
       [Parameter(Position=1)]
-      [ValidateScript({ 
-         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-         if($invalid -eq -1){ 
+      [ValidateScript({
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())
+         if($invalid -eq -1){
             return $true
          } else {
             throw "Invalid character in Company Name '$_' at $invalid"
          }
-      })]         
+      })]
       [string]$Company = "PoshCode"
 
    )
    end {
       if(!($path = $SplunkCheckpointPath)) {
          $path = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) $Company
-      } 
+      }
       $path  = Join-Path $path $Module
 
       if(!(Test-Path $path -PathType Container)) {
@@ -469,26 +419,26 @@ function Get-ScopeStoragePath {
     param(
         # A unique valid module name to use when persisting the object to disk
         [Parameter(Mandatory=$true, Position=0)]
-        [ValidateScript({ 
-            $invalid = "$_".IndexOfAny([IO.Path]::GetInvalidPathChars())       
-            if($invalid -eq -1){ 
+        [ValidateScript({
+            $invalid = "$_".IndexOfAny([IO.Path]::GetInvalidPathChars())
+            if($invalid -eq -1){
                 return $true
             } else {
                 throw "Invalid character in Module Name '$_' at $invalid"
             }
-        })]      
+        })]
         $Module,
 
         # A unique object name to use when persisting the object to disk
         [Parameter(Mandatory=$true, Position=1)]
-        [ValidateScript({ 
-            $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-            if($invalid -eq -1){ 
+        [ValidateScript({
+            $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())
+            if($invalid -eq -1){
                 return $true
             } else {
                 throw "Invalid character in Object Name '$_' at $invalid"
             }
-        })]      
+        })]
         [string]$Name,
 
         # The scope to store the data in. Defaults to storing in the ModulePath
@@ -496,12 +446,13 @@ function Get-ScopeStoragePath {
         $Scope = "Module"
     )
     end {
-        $invalid = "$Module".IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-        if(($Scope -ne "User") -and $invalid -and (Test-Path "$Module")) 
+        Write-Debug "Get-ScopeStoragePath -Module '$Module' -Name '$Name' -Scope '$Scope'"
+        $invalid = "$Module".IndexOfAny([IO.Path]::GetInvalidFileNameChars())
+        if(($Scope -ne "User") -and $invalid -and (Test-Path "$Module"))
         {
             $ModulePath = Resolve-Path $Module
-        } 
-        elseif($Scope -eq "Module") 
+        }
+        elseif($Scope -eq "Module")
         {
             if($Module -is [System.Management.Automation.PSModuleInfo]) {
                 $ModulePath = $Module.ModuleBase
@@ -542,9 +493,9 @@ function Export-LocalStorage {
    param(
       # A unique valid module name to use when persisting the object to disk
       [Parameter(Mandatory=$true, Position=0)]
-      [ValidateScript({ 
-         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
-         if($invalid -eq -1){ 
+      [ValidateScript({
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())
+         if($invalid -eq -1){
             return $true
          } else {
             throw "Invalid character in Module Name '$_' at $invalid"
@@ -554,14 +505,14 @@ function Export-LocalStorage {
 
       # A unique object name to use when persisting the object to disk
       [Parameter(Mandatory=$true, Position=1)]
-      [ValidateScript({ 
-         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())       
-         if($invalid -eq -1){ 
+      [ValidateScript({
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidFileNameChars())
+         if($invalid -eq -1){
             return $true
          } else {
             throw "Invalid character in Object Name '$_' at $invalid"
          }
-      })]      
+      })]
       [string]$Name,
 
       # The scope to store the data in. Defaults to storing in the ModulePath
@@ -604,15 +555,15 @@ function Export-LocalStorage {
 
 function Import-LocalStorage {
    #.Synopsis
-   #   Loads an object with the specified name from local storage 
+   #   Loads an object with the specified name from local storage
    #.Description
    #   Retrieves objects from disk using Get-LocalStoragePath and Import-CliXml
    param(
       # A unique valid module name to use when persisting the object to disk
       [Parameter(Mandatory=$true, Position=0)]
-      [ValidateScript({ 
-         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
-         if($invalid -eq -1){ 
+      [ValidateScript({
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())
+         if($invalid -eq -1){
             return $true
          } else {
             throw "Invalid character in Module Name '$_' at $invalid"
@@ -622,14 +573,14 @@ function Import-LocalStorage {
 
       # A unique object name to use when persisting the object to disk
       [Parameter(Position=1)]
-      [ValidateScript({ 
-         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())       
-         if($invalid -eq -1){ 
+      [ValidateScript({
+         $invalid = $_.IndexOfAny([IO.Path]::GetInvalidPathChars())
+         if($invalid -eq -1){
             return $true
          } else {
             throw "Invalid character in Object Name '$_' at $invalid"
          }
-      })]      
+      })]
       [string]$Name = '*',
 
       # The scope to store the data in. Defaults to storing in the ModulePath
@@ -643,8 +594,9 @@ function Import-LocalStorage {
    end {
       $null = $PSBoundParameters.Remove("DefaultValue")
       if($Name -eq "*") {
-        $PSBoundParameters["Name"] = "*" 
+        $PSBoundParameters["Name"] = "*"
       }
+      Write-Debug "Import-LocalStorage -Module '$Module' -Name '$Name' -Scope '$Scope'"
       $Path = Get-ScopeStoragePath @PSBoundParameters
       try {
          $Path = Resolve-Path $Path -ErrorAction Stop
@@ -666,9 +618,9 @@ function Import-LocalStorage {
       }
    }
 }
-                              
+
 Export-ModuleMember -Function Get-ScopeStoragePath, Get-LocalStoragePath,
                               Import-LocalStorage, Export-LocalStorage,
-                              Get-SpecialFolder, Select-ModulePath, Test-ExecutionPolicy, 
+                              Get-SpecialFolder, Select-ModulePath, Test-ExecutionPolicy,
                               Get-ConfigData, Set-ConfigData, Test-ConfigData
 # FULL # END FULL

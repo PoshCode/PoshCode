@@ -1,6 +1,6 @@
 ###############################################################################
 ## Copyright (c) 2013 by Joel Bennett, all rights reserved.
-## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice. 
+## Free for use under MS-PL, MS-RL, GPL 2, or BSD license. Your choice.
 ###############################################################################
 ## Metadata.psm1 defines the core commands for Atom Entries and Feeds
 ##
@@ -22,7 +22,7 @@ Import-Module $PoshCodeModuleRoot\Atom.psm1
 Set-Variable -Option Constant -Name ModuleManifestProperties -Value @('AliasesToExport', 'Author', 'ClrVersion', 'CmdletsToExport', 'CompanyName', 'Copyright', 'DefaultCommandPrefix', 'Description', 'DotNetFrameworkVersion', 'FileList', 'FormatsToProcess', 'FunctionsToExport', 'Guid', 'HelpInfoUri', 'ModuleList', 'ModuleVersion', 'NestedModules', 'PowerShellHostName', 'PowerShellHostVersion', 'PowerShellVersion', 'PrivateData', 'ProcessorArchitecture', 'RequiredAssemblies', 'RequiredModules', 'ModuleToProcess', 'ScriptsToProcess', 'TypesToProcess', 'VariablesToExport')
 Set-Variable -Option Constant -Name PackageProperties -Value @('Category', 'IconUrl', 'IsPrerelease', 'LicenseUrl', 'PackageInfoUrl', 'ProjectUrl', 'RequireLicenseAcceptance', 'Tags')
 
-# Import and Export are the external functions. 
+# Import and Export are the external functions.
 function Import-Metadata {
    <#
       .Synopsis
@@ -165,7 +165,7 @@ function ConvertFrom-Metadata {
       try {
          $Script.InvokeReturnAsIs(@())
       }
-      finally {    
+      finally {
          $ErrorActionPreference = $EAP
          $ExecutionContext.SessionState.LanguageMode = $Mode
       }
@@ -182,15 +182,15 @@ function ConvertTo-Metadata {
    process {
       if($InputObject -eq $Null) {
         '""'
-      } elseif( $InputObject -is [Int16] -or 
-                $InputObject -is [Int32] -or 
-                $InputObject -is [Int64] -or 
-                $InputObject -is [Double] -or 
-                $InputObject -is [Decimal] -or 
+      } elseif( $InputObject -is [Int16] -or
+                $InputObject -is [Int32] -or
+                $InputObject -is [Int64] -or
+                $InputObject -is [Double] -or
+                $InputObject -is [Decimal] -or
                 $InputObject -is [Byte] )
       {
          # Write-Verbose "Numbers"
-         "$InputObject" 
+         "$InputObject"
       }
       elseif($InputObject -is [bool])  {
          # Write-Verbose "Boolean"
@@ -207,7 +207,7 @@ function ConvertTo-Metadata {
       elseif($InputObject -is [String] -or
              $InputObject -is [Version])  {
          # Write-Verbose "String"
-         "'$InputObject'" 
+         "'$InputObject'"
       }
       elseif($InputObject -is [System.Collections.IDictionary]) {
          # Write-Verbose "Dictionary:`n $($InputObject|ft|out-string -width 110)"
@@ -221,7 +221,7 @@ function ConvertTo-Metadata {
                "'$key' = " + (ConvertTo-Metadata $InputObject.($key))
             }
          }) -split "`n" -join "`n$t")
-      } 
+      }
       elseif($InputObject -is [System.Collections.IEnumerable]) {
          # Write-Verbose "Enumerable"
          "@($($(ForEach($item in @($InputObject)) { ConvertTo-Metadata $item }) -join ','))"
@@ -243,7 +243,7 @@ function ConvertTo-Metadata {
                }
             }
          ) -split "`n" -join "`n$t")
-      } 
+      }
       else {
          Write-Warning "$($InputObject.GetType().FullName) is not serializable. Serializing as string"
          "'{0}'" -f $InputObject.ToString()
@@ -263,7 +263,7 @@ function PSObject {
          The hashtable of properties to add to the created objects
    #>
    param([hashtable]$Value)
-   New-Object System.Management.Automation.PSObject -Property $Value 
+   New-Object System.Management.Automation.PSObject -Property $Value
 }
 
 function Guid {
@@ -275,7 +275,7 @@ function Guid {
          It exists purely for the sake of psd1 serialization
       .Parameter Value
          The GUID value.
-   #>   
+   #>
    param([string]$Value)
    [Guid]$Value
 }
@@ -289,7 +289,7 @@ function DateTime {
          It exists purely for the sake of psd1 serialization
       .Parameter Value
          The DateTime value, preferably from .Format('o'), the .Net round-trip format
-   #>   
+   #>
    param([string]$Value)
    [DateTime]$Value
 }
@@ -303,19 +303,19 @@ function DateTimeOffset {
          It exists purely for the sake of psd1 serialization
       .Parameter Value
          The DateTimeOffset value, preferably from .Format('o'), the .Net round-trip format
-   #>    
+   #>
    param([string]$Value)
    [DateTimeOffset]$Value
 }
 
-       
+
 function FindTokens {
     [CmdletBinding()]
     param(
-        [Parameter(Position=0, Mandatory=$true)] 
+        [Parameter(Position=0, Mandatory=$true)]
         [System.Management.Automation.Language.HashtableAst]$Hashtable,
 
-        [Parameter(Position=1, Mandatory=$true)] 
+        [Parameter(Position=1, Mandatory=$true)]
         [String[]]$Keys,
 
         $AllowedKeys = $ModuleManifestProperties
@@ -337,7 +337,7 @@ function FindTokens {
         } elseif($AllowedKeys -and ($Key -in $AllowedKeys)) {
             if(($Match = ([regex]"#\s*$Key\s*=.*").Match($Code)).Success) {
                 Write-Debug "Found a match for $Key in comments at $($Match.Value)"
-                [PSCustomObject]@{  
+                [PSCustomObject]@{
                     Name = $Key
                     Display = "Replacing {0} at index {1} in {2}" -f $Key, $Match.Index, $Match.Value
                     Start = $Match.Index
@@ -346,7 +346,7 @@ function FindTokens {
                 }
             } else {
                 Write-Debug "Found no match for $Key. Writing at the end $($Hashtable.Extent.EndOffset)"
-                [PSCustomObject]@{  
+                [PSCustomObject]@{
                     Name = $Key
                     Display = "Inserting {0} at the end of the file" -f $Key
                     Start = $Hashtable.Extent.EndOffset - 1
@@ -359,11 +359,11 @@ function FindTokens {
         }
     }
 }
- 
+
 $HashtableAst = [System.Management.Automation.Language.HashtableAst]
 $ArrayLiteralAst = [System.Management.Automation.Language.ArrayLiteralAst]
 function UpdateManifestContent {
-    # Update a Manifest file with the values in a hashtable. 
+    # Update a Manifest file with the values in a hashtable.
     # This is the core of Set-ModuleManifest, but is also used by New-ModuleManifest
     [CmdletBinding(DefaultParameterSetName="Path")]
     param(
@@ -406,7 +406,7 @@ function UpdateManifestContent {
                 $null = $Properties.Remove($name)
             }
             if($Properties.ContainsKey('PrivateData') -and $Properties.PrivateData.ContainsKey($PackageDataKey) -and $Properties.PrivateData.$PackageDataKey.ContainsKey($name)) {
-                
+
                 $PSData.$name = $Properties.PrivateData.$PackageDataKey.$name
                 $null = $Properties.PrivateData.$PackageDataKey.Remove($name)
             }
@@ -420,6 +420,8 @@ function UpdateManifestContent {
             }
             $null = $Properties.PrivateData.Remove($PackageDataKey)
         }
+
+        Write-Verbose "Setting $($PSData.Count) Fields in PrivateData.PSData $([bool]$Properties.ContainsKey('PrivateData'))"
         if($PSData.Count -or $Properties.ContainsKey('PrivateData')) {
             # Existing PrivateData
             if($PrivateDataHash = $Hashtable.KeyValuePairs | Where { $_.Item1.Value -eq 'PrivateData' }) {
@@ -446,16 +448,19 @@ function UpdateManifestContent {
             }
         }
 
-        $OrderedKeys = FindTokens $Hashtable $Properties.Keys | Sort End -Descending
-        Write-Host ($OrderedKeys | Format-Table Name, Start, End, Display -AutoSize | out-string)
+        if($Properties.Keys.Count) {
+            # If there's anything left to do ... do it now.
+            $OrderedKeys = FindTokens $Hashtable $Properties.Keys | Sort End -Descending
+            Write-Host ($OrderedKeys | Format-Table Name, Start, End, Display -AutoSize | out-string)
 
-        # Put our new values into the module manifest in string form ... 
-        foreach($Key in $OrderedKeys) {
-            $NewCode = ConvertTo-Metadata $Properties.($Key.Name)
-            if($Key.Name -eq "PrivateData" -and $PSDataContent) {
-                $NewCode = $NewCode -replace '([ \t]*\})$',"  ${PSDataContent}`r`n  `$1"
+            # Put our new values into the module manifest in string form ...
+            foreach($Key in $OrderedKeys) {
+                $NewCode = ConvertTo-Metadata $Properties.($Key.Name)
+                if($Key.Name -eq "PrivateData" -and $PSDataContent) {
+                    $NewCode = $NewCode -replace '([ \t]*\})$',"  ${PSDataContent}`r`n  `$1"
+                }
+                $Code = $Code.Remove($Key.Start, $Key.Length).Insert($Key.Start, "$($Key.Name) = $NewCode`r`n")
             }
-            $Code = $Code.Remove($Key.Start, $Key.Length).Insert($Key.Start, "$($Key.Name) = $NewCode`r`n")
         }
 
         $Code = $Code -replace "\r?\n", "`r`n" -replace "(?:\s*\r\n){2,}","`r`n`r`n"
@@ -469,7 +474,7 @@ function Set-ModuleManifest {
          Creates or Updates Module manifest (.psd1) for a module.
       .Description
          Updates specified parameters on a module manifest
-    #>   
+    #>
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
         # The name of the module to setmodule manifest information on
@@ -623,7 +628,7 @@ function Set-ModuleManifest {
         # a URL or relative path to a web page about this module
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [String]$ProjectUrl,
-      
+
         # TODO: If set, require the license to be accepted during installation (not supported yet)
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [Switch]$RequireLicenseAcceptance,
@@ -681,7 +686,7 @@ function Set-ModuleManifest {
             }
         }
         if(!(Test-Path $ModuleManifestPath)) {
-            $RootModuleName = Split-Path $Manifest.Path -Leaf 
+            $RootModuleName = Split-Path $Manifest.Path -Leaf
             if($Force -or $PSCmdlet.ShouldContinue("Generate the module manifest?`n$ModuleManifestPath","Module manifest not found for $RootModuleName")) {
                 Write-Warning "Generating Manifest: '$ModuleManifestPath'"
                 # We're just trying to make a placeholder, we'll update it afterward
@@ -708,20 +713,20 @@ function Set-ModuleManifest {
         } elseif(!$Manifest.PrivateData -and $PrivateData) {
             $Manifest.PrivateData = $PrivateData
         }
-        
+
         # Deal with setting or incrementing the module version
         if($IncrementVersionNumber -or $ModuleVersion -or $Manifest.Version -le [Version]"0.0") {
             [Version]$OldVersion = $Manifest.Version
             if($ModuleVersion) {
                 Write-Debug "Setting Module Version from parameter $ModuleVersion"
-                [Version]$PackageVersion = $ModuleVersion 
+                [Version]$PackageVersion = $ModuleVersion
             } elseif($Manifest.Version -gt "0.0") {
                 [Version]$PackageVersion = $Manifest.Version
             } else {
                 Write-Warning "Module Version not specified properly, incrementing to 1.0"
                 [Version]$OldVersion = [Version]$PackageVersion = "0.0"
             }
-           
+
             if($IncrementVersionNumber -or $PackageVersion -le "0.0") {
                 if($PackageVersion.Revision -ge 0) {
                     $PackageVersion = New-Object Version $PackageVersion.Major, $PackageVersion.Minor, $PackageVersion.Build, ($PackageVersion.Revision + 1)
@@ -760,7 +765,7 @@ function Set-ModuleManifest {
                 $RequiredModules = @($Manifest.RequiredModules)
             }
             $RequiredModules = foreach($Module in $RequiredModules | Where { $_ }) {
-                if($Module -is [String]) { 
+                if($Module -is [String]) {
                     $Module
                 }
                 else {
@@ -945,7 +950,7 @@ function New-ModuleManifest {
         # a URL or relative path to a web page about this module
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [String]$ProjectUrl,
-      
+
         # TODO: If set, require the license to be accepted during installation (not supported yet)
         [Parameter(ValueFromPipelineByPropertyName=$true)]
         [Switch]$RequireLicenseAcceptance,
@@ -1016,6 +1021,7 @@ function New-ModuleManifest {
             $PSData.PrivateData = $PrivateData
         }
 
+        Write-Verbose "Populating $($PSData.Count) Fields in PrivateData.PSData"
 
         try {
             $outBuffer = $null
@@ -1040,10 +1046,22 @@ function New-ModuleManifest {
 
         # Force manifests to be compatible with PowerShell 2, since we can
         $Content = Get-Content $Path -Delimiter ([char]0)
+
+        Write-Verbose "Replacing RootModule with ModuleToProcess ($($Content.Length) chars)"
         $Content = $Content -replace "(?m)^RootModule = ","ModuleToProcess = "
-        $Content = $Content -replace "#\s*PrivateData\s*=.*",@"
+        Write-Verbose "Replacing PrivateData with Hashtable ($($Content.Length) chars)"
+
+        #### The manifest has either:
+        # <#
+        # # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
+        # PrivateData =
+        #### OR
+        # # PrivateData =
+
+        $Content = $Content -replace "#\s*PrivateData\s*=.*|(?m)<#\s*\r?\n#.*\r?\nPrivateData\s*=[^>]*#>",@"
 PrivateData = @{
-    # PSData is module packaging and gallery metadata embedded in PrivateData 
+    # PSData is module packaging and gallery metadata embedded in PrivateData
+    # It's for the PoshCode and PowerShellGet modules
     # We had to do this because it's the only place we're allowed to extend the manifest
     # https://connect.microsoft.com/PowerShell/feedback/details/421837
     PSData = @{
@@ -1054,13 +1072,16 @@ PrivateData = @{
         # Tags = ""
 
         # The web address of an icon which can be used in galleries to represent this module
-        # IconUrl = ""
+        # IconUri = ""
 
         # The web address of this module's project or support homepage.
-        # ProjectUrl = ""
+        # ProjectUri = ""
 
         # The web address of this module's license. Points to a page that's embeddable and linkable.
-        # LicenseUrl = ""
+        # LicenseUri = ""
+
+        # Release notes for this particular version of the module
+        # ReleaseNotes = $False
 
         # If true, the LicenseUrl points to an end-user license (not just a source license) which requires the user agreement before use.
         # RequireLicenseAcceptance = ""
@@ -1070,6 +1091,8 @@ PrivateData = @{
     }
 }
 "@
+        Write-Verbose "Setting Manifest Content ($($Content.Length) chars)"
+
         if($PSData.Count -gt 0) {
             UpdateManifestContent -Path $Path -Properties $PSData -Content $Content
         } else {
@@ -1185,7 +1208,7 @@ function ConvertToHashtable {
     #
     #   Demonstrates the most common reason for converting an object to a hashtable: splatting
     param(
-        # The input object to convert to a hashtable 
+        # The input object to convert to a hashtable
         [Parameter(ValueFromPipeline=$true)]
         $InputObject,
 
@@ -1196,13 +1219,13 @@ function ConvertToHashtable {
         # If set, all selected properties are included. By default, empty properties are discarded
         [Switch]$IgnoreEmptyProperties
     )
-    begin   { $Output=@{} } 
-    end     { if($Output.Count){ $Output } } 
+    begin   { $Output=@{} }
+    end     { if($Output.Count){ $Output } }
     process {
         $Property = Get-Member $Property -Input $InputObject -Type Properties | % { $_.Name }
         foreach($Name in $Property) {
             if(!$IgnoreEmptyProperties -or (($InputObject.$Name -ne $null) -and (@($InputObject.$Name).Count -gt 0) -and ($InputObject.$Name -ne ""))) {
-                $Output.$Name = $InputObject.$Name 
+                $Output.$Name = $InputObject.$Name
             }
         }
     }
@@ -1222,7 +1245,7 @@ function GetModuleOrElse {
                 $Path = Split-Path $Name | Convert-Path
             # Or from the folder path
             } elseif(Test-Path $Name) {
-                $ModuleName = Split-Path $Name -Leaf 
+                $ModuleName = Split-Path $Name -Leaf
                 $Path = Convert-Path $Name
             } else {
                 throw "Invalid Module Name: Has directory separactors in it, but we can't find the path $Name"
@@ -1267,11 +1290,11 @@ function Get-ModuleInfo {
    # .Synopsis
    #    Get enhanced information about a Module or Package
    # .Description
-   #    This is a wrapper for Get-Module which includes the information in the nuget spec and atom packageInfo entry 
+   #    This is a wrapper for Get-Module which includes the information in the nuget spec and atom packageInfo entry
    [CmdletBinding(DefaultParameterSetName='Loaded')]
    param(
-      # Gets only modules with the specified names or name patterns. 
-      # Wildcards are permitted. You can also pipe the names to Get-ModuleInfo. 
+      # Gets only modules with the specified names or name patterns.
+      # Wildcards are permitted. You can also pipe the names to Get-ModuleInfo.
       # You can also specify the path to a module or package.
       [Parameter(ParameterSetName='Available', Position=0, ValueFromPipeline=$true)]
       [Parameter(ParameterSetName='Loaded', Position=0, ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
@@ -1279,12 +1302,12 @@ function Get-ModuleInfo {
       ${Name},
 
       # Gets all installed modules. Get-ModuleInfo works just like Get-Module, it gets the modules in paths listed in the PSModulePath environment variable.
-      # Without this parameter, Get-ModuleInfo gets only the modules that are both listed in the PSModulePath environment variable, and that are loaded in the current session. 
+      # Without this parameter, Get-ModuleInfo gets only the modules that are both listed in the PSModulePath environment variable, and that are loaded in the current session.
       [Parameter(ParameterSetName='Available', Mandatory=$true)]
       [switch]
       ${ListAvailable},
 
-      # Force rereading the module manifest: 
+      # Force rereading the module manifest:
       # NOTE: this may result in information that's out of sync with an imported module.
       # It's usually better to re-import the module with -Force
       [Switch]${Force}
@@ -1303,7 +1326,7 @@ function Get-ModuleInfo {
          }
 
          if($PSBoundParameters.ContainsKey("Force")) {
-            $null = $PSBoundParameters.Remove("Force") 
+            $null = $PSBoundParameters.Remove("Force")
          }
 
          if ($PSBoundParameters.TryGetValue('Name', [ref]$moduleName))
@@ -1404,7 +1427,7 @@ function ReadModulePackageInfo {
                         if($NuGetManifest = ImportNugetStream ($Part.GetStream())) {
                             $PackageInfo = UpdateDictionary $NuGetManifest $PackageInfo
                         }
-                    } 
+                    }
                 }
 
                 ## Now load the module manifest (which has everything else in it)
@@ -1454,7 +1477,7 @@ function ImportManifestStream {
 
         # Convert a top-level hashtable to an object before outputting it
         [switch]$AsObject
-    )   
+    )
     try {
         $reader = New-Object System.IO.StreamReader $stream
         # This gets the ModuleInfo
@@ -1484,7 +1507,7 @@ function ImportNugetStream {
 
         # Convert a top-level hashtable to an object before outputting it
         [switch]$AsObject
-    )   
+    )
     try {
         $reader = New-Object System.IO.StreamReader $stream
         # This gets the ModuleInfo
@@ -1547,7 +1570,7 @@ function ImportModuleInfo {
                }
                $ModuleInfo = UpdateDictionary $ExistingModuleInfo $ModuleInfo -ForceProperties Version
                Write-Debug "Result of merge:`n$($ModuleInfo | Format-List * | Out-String)"
-               
+
 
             }
             $ModuleInfo.Path = $ModuleManifestPath
@@ -1582,14 +1605,14 @@ function ImportModuleInfo {
             }
          }
 
-         ConvertTo-PSModuleInfo $ModuleInfo -AsObject 
+         ConvertTo-PSModuleInfo $ModuleInfo -AsObject
       }
    }
 }
 
 # Internal function to updates dictionaries or ModuleInfo objects with extra metadata
 # This is the guts of ImportModuleInfo and ReadModulePackageInfo
-# It is currently hard-coded to handle a nested array of hashtables for RequiredModules 
+# It is currently hard-coded to handle a nested array of hashtables for RequiredModules
 # But it ought to be extended to handle objects, hashtables, and arrays, and with a specified key
 function UpdateDictionary {
    param(
@@ -1654,7 +1677,7 @@ function UpdateDictionary {
                   if(!$Authoritative.($prop.Name) -or ($Authoritative.($prop.Name).Count -eq 0) -or $ForceProperties -contains $prop.Name) {
                      Add-Member -in $Authoritative -type NoteProperty -Name $prop.Name -Value $prop.Value -Force -ErrorAction SilentlyContinue
                   }
-               }            
+               }
             }
          }
       }
@@ -1718,7 +1741,7 @@ function ConvertTo-PSModuleInfo {
                     }
                 }
             }
-        
+
 
             if($AsObject -and ($MI -is [Collections.IDictionary])) {
                 if($MI.RequiredModules) {
